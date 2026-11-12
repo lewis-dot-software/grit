@@ -102,13 +102,16 @@ void main() {
   });
 
   group('the settings', () {
-    test(
-      'of a run count below 1 or a negative step bound are thrown as a bug',
-      () {
-        expect(() => Settings(runs: 0), throwsRangeError);
-        expect(() => Settings(shrinkSteps: -1), throwsRangeError);
-      },
-    );
+    test('of a run count below 1, or a negative step or time bound, are thrown '
+        'as a bug', () {
+      expect(() => Settings(runs: 0), throwsRangeError);
+      expect(() => Settings(shrinkSteps: -1), throwsRangeError);
+      expect(
+        () => Settings(shrinkTime: const .new(microseconds: -1)),
+        throwsRangeError,
+      );
+      expect(Settings(shrinkTime: .zero).shrinkTime, Duration.zero);
+    });
 
     test('name the seed a search fills from', () {
       expect(PropertyRun.of(.new(seed: 5), callSite: _callSite).seed, 5);

@@ -37,7 +37,7 @@ final class Search {
   /// [runs] is how many runs must return for the property to pass, [limit]
   /// the most choices one run may make, and [invalid] how many runs rejected
   /// or overrun give the search up. [invalid] is at least 1, and every other
-  /// count is never negative.
+  /// count, and the budget's time, is never negative.
   Search({
     required this._clock,
     required this._random,
@@ -53,7 +53,14 @@ final class Search {
            : throw RangeError.range(invalid, 1, null, 'invalid'),
        _budget = (
          steps: RangeError.checkNotNegative(budget.steps, 'budget.steps'),
-         time: budget.time,
+         time: budget.time.isNegative
+             ? throw RangeError.range(
+                 budget.time.inMicroseconds,
+                 0,
+                 null,
+                 'budget.time',
+               )
+             : budget.time,
        );
 
   /// The odds an early run fills a choice at 0 or at its bound.
@@ -112,14 +119,18 @@ final class Search {
 
   /// Shrinking from [first] under the budget, then the final replay of the
   /// smallest failing sequence.
+  ///
+  /// The smallest failing sequence is the choices its run read, which may be
+  /// fewer than the candidate it ran on holds.
   Future<Outcome> _shrink(Body body, Threw first) async {
     final Duration start = _clock.elapsed;
     final _Shrunk shrunk = await _shrunk(body, first, start);
     final Duration time = _clock.elapsed - start;
-    final Run replay = await _replay(body, shrunk.sequence);
+    final ChoiceSequence smallest = shrunk.smallest.record;
+    final Run replay = await _replay(body, smallest);
     return switch (replay) {
       final Threw last when first.failedAlike(last) => Failed(
-        shrunk.sequence,
+        smallest,
         last,
         steps: shrunk.steps,
         time: time,
@@ -143,7 +154,7 @@ final class Search {
     Shrink shrink = .start(first.record);
     int steps = 0;
     _Shrunk ended(ShrinkEnd end) =>
-        (sequence: shrink.current, smallest: smallest, steps: steps, end: end);
+        (smallest: smallest, steps: steps, end: end);
     while (true) {
       switch (shrink) {
         case Shrunk():
@@ -205,14 +216,8 @@ final class Search {
 
 /// Where a shrinking ended.
 ///
-/// - `sequence`: the step function's current sequence.
-/// - `smallest`: the run of the last candidate that failed alike, or of the
-///   first failure where none did.
+/// - `smallest`: the run of the step function's current sequence, the last
+///   candidate that failed alike, or the first failure where none did.
 /// - `steps`: how many candidates it ran.
 /// - `end`: what ended it.
-typedef _Shrunk = ({
-  ChoiceSequence sequence,
-  Threw smallest,
-  int steps,
-  ShrinkEnd end,
-});
+typedef _Shrunk = ({Threw smallest, int steps, ShrinkEnd end});

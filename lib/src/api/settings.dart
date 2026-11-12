@@ -3,14 +3,23 @@
 final class Settings {
   /// The settings of a search, each defaulted where it is not given.
   ///
-  /// [runs] is at least 1, and [shrinkSteps] never negative.
+  /// [runs] is at least 1, and [shrinkSteps] and [shrinkTime] never
+  /// negative.
   Settings({
     int runs = 100,
     this.seed,
     int shrinkSteps = 5000,
-    this.shrinkTime = const .new(seconds: 10),
+    Duration shrinkTime = const .new(seconds: 10),
   }) : runs = runs >= 1 ? runs : throw RangeError.range(runs, 1, null, 'runs'),
-       shrinkSteps = RangeError.checkNotNegative(shrinkSteps, 'shrinkSteps');
+       shrinkSteps = RangeError.checkNotNegative(shrinkSteps, 'shrinkSteps'),
+       shrinkTime = shrinkTime.isNegative
+           ? throw RangeError.range(
+               shrinkTime.inMicroseconds,
+               0,
+               null,
+               'shrinkTime',
+             )
+           : shrinkTime;
 
   /// How many runs must return for the property to pass.
   final int runs;

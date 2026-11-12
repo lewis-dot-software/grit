@@ -9,6 +9,7 @@ import 'package:grit/src/shrink/shrink.dart';
 import 'package:test/test.dart';
 
 import '../support/fake_clock.dart';
+import '../support/fixed_random.dart';
 import '../support/shrinking.dart';
 import '../support/small.dart';
 
@@ -21,9 +22,11 @@ const Budget _unbounded = (steps: 1 << 30, time: .new(days: 1));
 /// The seeds the property checks search from.
 const int _seeds = 3;
 
-/// A search over [runs] runs of at most [limit] choices, from [seed].
+/// A search over [runs] runs of at most [limit] choices, from [seed], or
+/// from [random] where it is given.
 Search _search({
   int seed = 0,
+  Random? random,
   Clock? clock,
   int runs = 20,
   int limit = 24,
@@ -31,7 +34,7 @@ Search _search({
   Budget budget = _unbounded,
 }) => .new(
   clock: clock ?? FakeClock(),
-  random: Random(seed),
+  random: random ?? Random(seed),
   callSite: _callSite,
   runs: runs,
   limit: limit,
@@ -41,6 +44,28 @@ Search _search({
 
 /// A choice from 0 to 3, whose value is the choice.
 final Gen<int> _choice = .integer(min: 0, max: 3);
+
+/// A random whose first run fills the choices 3 and 3.
+Random get _fillsThreeThree => FixedRandom(0.9, ints: const [3, 3]);
+
+/// The step bound at which shrinking [_readsSecondUnlessZero] from 3 and 3
+/// has just accepted 0 and 0, of which its run read the 0 alone.
+const int _tailedAt = 4;
+
+/// A body that always fails, reading a second choice where its first is not
+/// 0, and on its [flakesOn]th run reading one more and failing another way.
+Body _readsSecondUnlessZero({int? flakesOn}) {
+  int runs = 0;
+  return (Draw draw) {
+    runs++;
+    if (draw(_choice) != 0) draw(_choice);
+    if (runs == flakesOn) {
+      draw(_choice);
+      throw ArgumentError('flaked');
+    }
+    throw StateError('always');
+  };
+}
 
 /// How a body fails, if it does: a [StateError] or an [ArgumentError] from
 /// one line, or a [StateError] from another.
@@ -284,8 +309,8 @@ Future<void> _eachSearch(
 
 /// Checks the searches of [body] from [seed] under a bound of [bound] steps,
 /// and under as many milliseconds by a clock that moves one a read, against
-/// [whole], its search with no bound, and returns whether the step bound ran
-/// out.
+/// [whole], its search with no bound, each reporting the choices its final
+/// replay read, and returns whether the step bound ran out.
 ///
 /// Each search runs a fresh copy of [body], at most [limit] choices a run.
 Future<bool> _expectBounded(
@@ -303,6 +328,7 @@ Future<bool> _expectBounded(
     budget: (steps: bound, time: _unbounded.time),
   ).run(stepped.call) as Failed;
   expect(byStep.steps, stepped.steps, reason: reason);
+  expect(byStep.sequence, byStep.run.record, reason: reason);
   expect(byStep.steps, lessThanOrEqualTo(bound), reason: reason);
   final bool ranOut = whole.steps > bound;
   if (ranOut) {
@@ -325,6 +351,7 @@ Future<bool> _expectBounded(
     budget: (steps: _unbounded.steps, time: time),
   ).run(timed.call) as Failed;
   expect(byTime.steps, timed.steps, reason: '$reason, $time');
+  expect(byTime.sequence, byTime.run.record, reason: '$reason, $time');
   if (whole.steps > allowed) {
     expect(byTime.end, ShrinkEnd.time, reason: '$reason, $time');
     expect(byTime.steps, allowed, reason: '$reason, $time');
@@ -524,6 +551,28 @@ void main() {
       );
     });
 
+    test('is failed on the choices its smallest failing run read, where '
+        'the candidate it ran on held more', () async {
+      final Failed failed = await _search(
+        random: _fillsThreeThree,
+        budget: (steps: _tailedAt, time: _unbounded.time),
+      ).run(_readsSecondUnlessZero()) as Failed;
+      expect(failed.end, ShrinkEnd.steps);
+      expect(failed.sequence, sequenceOf([0]));
+      expect(failed.run.record, sequenceOf([0]));
+    });
+
+    test('is flaky, with the replay of its failed run\'s sequence, where the '
+        'final replay does not fail as the first run did', () async {
+      final Flaky flaky = await _search(
+        random: _fillsThreeThree,
+        budget: (steps: _tailedAt, time: _unbounded.time),
+      ).run(_readsSecondUnlessZero(flakesOn: _tailedAt + 3)) as Flaky;
+      expect(flaky.failed.record, sequenceOf([0]));
+      expect(flaky.replay, isA<Overran>());
+      expect(flaky.replay.record, flaky.failed.record);
+    });
+
     test(
       'names the step bound where it ran out, at the first failure',
       () async {
@@ -660,8 +709,9 @@ void main() {
       });
     });
 
-    test('Shrinking never runs more steps than its bound, and an outcome whose '
-        'bound ran out names that bound.', () async {
+    test('Shrinking never runs more steps than its bound, an outcome whose '
+        'bound ran out names that bound, and its sequence is the choices its '
+        'final replay read.', () async {
       int failed = 0;
       await _eachSearch((_Body body, int seed, Outcome outcome) async {
         if (outcome is! Failed) return;
@@ -773,6 +823,7 @@ void main() {
         () => _search(limit: -1),
         () => _search(invalid: 0),
         () => _search(budget: (steps: -1, time: .zero)),
+        () => _search(budget: (steps: 0, time: const .new(microseconds: -1))),
       ]) {
         expect(make, throwsRangeError);
       }
@@ -812,8 +863,9 @@ void main() {
       expect(failed, greaterThan(0));
     });
 
-    test('Shrinking never runs more steps than its bound, and an outcome whose '
-        'bound ran out names that bound.', () async {
+    test('Shrinking never runs more steps than its bound, an outcome whose '
+        'bound ran out names that bound, and its sequence is the choices its '
+        'final replay read.', () async {
       int ranOut = 0;
       await forAll((Draw draw) async {
         final _Body body = draw(_anyBody, label: 'body');

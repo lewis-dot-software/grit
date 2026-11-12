@@ -47,7 +47,7 @@ flowchart LR
 | Generate | The body on random fills, one run after another | A failure, the run count spent, or too many runs rejected or overrun |
 | First replay | The failing sequence again | The same failure, or anything else, which makes the outcome flaky |
 | Shrink | The candidates the step function proposes | The step function's end, or the budget spent |
-| Final replay | The smallest failing sequence | The error and the draws for the report, or anything else, which makes the outcome flaky |
+| Final replay | The smallest failing sequence, the choices its run read and no more | The error and the draws for the report, or anything else, which makes the outcome flaky |
 
 A stored failure replays before generation starts. Where it fails, that failure stands as the first failure and the search goes straight to shrinking. A token passed to a property's `replay` setting replays that sequence alone, with no generation and no shrinking.
 
