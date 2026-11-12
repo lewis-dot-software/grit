@@ -487,7 +487,7 @@ void main() {
       expect(failed.sequence, sequenceOf([10]));
       expect(failed.run.record, sequenceOf([10]));
       expect(failed.run.error, isA<StateError>());
-      expect(failed.run.draws, [(label: 'x', value: 10)]);
+      expect(failed.run.draws, [(label: 'x', value: 10, text: '10')]);
       expect(failed.run.notes, ['x is 10']);
       expect(failed.end, ShrinkEnd.shrunk);
       expect(failed.steps, greaterThan(0));

@@ -65,10 +65,10 @@ String _case(Threw run) => [
   'It threw:\n${_indented('${run.error}'.trimRight())}',
 ].join('\n\n');
 
-/// One value drawn, under its label where it has one.
+/// One value's text as it was drawn, under its label where it has one.
 String _drawn(Drawn drawn) => _indented(switch (drawn) {
-  (label: final String label, :final Object? value) => '$label: $value',
-  (label: null, :final Object? value) => '$value',
+  (label: final String label, :final String text, value: _) => '$label: $text',
+  (label: null, :final String text, value: _) => text,
 });
 
 /// What a replay that did not fail as the first run did ended as.

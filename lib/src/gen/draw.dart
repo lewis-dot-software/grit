@@ -1,8 +1,12 @@
 part of 'gen.dart';
 
-/// One value a property's body drew, with the label it was drawn under,
-/// where it named one.
-typedef Drawn = ({String? label, Object? value});
+/// One value a property's body drew.
+///
+/// - `label`: the label the body drew it under, or null where it named none.
+/// - `value`: the value the draw returned, which the body may since have
+///   changed in place.
+/// - `text`: the value's text as the draw returned it.
+typedef Drawn = ({String? label, Object? value, String text});
 
 /// What a property's body draws its inputs through, from one run's choices.
 final class Draw {
@@ -34,7 +38,9 @@ final class Draw {
     } finally {
       _depth--;
     }
-    if (_depth == 0) _draws.add((label: label, value: value));
+    // The text is taken as the value is returned, since the body may sort,
+    // clear or add to it in place before a report prints it.
+    if (_depth == 0) _draws.add((label: label, value: value, text: '$value'));
     return value;
   }
 

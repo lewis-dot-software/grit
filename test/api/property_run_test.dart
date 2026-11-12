@@ -177,6 +177,32 @@ void main() {
       },
     );
 
+    test('of a failed outcome reports each value as the draw returned it, '
+        'not as the body left it', () async {
+      final (Object, StackTrace)? thrown = await _thrown(
+        _run().check((Draw draw) {
+          final List<int> xs = draw(
+            .list(.integer(min: 0, max: 1), minLength: 2, maxLength: 2),
+            label: 'xs',
+          );
+          if (xs case [0, 1]) {
+            xs
+              ..sort((int a, int b) => b.compareTo(a))
+              ..add(99);
+            throw StateError('drawn [0, 1]');
+          }
+        }),
+      );
+      expect(
+        thrown?.$1,
+        isA<TestFailure>().having(
+          (TestFailure failure) => failure.message,
+          'message',
+          contains('It drew:\n  xs: [0, 1]\n\n'),
+        ),
+      );
+    });
+
     test(
       'of a flaky outcome throws its report with the failure\'s stack',
       () async {

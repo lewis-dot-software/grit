@@ -45,8 +45,8 @@ void main() {
     test('failed reports its smallest case, its shrinking and its seed', () {
       final Threw run = _threw(
         draws: [
-          (label: 'xs', value: [3]),
-          (label: null, value: true),
+          (label: 'xs', value: [3], text: '[3]'),
+          (label: null, value: true, text: 'true'),
         ],
         notes: ['sum 3'],
       );
@@ -70,7 +70,7 @@ void main() {
     });
 
     test('flaky reports its failure and how its replay ended', () {
-      final Threw failed = _threw(draws: [(label: 'x', value: 2)]);
+      final Threw failed = _threw(draws: [(label: 'x', value: 2, text: '2')]);
       final Run replay = Returned(failed.record, const [], const []);
       expect(
         report(Flaky(failed, replay), seed: 7),
@@ -128,13 +128,26 @@ void main() {
       );
     });
 
+    test('prints each value\'s text as it was drawn, not the value as the '
+        'body left it', () {
+      final Threw run = _threw(
+        draws: [
+          (label: 'xs', value: [1, 0, 99], text: '[0, 1]'),
+        ],
+      );
+      expect(
+        report(_failed(run), seed: 7),
+        contains('It drew:\n  xs: [0, 1]\n\n'),
+      );
+    });
+
     test('that drew nothing says so', () {
       expect(report(_failed(_threw()), seed: 7), contains('It drew nothing.'));
     });
 
     test('indents every line of a value and an error under its heading', () {
       final Threw run = _threw(
-        draws: [(label: 'text', value: 'one\ntwo')],
+        draws: [(label: 'text', value: 'one\ntwo', text: 'one\ntwo')],
         message: 'first\nsecond\n',
       );
       expect(

@@ -228,6 +228,19 @@ void main() {
       );
     });
 
+    test('keeps each value\'s text as the draw returned it, whatever the '
+        'body does to the value after', () {
+      final ChoiceSource source = .fixed(sequenceOf([1, 0, 1, 1, 0]));
+      final Draw draw = .new(source);
+      final List<int> xs = draw(.list(.integer(min: 0, max: 1)));
+      expect(xs, [0, 1]);
+      xs
+        ..sort((int a, int b) => b.compareTo(a))
+        ..add(99);
+      expect(draw.draws.single.text, '[0, 1]');
+      expect(draw.draws.single.value, same(xs));
+    });
+
     test('keeps no value from a draw the source stopped', () {
       final ChoiceSource source = .fixed(.empty);
       final Draw draw = .new(source);
@@ -298,6 +311,23 @@ void main() {
         drawFrom(generator.gen, sequence),
         drawFrom(generator.gen, sequence),
       );
+    });
+
+    property('A draw keeps each value\'s text as the draw returned it, '
+        'whatever the body does to the value after.', (Draw draw) {
+      final Generator generator = draw(anyGenerator, label: 'generator');
+      final ChoiceSequence sequence = draw(_sequence, label: 'sequence');
+      final ChoiceSource source = .fixed(sequence);
+      final Draw inner = .new(source);
+      late final String returned;
+      final Status status = run(source, () {
+        final Object? value = inner(generator.gen);
+        returned = '$value';
+        if (value case final List<Object?> list) list.clear();
+      });
+      if (status == .returned) {
+        expect(inner.draws.single.text, returned);
+      }
     });
 
     property('A filtered generator only ever draws a value its predicate '
