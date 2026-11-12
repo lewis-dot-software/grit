@@ -118,16 +118,24 @@ void main() {
     });
 
     test('fill the same draws from the same seed', () async {
-      Future<Object?> drawn(int seed) async => switch (await PropertyRun.of(
-        .new(seed: seed, shrinkSteps: 0),
-        callSite: _callSite,
-      ).outcome((Draw draw) {
-        draw(.list(.integer()));
-        throw StateError('drawn');
-      })) {
-        Failed(:final Threw run) => run.draws.single.value,
-        Passed() || Flaky() || GaveUp() => null,
-      };
+      Future<Object?> drawn(int seed) async {
+        final Outcome outcome =
+            await PropertyRun.of(
+              .new(seed: seed, shrinkSteps: 0),
+              callSite: _callSite,
+            ).outcome((Draw draw) {
+              draw(.list(.integer()));
+              throw StateError('drawn');
+            });
+        return switch (outcome) {
+          Failed(:final Threw run) => run.draws.single.value,
+          Passed() || Flaky() || GaveUp() => fail(
+            'Seed $seed came to ${outcome.runtimeType}, where a failure was '
+            'due',
+          ),
+        };
+      }
+
       expect(await drawn(3), await drawn(3));
     });
 

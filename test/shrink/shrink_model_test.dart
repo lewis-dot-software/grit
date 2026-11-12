@@ -14,39 +14,18 @@ import '../support/lake.dart';
 import '../support/oracle.dart';
 import '../support/shrinking.dart';
 
-/// The way shrinking went: each candidate proposed and the answer it was
-/// told, in order, and the state it ended in.
-typedef _Path = ({
-  List<ChoiceSequence> candidates,
-  List<bool> told,
-  Shrunk end,
-});
-
-/// The path from shrinking [first] to its end, each candidate told as
-/// failing as [oracle] answers it in turn.
-_Path _path(ChoiceSequence first, Oracle oracle) {
-  final List<ChoiceSequence> candidates = [];
-  final List<bool> told = [];
-  final Shrunk end = shrunk(.start(first), (ChoiceSequence candidate) {
-    final bool failed = answerOf(oracle, told.length, candidate);
-    candidates.add(candidate);
-    told.add(failed);
-    return failed;
-  });
-  return (candidates: candidates, told: told, end: end);
-}
-
 /// [sequence] written `[1,2]`, as the model writes it.
 String _written(ChoiceSequence sequence) => '[${sequence.choices.join(',')}]';
 
-/// The model's request to shrink [first], told [told] in turn.
-String _request(ChoiceSequence first, List<bool> told) =>
-    '${first.choices.join(',')}\t${[for (final bool failed in told) failed ? '1' : '0'].join()}';
+/// The model's request to shrink [first], told each answer of [path] in
+/// turn.
+String _request(ChoiceSequence first, List<ShrinkStep> path) =>
+    '${first.choices.join(',')}\t${[for (final ShrinkStep step in path) step.failed ? '1' : '0'].join()}';
 
 /// What the model answers where it proposes each of [path]'s candidates and
-/// ends where it does.
-String _expected(_Path path) =>
-    '${path.candidates.map(_written).join()}\tshrunk\t${_written(path.end.current)}';
+/// ends at [end].
+String _expected(List<ShrinkStep> path, Shrunk end) =>
+    '${[for (final ShrinkStep step in path) _written(step.candidate)].join()}\tshrunk\t${_written(end.current)}';
 
 /// Where [actual] first parts from [expected], as a few characters either
 /// side of the place.
@@ -103,9 +82,12 @@ void main() {
   property('Shrink proposes each candidate and ends as the Lean model does, '
       'whatever the oracle answers', (Draw draw) async {
     final ChoiceSequence first = draw(anySequence, label: 'first failure');
-    final _Path path = _path(first, drawOracle(draw, first));
-    final String expected = _expected(path);
-    final String actual = await ask(_request(first, path.told));
+    final (List<ShrinkStep> path, Shrunk end) = answered(
+      first,
+      drawOracle(draw, first),
+    );
+    final String expected = _expected(path, end);
+    final String actual = await ask(_request(first, path));
     if (actual != expected) fail(_parting(expected, actual));
   }, settings: .new(runs: 1000));
 

@@ -29,12 +29,25 @@ Iterable<ClassMirror> get _exportedClasses sync* {
   }
 }
 
-/// Whether [name] passes every one of [combinators].
-bool _passes(List<CombinatorMirror> combinators, Symbol name) =>
-    combinators.every(
-      (CombinatorMirror combinator) =>
-          combinator.identifiers.contains(name) == combinator.isShow,
-    );
+/// Whether [name] passes [combinators]: shown by one where any shows, and
+/// hidden by none.
+///
+/// The VM's mirrors give a `show` of several names as one combinator a name,
+/// so the names shown are the union of every `show`'s.
+bool _passes(List<CombinatorMirror> combinators, Symbol name) {
+  final List<CombinatorMirror> shows = [
+    for (final CombinatorMirror combinator in combinators)
+      if (combinator.isShow) combinator,
+  ];
+  return (shows.isEmpty ||
+          shows.any(
+            (CombinatorMirror show) => show.identifiers.contains(name),
+          )) &&
+      !combinators.any(
+        (CombinatorMirror combinator) =>
+            combinator.isHide && combinator.identifiers.contains(name),
+      );
+}
 
 void main() {
   group('the public library', () {
@@ -45,6 +58,8 @@ void main() {
 
     test('exports no class that makes a draw', () {
       final ClassMirror draw = reflectClass(Draw);
+      // Draw is exported, so a reading of no class fails.
+      expect(_exportedClasses, contains(draw));
       expect([
         for (final ClassMirror exported in _exportedClasses)
           if (exported != draw && exported.isSubclassOf(draw))
@@ -53,7 +68,11 @@ void main() {
     });
 
     test('exports no empty choice sequence', () {
-      expect(_declared(ChoiceSequence), isNot(contains('empty')));
+      // It holds a name the class does declare, so an empty reading fails.
+      expect(
+        _declared(ChoiceSequence),
+        allOf(contains('isSmallerThan'), isNot(contains('empty'))),
+      );
     });
   });
 }

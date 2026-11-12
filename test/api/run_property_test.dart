@@ -37,30 +37,29 @@ void main() {
       expect(await runProperty(failsOnce()), isA<Flaky>());
     });
 
-    test(
-      'a failed outcome whose parts are each named by the surface',
-      () async {
-        final Body body = failsOnTrue;
-        final Failed failed = await runProperty(body) as Failed;
-        final ChoiceSequence sequence = failed.sequence;
-        final List<Choice> choices = sequence.choices;
-        final Threw run = failed.run;
-        final Failure failure = run.failure;
-        final Frame? frame = failure.frame;
-        final ShrinkEnd end = failed.end;
-        expect(choices, [Choice(1)]);
-        expect(failure.type, StateError);
-        expect(frame?.uri.path, endsWith('test/support/bodies.dart'));
-        expect(end, ShrinkEnd.shrunk);
-      },
-    );
+    test('a failed outcome whose parts are each named by the surface, its '
+        'shrinking ended by its step bound', () async {
+      final Body body = failsOnTrue;
+      // A step bound of 0 ends shrinking before its time bound is weighed,
+      // so the end is the same on any machine.
+      final Failed failed =
+          await runProperty(body, settings: .new(shrinkSteps: 0)) as Failed;
+      final ChoiceSequence sequence = failed.sequence;
+      final List<Choice> choices = sequence.choices;
+      final Threw run = failed.run;
+      final Failure failure = run.failure;
+      final Frame? frame = failure.frame;
+      final ShrinkEnd end = failed.end;
+      expect(choices, [Choice(1)]);
+      expect(failure.type, StateError);
+      expect(frame?.uri.path, endsWith('test/support/bodies.dart'));
+      expect(end, ShrinkEnd.steps);
+    });
 
     test('a flaky outcome whose replay is a run', () async {
       final Flaky flaky = await runProperty(failsOnce()) as Flaky;
       final Run replay = flaky.replay;
       expect(replay, isA<Returned>());
-      expect(replay, isNot(isA<Rejected>()));
-      expect(replay, isNot(isA<Overran>()));
     });
 
     test('a gave-up outcome', () async {

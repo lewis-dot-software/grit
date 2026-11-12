@@ -59,75 +59,6 @@ final Gen<_Ask> _ask = .build(
 
 void main() {
   group('a fixed source', () {
-    test('hands a run exactly its sequence\'s choices in order, and a run '
-        'that asks past its end ends overrun', () {
-      for (final ChoiceSequence sequence in everySequence(
-        length: _length,
-        bound: _bound,
-      )) {
-        final int size = sequence.choices.length;
-        for (int asks = 0; asks <= size + 2; asks++) {
-          final ChoiceSource source = .fixed(sequence);
-          final List<Choice> handed = [];
-          final Status status = run(source, () {
-            for (int i = 0; i < asks; i++) {
-              handed.add(source.choose(.new(_bound)));
-            }
-          });
-          final String reason = '$sequence asked $asks times';
-          expect(
-            handed,
-            sequence.choices.take(min(asks, size)),
-            reason: reason,
-          );
-          expect(source.record.choices, handed, reason: reason);
-          expect(
-            status,
-            asks > size ? Status.overrun : Status.returned,
-            reason: reason,
-          );
-        }
-      }
-    });
-
-    test('a fixed choice above the bound a generator now asks for ends the run '
-        'rejected', () {
-      for (int size = 0; size <= _length; size++) {
-        final List<ChoiceSequence> sequences = everySequenceOf(
-          size: size,
-          bound: _bound,
-        ).toList();
-        for (final ChoiceSequence sequence in sequences) {
-          for (final ChoiceSequence bounds in sequences) {
-            final ChoiceSource source = .fixed(sequence);
-            final Status status = run(source, () {
-              for (final Choice bound in bounds.choices) {
-                source.choose(.new(bound.value));
-              }
-            });
-            final int firstAbove = [for (int i = 0; i < size; i++) i]
-                .firstWhere(
-                  (int i) =>
-                      sequence.choices[i].value > bounds.choices[i].value,
-                  orElse: () => -1,
-                );
-            final String reason = '$sequence under $bounds';
-            if (firstAbove == -1) {
-              expect(status, Status.returned, reason: reason);
-              expect(source.record, sequence, reason: reason);
-            } else {
-              expect(status, Status.rejected, reason: reason);
-              expect(
-                source.record.choices,
-                sequence.choices.take(firstAbove),
-                reason: reason,
-              );
-            }
-          }
-        }
-      }
-    });
-
     test('reads a weighted choice of 0 as false and 1 as true', () {
       final ChoiceSource source = .fixed(sequenceOf([1, 0]));
       expect(source.weigh(.new(0.01)), isTrue);
@@ -147,45 +78,6 @@ void main() {
   });
 
   group('a random fill', () {
-    test('never gives a choice above the bound asked for, nor more choices '
-        'than its limit', () {
-      // Each ask is a choice up to the bound its value names, or a weighted
-      // choice where its value is one past the largest bound.
-      for (int seed = 0; seed < 3; seed++) {
-        for (int limit = 0; limit <= _length; limit++) {
-          for (final ChoiceSequence asks in everySequence(
-            length: _length + 1,
-            bound: _bound + 1,
-          )) {
-            final ChoiceSource source = .random(.new(seed), limit: limit);
-            final List<(Bound, Choice)> handed = [];
-            final Status status = run(source, () {
-              for (final Choice ask in asks.choices) {
-                if (ask.value > _bound) {
-                  final bool weighed = source.weigh(.new(0.5));
-                  handed.add((.binary, .new(weighed ? 1 : 0)));
-                } else {
-                  final Bound bound = .new(ask.value);
-                  handed.add((bound, source.choose(bound)));
-                }
-              }
-            });
-            final String reason = 'seed $seed, limit $limit, asks $asks';
-            for (final (Bound bound, Choice choice) in handed) {
-              expect(bound.admits(choice), isTrue, reason: reason);
-            }
-            expect(source.record.choices, hasLength(handed.length));
-            expect(handed.length, lessThanOrEqualTo(limit), reason: reason);
-            expect(
-              status,
-              asks.choices.length > limit ? Status.overrun : Status.returned,
-              reason: reason,
-            );
-          }
-        }
-      }
-    });
-
     test('fills bounds past one word within the bound', () {
       for (final int value in [
         (1 << 32) - 1,
@@ -364,8 +256,11 @@ void main() {
       expect(status, Status.rejected);
     });
 
-    // Each stop beside a source whose later asks would be handed over, or
-    // stop otherwise, were the source to forget it had stopped.
+    // Each stop beside a source whose later choice or weighted choice would
+    // be handed over, or stop otherwise, were the source to forget it had
+    // stopped, wherever a source can. A later ask that only repeats the
+    // stop, another past an overrun or a reject after a reject, stops alike
+    // either way, as does a weighted choice above 1 asked again.
     final List<
       (String, Status, ChoiceSource Function(), void Function(ChoiceSource))
     >
@@ -419,6 +314,116 @@ void main() {
         });
       }
     }
+  });
+
+  group('over every small sequence', () {
+    test('A fixed source hands a run exactly its sequence\'s choices in '
+        'order, and a run that asks past its end ends overrun.', () {
+      for (final ChoiceSequence sequence in everySequence(
+        length: _length,
+        bound: _bound,
+      )) {
+        final int size = sequence.choices.length;
+        for (int asks = 0; asks <= size + 2; asks++) {
+          final ChoiceSource source = .fixed(sequence);
+          final List<Choice> handed = [];
+          final Status status = run(source, () {
+            for (int i = 0; i < asks; i++) {
+              handed.add(source.choose(.new(_bound)));
+            }
+          });
+          final String reason = '$sequence asked $asks times';
+          expect(
+            handed,
+            sequence.choices.take(min(asks, size)),
+            reason: reason,
+          );
+          expect(source.record.choices, handed, reason: reason);
+          expect(
+            status,
+            asks > size ? Status.overrun : Status.returned,
+            reason: reason,
+          );
+        }
+      }
+    });
+
+    test('A fixed choice above the bound a generator now asks for ends the '
+        'run rejected.', () {
+      for (int size = 0; size <= _length; size++) {
+        final List<ChoiceSequence> sequences = everySequenceOf(
+          size: size,
+          bound: _bound,
+        ).toList();
+        for (final ChoiceSequence sequence in sequences) {
+          for (final ChoiceSequence bounds in sequences) {
+            final ChoiceSource source = .fixed(sequence);
+            final Status status = run(source, () {
+              for (final Choice bound in bounds.choices) {
+                source.choose(.new(bound.value));
+              }
+            });
+            final int firstAbove = [for (int i = 0; i < size; i++) i]
+                .firstWhere(
+                  (int i) =>
+                      sequence.choices[i].value > bounds.choices[i].value,
+                  orElse: () => -1,
+                );
+            final String reason = '$sequence under $bounds';
+            if (firstAbove == -1) {
+              expect(status, Status.returned, reason: reason);
+              expect(source.record, sequence, reason: reason);
+            } else {
+              expect(status, Status.rejected, reason: reason);
+              expect(
+                source.record.choices,
+                sequence.choices.take(firstAbove),
+                reason: reason,
+              );
+            }
+          }
+        }
+      }
+    });
+
+    test('A random fill never gives a choice above the bound asked for, nor '
+        'more choices than its limit.', () {
+      // Each ask is a choice up to the bound its value names, or a weighted
+      // choice where its value is one past the largest bound.
+      for (int seed = 0; seed < 3; seed++) {
+        for (int limit = 0; limit <= _length; limit++) {
+          for (final ChoiceSequence asks in everySequence(
+            length: _length + 1,
+            bound: _bound + 1,
+          )) {
+            final ChoiceSource source = .random(.new(seed), limit: limit);
+            final List<(Bound, Choice)> handed = [];
+            final Status status = run(source, () {
+              for (final Choice ask in asks.choices) {
+                if (ask.value > _bound) {
+                  final bool weighed = source.weigh(.new(0.5));
+                  handed.add((.binary, .new(weighed ? 1 : 0)));
+                } else {
+                  final Bound bound = .new(ask.value);
+                  handed.add((bound, source.choose(bound)));
+                }
+              }
+            });
+            final String reason = 'seed $seed, limit $limit, asks $asks';
+            for (final (Bound bound, Choice choice) in handed) {
+              expect(bound.admits(choice), isTrue, reason: reason);
+            }
+            expect(source.record.choices, hasLength(handed.length));
+            expect(handed.length, lessThanOrEqualTo(limit), reason: reason);
+            expect(
+              status,
+              asks.choices.length > limit ? Status.overrun : Status.returned,
+              reason: reason,
+            );
+          }
+        }
+      }
+    });
   });
 
   group('a bug in grit', () {

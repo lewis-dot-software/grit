@@ -56,31 +56,6 @@ void main() {
       ]);
     });
 
-    test(
-      'for any two different sequences, exactly one is shortlex smaller than '
-      'the other',
-      () {
-        final List<ChoiceSequence> sequences = everySequence(
-          length: 4,
-          bound: 3,
-        ).toList();
-        // The enumeration yields each sequence once, so two places hold two
-        // different sequences, told apart with no appeal to the order.
-        for (int i = 0; i < sequences.length; i++) {
-          for (int j = 0; j < sequences.length; j++) {
-            if (i == j) continue;
-            final ChoiceSequence a = sequences[i];
-            final ChoiceSequence b = sequences[j];
-            expect(
-              a.isSmallerThan(b) != b.isSmallerThan(a),
-              isTrue,
-              reason: '$a and $b',
-            );
-          }
-        }
-      },
-    );
-
     test('every sequence is smaller than each one enumerated after it', () {
       final List<ChoiceSequence> sequences = everySequence(
         length: 3,
@@ -124,6 +99,33 @@ void main() {
 
   test('a negative choice is a bug, thrown', () {
     expect(() => Choice(-1), throwsRangeError);
+  });
+
+  group('over every small sequence', () {
+    test(
+      'For any two different sequences, exactly one is shortlex smaller than '
+      'the other.',
+      () {
+        final List<ChoiceSequence> sequences = everySequence(
+          length: 4,
+          bound: 3,
+        ).toList();
+        // The enumeration yields each sequence once, so two places hold two
+        // different sequences, told apart with no appeal to the order.
+        for (int i = 0; i < sequences.length; i++) {
+          for (int j = 0; j < sequences.length; j++) {
+            if (i == j) continue;
+            final ChoiceSequence a = sequences[i];
+            final ChoiceSequence b = sequences[j];
+            expect(
+              a.isSmallerThan(b) != b.isSmallerThan(a),
+              isTrue,
+              reason: '$a and $b',
+            );
+          }
+        }
+      },
+    );
   });
 
   group('on grit, over larger inputs', () {

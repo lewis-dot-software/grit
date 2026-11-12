@@ -38,11 +38,11 @@ void challenge(
 }
 
 /// Declares a test for each of [starts] that the search of [body], whose
-/// first run makes that start's choices and fails, shrinks under the default
-/// budget to the draws [smallest] holds, in order.
+/// first run fills each choice but a weighted one from that start in turn,
+/// each weighted one at 0, and fails, shrinks under the default budget to the
+/// draws [smallest] holds, in order.
 ///
-/// Each start's choices are filled uniformly within their bounds, and the
-/// search is timed by a clock that never moves.
+/// The search is timed by a clock that never moves.
 void challengeFrom(
   String name,
   Body body,
@@ -55,8 +55,9 @@ void challengeFrom(
         final Settings settings = .new();
         final Outcome outcome = await Search(
           clock: FakeClock(),
-          // A draw of 1 is never below an early run's odds of an edge, so
-          // every choice is the next of the start's.
+          // A draw of 1 is never below an early run's odds of an edge, nor
+          // below any weighted choice's odds, so every choice but a weighted
+          // one is the next of the start's, and every weighted one is 0.
           random: FixedRandom(1, ints: start),
           callSite: .of(StackTrace.current),
           runs: 1,

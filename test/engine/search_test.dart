@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:grit/grit.dart';
+import 'package:grit/src/choice/choice_source.dart';
 import 'package:grit/src/engine/budget.dart';
 import 'package:grit/src/engine/call_site.dart';
 import 'package:grit/src/engine/clock.dart';
@@ -147,14 +148,13 @@ final class _Body {
   ///
   /// Only a body that fails as its record alone says has one way a sequence.
   _Way wayOn(ChoiceSequence sequence) {
-    final List<int> record;
-    try {
-      record = _shape(RunDraw(.fixed(sequence)));
-    } on Exception {
-      // The source stopped the run, overrun or rejected.
-      return .none;
-    }
-    return _fails(0, record);
+    final ChoiceSource source = .fixed(sequence);
+    late final List<int> record;
+    return switch (run(source, () => record = _shape(RunDraw(source)))) {
+      .returned => _fails(0, record),
+      .overrun || .rejected => .none,
+      .failed => throw StateError('The shape of $name threw on $sequence'),
+    };
   }
 
   /// How many candidates the search ran in shrinking: every run but
@@ -465,10 +465,24 @@ void main() {
     });
 
     test('is passed past runs rejected or overrun within the limit', () async {
-      final Outcome outcome = await _search(runs: 30).run((Draw draw) {
-        draw.assume(draw(_choice) > 0);
+      int rejected = 0;
+      int overran = 0;
+      final Outcome outcome = await _search(runs: 30, limit: 2).run((
+        Draw draw,
+      ) {
+        switch (draw(_choice)) {
+          case 0:
+            rejected++;
+            draw.assume(false);
+          case 1:
+            overran++;
+            draw(_choice);
+            draw(_choice);
+        }
       });
       expect(outcome, isA<Passed>().having((o) => o.runs, 'runs', 30));
+      expect(rejected, greaterThan(0));
+      expect(overran, greaterThan(0));
     });
 
     test(
@@ -635,6 +649,10 @@ void main() {
         'early runs than a uniform fill would, and fills later runs '
         'uniformly', () async {
       const int bound = 1000;
+      // The later runs' choices by tenth of the bound, the bound itself in
+      // the last.
+      const int tenths = 10;
+      final List<int> laterByTenth = .filled(tenths, 0);
       int early = 0;
       int earlyEdges = 0;
       int later = 0;
@@ -651,12 +669,22 @@ void main() {
           } else {
             later++;
             if (edge) laterEdges++;
+            laterByTenth[min(x * tenths ~/ bound, tenths - 1)]++;
           }
         });
       }
       // A uniform fill puts 2 choices in 1001 at an edge.
       expect(earlyEdges / early, greaterThan(0.3));
       expect(laterEdges / later, lessThan(0.01));
+      // A uniform fill puts about a tenth of 900 choices in each tenth, each
+      // count's spread about 9, so a count past 30 off it is no uniform fill.
+      for (int tenth = 0; tenth < tenths; tenth++) {
+        expect(
+          laterByTenth[tenth],
+          inInclusiveRange(later ~/ tenths - 30, later ~/ tenths + 30),
+          reason: 'choices in tenth $tenth of $laterByTenth',
+        );
+      }
     });
   });
 
