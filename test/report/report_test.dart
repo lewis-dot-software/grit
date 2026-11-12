@@ -31,11 +31,14 @@ Failed _failed(
   Duration time = const .new(milliseconds: 34),
 }) => .new(run.record, run, steps: steps, time: time, end: end);
 
+/// The Dart of the default settings filled from seed 7.
+const String _settings = 'Settings(seed: 7)';
+
 void main() {
   group('an outcome', () {
     test('passed reports its run count', () {
       expect(
-        report(Passed(runs: 100), seed: 7),
+        report(Passed(runs: 100), seed: 7, settings: _settings),
         'The property passed 100 runs.\n'
         '\n'
         'Seed 7. Repeat this search with `settings: Settings(seed: 7)`.',
@@ -51,7 +54,7 @@ void main() {
         notes: ['sum 3'],
       );
       expect(
-        report(_failed(run), seed: 7),
+        report(_failed(run), seed: 7, settings: _settings),
         'The property failed. Its smallest failing case, shrunk in 12 steps '
         'over 34 ms:\n'
         '\n'
@@ -73,7 +76,7 @@ void main() {
       final Threw failed = _threw(draws: [(label: 'x', value: 2, text: '2')]);
       final Run replay = Returned(failed.record, const [], const []);
       expect(
-        report(Flaky(failed, replay), seed: 7),
+        report(Flaky(failed, replay), seed: 7, settings: _settings),
         'The property is flaky: it failed, then did not fail the same way '
         'when its failing case ran again.\n'
         '\n'
@@ -91,7 +94,11 @@ void main() {
 
     test('gave up reports its rejected and overrun counts', () {
       expect(
-        report(GaveUp(rejected: 990, overran: 10), seed: 7),
+        report(
+          GaveUp(rejected: 990, overran: 10),
+          seed: 7,
+          settings: _settings,
+        ),
         'The property gave up: 990 runs were rejected and 10 overran before '
         'enough returned. A run is rejected by an assume that is false or a '
         'filter that finds no value, and overruns where it makes more choices '
@@ -100,12 +107,44 @@ void main() {
         'Seed 7. Repeat this search with `settings: Settings(seed: 7)`.',
       );
     });
+
+    test('ends on the settings it was searched under', () {
+      expect(
+        report(
+          Passed(runs: 1000),
+          seed: 7,
+          settings: 'Settings(seed: 7, runs: 1000)',
+        ),
+        endsWith(
+          'Seed 7. Repeat this search with '
+          '`settings: Settings(seed: 7, runs: 1000)`.',
+        ),
+      );
+    });
+
+    test('passed in 1 run says so', () {
+      expect(
+        report(Passed(runs: 1), seed: 7, settings: _settings),
+        startsWith('The property passed 1 run.\n'),
+      );
+    });
+
+    test('gave up with 1 run rejected says so', () {
+      expect(
+        report(GaveUp(rejected: 1, overran: 9), seed: 7, settings: _settings),
+        startsWith('The property gave up: 1 run was rejected and 9 overran '),
+      );
+    });
   });
 
   group('a failed outcome', () {
     test('whose step budget ran out says its case is the smallest found', () {
       expect(
-        report(_failed(_threw(), end: .steps, steps: 5000), seed: 7),
+        report(
+          _failed(_threw(), end: .steps, steps: 5000),
+          seed: 7,
+          settings: _settings,
+        ),
         startsWith(
           'The property failed. Shrinking ran out of steps after 5000 steps, '
           'over 34 ms, so its failing case is the smallest found within the '
@@ -119,6 +158,7 @@ void main() {
         report(
           _failed(_threw(), end: .time, steps: 1, time: .new(seconds: 10)),
           seed: 7,
+          settings: _settings,
         ),
         startsWith(
           'The property failed. Shrinking ran out of time after 10.0 s, in '
@@ -136,13 +176,16 @@ void main() {
         ],
       );
       expect(
-        report(_failed(run), seed: 7),
+        report(_failed(run), seed: 7, settings: _settings),
         contains('It drew:\n  xs: [0, 1]\n\n'),
       );
     });
 
     test('that drew nothing says so', () {
-      expect(report(_failed(_threw()), seed: 7), contains('It drew nothing.'));
+      expect(
+        report(_failed(_threw()), seed: 7, settings: _settings),
+        contains('It drew nothing.'),
+      );
     });
 
     test('indents every line of a value and an error under its heading', () {
@@ -151,7 +194,7 @@ void main() {
         message: 'first\nsecond\n',
       );
       expect(
-        report(_failed(run), seed: 7),
+        report(_failed(run), seed: 7, settings: _settings),
         contains(
           'It drew:\n'
           '  text: one\n'
@@ -171,14 +214,22 @@ void main() {
 
     test('rejected says so', () {
       expect(
-        report(Flaky(failed, Rejected(failed.record, [], [])), seed: 7),
+        report(
+          Flaky(failed, Rejected(failed.record, [], [])),
+          seed: 7,
+          settings: _settings,
+        ),
         contains('Run again, it was rejected.'),
       );
     });
 
     test('overrun says so', () {
       expect(
-        report(Flaky(failed, Overran(failed.record, [], [])), seed: 7),
+        report(
+          Flaky(failed, Overran(failed.record, [], [])),
+          seed: 7,
+          settings: _settings,
+        ),
         contains('Run again, it made more choices than its case holds.'),
       );
     });
@@ -196,11 +247,33 @@ void main() {
         ),
       );
       expect(
-        report(Flaky(failed, other), seed: 7),
+        report(Flaky(failed, other), seed: 7, settings: _settings),
         contains(
           'Run again, it threw another way, ArgumentError from '
           'file:///a_test.dart:9:\n'
           '  Invalid argument(s): odd\n',
+        ),
+      );
+    });
+
+    test('that threw another way indents its error with no line of spaces '
+        'from a trailing newline', () {
+      final Threw other = .new(
+        failed.record,
+        const [],
+        const [],
+        error: StateError('first\nsecond\n'),
+        stackTrace: StackTrace.empty,
+        failure: (type: StateError, frame: null),
+      );
+      expect(
+        report(Flaky(failed, other), seed: 7, settings: _settings),
+        contains(
+          ':\n'
+          '  Bad state: first\n'
+          '  second\n'
+          '\n'
+          'Seed 7.',
         ),
       );
     });
@@ -215,7 +288,7 @@ void main() {
         failure: (type: ArgumentError, frame: null),
       );
       expect(
-        report(Flaky(failed, other), seed: 7),
+        report(Flaky(failed, other), seed: 7, settings: _settings),
         contains('ArgumentError from a stack grit could not read:'),
       );
     });

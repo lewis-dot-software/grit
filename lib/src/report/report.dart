@@ -4,15 +4,15 @@ import '../engine/shrink_end.dart';
 import '../gen/gen.dart';
 
 /// The message [outcome] reports, for a search whose random choices were
-/// filled from [seed].
+/// filled from [seed] under the settings the Dart [settings] builds.
 ///
 /// A failed outcome reports its smallest failing case: what the body drew,
 /// what it noted and what it threw, and how shrinking ended, saying where the
 /// budget ran out that the case is the smallest found within it. Every
-/// outcome ends on the seed, so the search can be repeated.
-String report(Outcome outcome, {required int seed}) {
+/// outcome ends on the seed and the settings, so the search can be repeated.
+String report(Outcome outcome, {required int seed, required String settings}) {
   final String body = switch (outcome) {
-    Passed(:final int runs) => 'The property passed $runs runs.',
+    Passed(:final int runs) => 'The property passed ${_runs(runs)}.',
     Failed(
       :final Threw run,
       :final ShrinkEnd end,
@@ -27,13 +27,13 @@ String report(Outcome outcome, {required int seed}) {
       'Run again, ${_replayed(replay)}',
     ].join('\n\n'),
     GaveUp(:final int rejected, :final int overran) =>
-      'The property gave up: $rejected runs were rejected and $overran '
-          'overran before enough returned. A run is rejected by an assume '
-          'that is false or a filter that finds no value, and overruns where '
-          'it makes more choices than one run may.',
+      'The property gave up: ${_rejected(rejected)} and $overran overran '
+          'before enough returned. A run is rejected by an assume that is '
+          'false or a filter that finds no value, and overruns where it makes '
+          'more choices than one run may.',
   };
   return '$body\n\nSeed $seed. Repeat this search with '
-      '`settings: Settings(seed: $seed)`.';
+      '`settings: $settings`.';
 }
 
 /// The line saying how a shrinking of [steps] steps over [time] ended.
@@ -62,7 +62,7 @@ String _case(Threw run) => [
   else
     'It drew:\n${run.draws.map(_drawn).join('\n')}',
   if (run.notes.isNotEmpty) 'It noted:\n${run.notes.map(_indented).join('\n')}',
-  'It threw:\n${_indented('${run.error}'.trimRight())}',
+  'It threw:\n${_error(run.error)}',
 ].join('\n\n');
 
 /// One value's text as it was drawn, under its label where it has one.
@@ -79,14 +79,23 @@ String _replayed(Run replay) => switch (replay) {
   Threw(:final Object error) =>
     'it threw another way, ${error.runtimeType} from '
         '${replay.failure.frame ?? 'a stack grit could not read'}:\n'
-        '${_indented('$error')}',
+        '${_error(error)}',
 };
+
+/// [error]'s text indented under its heading, with no line of spaces from
+/// a trailing newline.
+String _error(Object error) => _indented('$error'.trimRight());
 
 /// [text] with every line indented under its heading.
 String _indented(String text) =>
     text.split('\n').map((String line) => '  $line').join('\n');
 
 String _steps(int steps) => steps == 1 ? '1 step' : '$steps steps';
+
+String _runs(int runs) => runs == 1 ? '1 run' : '$runs runs';
+
+String _rejected(int rejected) =>
+    rejected == 1 ? '1 run was rejected' : '$rejected runs were rejected';
 
 /// [time] in milliseconds under a second, and in seconds to a tenth above.
 String _time(Duration time) => time < const Duration(seconds: 1)

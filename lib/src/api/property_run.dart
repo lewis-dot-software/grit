@@ -9,6 +9,7 @@ import '../engine/run.dart';
 import '../engine/search.dart';
 import '../report/report.dart';
 import 'settings.dart';
+import 'settings_source.dart';
 import 'stopwatch_clock.dart';
 
 /// One search of a property from its settings, with its clock, its seed and
@@ -79,5 +80,11 @@ final class PropertyRun {
     }
   }
 
-  TestFailure _failure(Outcome outcome) => .new(report(outcome, seed: seed));
+  TestFailure _failure(Outcome outcome) => .new(
+    report(
+      outcome,
+      seed: seed,
+      settings: _settings.source(seed: seed),
+    ),
+  );
 }

@@ -60,7 +60,7 @@ The outcome is a sealed type, one subtype a row:
 | Flaky | The failing sequence, and the replay that did not fail as it did |
 | Gave up | How many runs were rejected and overran |
 
-Every outcome carries the search's warnings, a slow property among them. `runProperty` returns the outcome, and `property` and `forAll` are its bindings to `package:test`, failing the test on every outcome but passed. The report is a pure function of the outcome and the seed the search filled from, which it names so the search can be repeated.
+Every outcome carries the search's warnings, a slow property among them. `runProperty` returns the outcome, and `property` and `forAll` are its bindings to `package:test`, failing the test on every outcome but passed. The report is a pure function of the outcome, the seed the search filled from and the settings it ran under, which it names so the search can be repeated.
 
 ## Shrinking
 

@@ -170,7 +170,7 @@ void main() {
           isA<TestFailure>().having(
             (TestFailure failure) => failure.message,
             'message',
-            report(outcome, seed: 0),
+            report(outcome, seed: 0, settings: 'Settings(seed: 0)'),
           ),
         );
         expect(thrown?.$2.toString(), startsWith('#0      failsOnTrue '));
@@ -221,13 +221,37 @@ void main() {
       },
     );
 
+    test(
+      'reports the settings it searched under, filled from its seed',
+      () async {
+        expect(
+          (await _thrown(
+            _run(.new(runs: 3, shrinkSteps: 0))
+                .check((Draw draw) => draw.assume(false)),
+          ))?.$1,
+          isA<TestFailure>().having(
+            (TestFailure failure) => failure.message,
+            'message',
+            endsWith(
+              'Seed 0. Repeat this search with '
+              '`settings: Settings(seed: 0, runs: 3, shrinkSteps: 0)`.',
+            ),
+          ),
+        );
+      },
+    );
+
     test('of a gave-up outcome throws its report', () async {
       expect(
         (await _thrown(_run().check((Draw draw) => draw.assume(false))))?.$1,
         isA<TestFailure>().having(
           (TestFailure failure) => failure.message,
           'message',
-          report(GaveUp(rejected: 1000, overran: 0), seed: 0),
+          report(
+            GaveUp(rejected: 1000, overran: 0),
+            seed: 0,
+            settings: 'Settings(seed: 0)',
+          ),
         ),
       );
     });

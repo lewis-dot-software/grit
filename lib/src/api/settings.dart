@@ -18,7 +18,8 @@ final class Settings {
   /// The seed the search's random choices are filled from, or null for a
   /// seed drawn afresh each search.
   ///
-  /// One seed repeats one search, shrinking aside where its time runs out.
+  /// One seed under the same other settings repeats one search, shrinking
+  /// aside where its time runs out.
   final int? seed;
 
   /// The most candidates shrinking runs before it ends on the smallest
