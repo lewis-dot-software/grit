@@ -168,6 +168,48 @@ void main() {
       );
     });
 
+    test('a choice failing on even values alone, as a negative integer does '
+        'by its zigzag, shrinks to the smallest even value but 0', () {
+      expect(
+        _smallest([1022], (ChoiceSource source) {
+          final int x = source.choose(.new(1 << 20)).value;
+          if (x > 0 && x.isEven) throw 'negative';
+        }),
+        sequenceOf([2]),
+      );
+    });
+
+    test('a list whose length is read before its elements shrinks to its one '
+        'failing element, by deleting each other with the length lowered', () {
+      // Every element is at least 1 to fail, so no deletion that leaves an
+      // element of 0 standing as the length fails.
+      expect(
+        _smallest([3, 1, 1, 1, 7], (ChoiceSource source) {
+          final int length = source.choose(.new(9)).value;
+          final List<int> elements = [
+            for (int i = 0; i <= length; i++) source.choose(.new(9)).value,
+          ];
+          if (elements.every((int x) => x >= 1) &&
+              elements.any((int x) => x >= 7)) {
+            throw 'large';
+          }
+        }),
+        sequenceOf([0, 7]),
+      );
+    });
+
+    test('two equal choices of 10 or more shrink to both 10 by lowering them '
+        'together', () {
+      expect(
+        _smallest([500, 500], (ChoiceSource source) {
+          final int a = source.choose(.new(1000)).value;
+          final int b = source.choose(.new(1000)).value;
+          if (a >= 10 && a == b) throw 'equal';
+        }),
+        sequenceOf([10, 10]),
+      );
+    });
+
     test('a first failure no candidate of which fails is its own smallest', () {
       final Shrunk end = shrunk(.start(sequenceOf([3, 1, 2])), (_) => false);
       expect(end.current, sequenceOf([3, 1, 2]));

@@ -79,9 +79,10 @@ The budget then bounds how long shrinking takes, never whether it ends. It count
 
 A pass is a function from the current sequence to its candidates, and the step function chooses among them:
 
-- Deleting a span.
+- Deleting a span, alone and with the choice before it lowered by one, since that choice may be the span's length.
 - Zeroing a span.
-- Lowering a choice by binary search.
+- Lowering a choice by binary search, over the pairs of choices an integer's zigzag puts at one distance, so a value lowers on either side of the one it shrinks towards.
+- Lowering two choices by the same amount, so two values tied to each other fall together.
 - Sorting a span, and swapping two.
 - Moving value from one choice to another.
 
@@ -205,7 +206,9 @@ grit is one package. A Flutter package under `fixture/flutter/` resolves it besi
 
 ## Testing grit
 
-The shrinking challenge is a public set of shrinking problems, each with the smallest case known (jlink/shrinking-challenge on GitHub). It is a suite under `test/challenge/`, one file a challenge, each driving the engine on a fixed seed, the fake clock and, once it stands, the in-memory store, and asserting the smallest sequence's value against the smallest known, so a fall in shrink quality fails the suite.
+The shrinking challenge is a public set of shrinking problems, each with the smallest case known (jlink/shrinking-challenge on GitHub). It is a suite under `test/challenge/`, one file a challenge, each driving the engine under the default settings on fixed seeds, the fake clock and, once it stands, the in-memory store, and asserting the smallest sequence's value against the smallest known, so a fall in shrink quality fails the suite.
+
+A challenge is held to each of the seeds from 0 to 9 whose search reaches the smallest known, and its file names each seed it leaves out and why. One whose failure the default search never finds is driven from fixed failing starts instead, so its shrinking is held all the same.
 
 grit departs from the stack's property-test row, which names glados, since it is the library that replaces it. Before `property` runs, a property a layer's issue carries is checked over every sequence up to a small length and bound, by plain loops in the test. Those checks stay once grit stands, beside the same property written on grit over larger inputs.
 
