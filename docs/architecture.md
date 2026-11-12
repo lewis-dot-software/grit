@@ -130,7 +130,7 @@ The rules every generator obeys:
 
 - Choices: drawn only through the choice source, with no `Random` of its own and nothing else read.
 - Simplest value: named in its doc comment, the one choice 0 gives.
-- Collections: each element behind a "one more" choice, so deleting a span deletes an element whole.
+- Collections: each element behind a "one more" choice, read as one more whatever it holds inside the minimum, and the collection ending on a choice of 0, one that can only be 0 at its maximum, so deleting a span deletes an element whole.
 - Distribution: none of it. A generator sets only its choices' bounds and a "one more" choice's odds.
 
 The bias towards a choice's bounds on early runs lives in the choice source's random fill, one home for every generator. A filter retries a bounded number of times, then rejects the run.
