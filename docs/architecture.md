@@ -13,7 +13,7 @@ The shrinker is a pure step function that imports nothing of grit's but `choice`
 
 A choice is a natural number from 0 to its bound, and 0 is the simplest. Every generator is built on choices, by an encoding that gives simpler values at smaller choices: an integer zigzags out from the value it shrinks towards, and a float takes an order that puts simple floats first.
 
-A run is one execution of the body, and its record is its sequence of choices. One sequence is smaller than another when it is shorter, or the same length and smaller at its first difference. That order, shortlex, is the one every part of grit means by smaller. A span is a stretch of consecutive choices in one sequence.
+A run is one execution of the body. Its record is its sequence of choices. One sequence is smaller than another when it is shorter, or the same length and smaller at its first difference. That order, shortlex, is the one every part of grit means by smaller. A span is a stretch of consecutive choices in one sequence.
 
 The choice source hands a run its choices. In generation it fills each at random, up to a limit on the choices one run may make. A candidate in shrinking, and a replay, hand over a fixed sequence and never fill, so a run that asks for more than the sequence holds ends there.
 
@@ -22,7 +22,7 @@ A run ends in one of four statuses:
 | Status | Means |
 |---|---|
 | `overrun` | More choices asked for than the source holds, past a fixed sequence's end or generation's limit |
-| `rejected` | An `assume` that was false, a filter that gave up, or a replayed choice above the bound its generator now asks for |
+| `rejected` | An `assume` that was false, a filter that gave up, or a fixed sequence's choice above the bound its generator asks for |
 | `returned` | A body that returned |
 | `failed` | A body that threw |
 
@@ -85,13 +85,18 @@ A pass is a function from the current sequence to its candidates, and the step f
 - Sorting a span, and swapping two.
 - Moving value from one choice to another.
 
-A pass for one kind of value, floats or strings, is added over the same naturals where shrink quality shows the need.
+A pass for one kind of value, floats or strings, is added where shrink quality shows the need. It needs the record to carry each draw's span and its kind beside the sequence, since a bare sequence cannot say where a kind's choices sit, and that change is settled with the pass.
 
 The step function's current sequence is always one it was told failed. The final replay then holds that every sequence the outcome reports as failed still fails.
 
 ## The clock
 
-Wall time is read in two places alone: the budget's bound on shrinking, and the slow-property warning. Neither changes a verdict.
+Wall time is read in two places alone:
+
+- The budget's bound on shrinking.
+- The slow-property warning.
+
+Neither changes a verdict.
 
 Each run is timed. A property whose runs are slow enough that its run count costs more than the engine's threshold gets a warning on its outcome, naming its time a run so its owner can lower the count. `api` prints it.
 
@@ -174,7 +179,7 @@ Each layer is a directory under `lib/src/`. A new generator is a static member o
 
 The outside world reaches the layers below `api` through three seams:
 
-- The clock, a monotonic elapsed time, which grit's own suite fakes, so no test of grit's reads the real clock.
+- The clock, a monotonic elapsed time, which grit's own suite fakes below `api`, and which no verdict turns on, so no test of grit's turns on it.
 - The `Random` the choice source fills from, seeded by a setting where a search must repeat.
 - The store, with a file implementation and one in-memory fake.
 
@@ -184,17 +189,25 @@ No other I/O stands below `api`, and nothing writes outside the consumer's `.dar
 
 The store keeps each call site's smallest failing sequence in a file of its own under `.dart_tool/grit/`. Its key is the stack at the `property`, `forAll` or `runProperty` call, every frame of it in the consumer's package, by file and line. A property behind a helper is keyed by where the helper is called, and an edit above any of those lines loses its stored failure. Calls from one line in a loop share a key, so they replay each other's failure.
 
-A file is written to a temporary name and renamed, since `dart test` runs test files at once. A stored sequence whose replay does not fail, whatever its status, is deleted. The token printed on a failure is the same sequence encoded.
+The store's file I/O is synchronous, since async file I/O can deadlock inside a `testWidgets`. A file is written to a temporary name and renamed, since `dart test` runs test files at once. A stored sequence whose replay does not fail, whatever its status, is deleted. The token printed on a failure is the same sequence encoded.
 
 ## Platform and packages
 
-The web would change three things: `dart:io`, which the layer rules keep to `api` and `store`, a stack's form, read in `engine` alone, and a bound's width under dart2js, held in `choice`. So the web is a later cut of those parts and not a rewrite.
+The web would change three things:
 
-grit is one package. If a proof is taken, a Lean package under `lean/` models the step function, proving that shrinking always ends and that its current sequence is always one it was told failed, and a grit property ties the model to the Dart code.
+- `dart:io`, which the layer rules keep to `api` and `store`.
+- A stack's form, read in `engine` alone.
+- A bound's width under dart2js, held in `choice`.
+
+So the web is a later cut of those parts and not a rewrite.
+
+grit is one package. A Lean package under `lean/` models the step function and proves the proof's statements, which `CLAUDE.md`'s intent holds, and a grit property ties the model to the Dart code.
 
 ## Testing grit
 
-The shrinking challenge is a public set of shrinking problems, each with the smallest case known (jlink/shrinking-challenge on GitHub). It is a suite under `test/challenge/`, one file a challenge, each driving the engine on a fixed seed, the fake clock and the in-memory store, and asserting the smallest sequence's value against the smallest known, so a fall in shrink quality fails the suite.
+The shrinking challenge is a public set of shrinking problems, each with the smallest case known (jlink/shrinking-challenge on GitHub). It is a suite under `test/challenge/`, one file a challenge, each driving the engine on a fixed seed, the fake clock and, once it stands, the in-memory store, and asserting the smallest sequence's value against the smallest known, so a fall in shrink quality fails the suite.
+
+grit departs from the stack's property-test row, which names glados, since it is the library that replaces it. Before `property` runs, a property a layer's issue carries is checked over every sequence up to a small length and bound, by plain loops in the test. Those checks stay once grit stands, beside the same property written on grit over larger inputs.
 
 ## Why this model
 
@@ -202,14 +215,14 @@ The engine is Hypothesis's model, in the small form minithesis gives it.
 
 Why shrinking works on the record of choices:
 
-- A generator built by `map`, `bind` or `filter` shrinks with no shrinker of its own, since every value it makes is a function of the choices beneath it.
+- A generator built by `map`, `filter` or `Gen.build` shrinks with no shrinker of its own, since every value it makes is a function of the choices beneath it.
 - A structured input shrinks whole, since deleting a span deletes a part of the value, wherever in it that part sits.
 - A failure is stored and replayed as its choices, so a stored failure outlives a change to how its value prints.
 
 Why every choice is a bounded natural:
 
-- One order serves every kind of value, so the shrinker holds one set of passes, and a proof, if one is taken, one order.
-- A kind of value whose choices shrink poorly takes a pass of its own over the same naturals, so the core never grows a type per kind.
+- One order serves every kind of value, so the shrinker holds one set of passes, and the proof one order.
+- A kind of value whose choices shrink poorly takes a pass of its own over the same naturals, so the order never grows a type per kind.
 
 Why the body draws its inputs:
 
