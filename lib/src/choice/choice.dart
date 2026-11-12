@@ -3,4 +3,7 @@
 extension type const Choice._(int value) implements Object {
   /// The choice of [value], which is never negative.
   factory Choice(int value) => ._(RangeError.checkNotNegative(value, 'value'));
+
+  /// The largest choice the Dart VM's integers hold.
+  static const Choice largest = ._(0x7FFFFFFFFFFFFFFF);
 }
