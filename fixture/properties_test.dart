@@ -6,8 +6,8 @@ import 'package:test/test.dart';
 /// to its smallest on any machine.
 final Settings _settings = .new(seed: 1, shrinkTime: const .new(days: 1));
 
-/// The properties grit's own suite runs through `dart test`, each named for
-/// the outcome it comes to.
+/// Properties declared through grit's public library, each named for the
+/// outcome it comes to.
 void main() {
   property('fails', (Draw draw) {
     final List<int> xs = draw(.list(.integer(min: 0, max: 100)), label: 'xs');

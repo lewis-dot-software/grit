@@ -24,7 +24,7 @@ Iterable<ChoiceSequence> everySequenceOf({
   required int bound,
 }) sync* {
   if (size == 0) {
-    yield .empty;
+    yield sequenceOf([]);
     return;
   }
   for (final ChoiceSequence rest in everySequenceOf(

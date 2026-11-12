@@ -7,16 +7,13 @@ import '../choice/odds.dart';
 import '../choice/status.dart';
 import '../gen/gen.dart';
 import '../shrink/shrink.dart';
+import 'body.dart';
 import 'budget.dart';
 import 'call_site.dart';
 import 'clock.dart';
 import 'outcome.dart';
 import 'run.dart';
 import 'shrink_end.dart';
-
-/// A property's body, which draws its inputs through [Draw] and fails by
-/// throwing.
-typedef Body = FutureOr<void> Function(Draw draw);
 
 /// Everything grit does for one property: its runs, its shrinking and its
 /// replays, ending in the property's outcome.
@@ -184,7 +181,7 @@ final class Search {
 
   /// A run of [body] on [source]'s choices.
   Future<Run> _ran(Body body, ChoiceSource source) async {
-    final Draw draw = .new(source);
+    final RunDraw draw = .new(source);
     (Object, StackTrace)? thrown;
     try {
       // A synchronous body is not awaited, so its run takes no turn of the

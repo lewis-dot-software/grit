@@ -1,12 +1,15 @@
 import '../choice/bound.dart';
+import '../choice/choice.dart';
 import '../choice/choice_source.dart';
 import '../choice/odds.dart';
 
 part 'boolean.dart';
 part 'draw.dart';
+part 'drawn.dart';
 part 'element.dart';
 part 'integer.dart';
 part 'list.dart';
+part 'run_draw.dart';
 
 /// A generator: a value drawn from a run's choices, which shrinks as its
 /// choices do.
@@ -29,8 +32,8 @@ final class Gen<T> {
   /// 32-bit signed integer.
   ///
   /// Its simplest value is the one in range nearest 0, and a value further
-  /// from it is never simpler. [min] is never above [max], and the range
-  /// holds no more values than a choice does, `1 << 63`.
+  /// from it is never simpler. [min] is never above [max], and [max] is at
+  /// most [Choice.largest] above [min].
   static Gen<int> integer({int min = -0x80000000, int max = 0x7FFFFFFF}) =>
       _integer(min: min, max: max);
 

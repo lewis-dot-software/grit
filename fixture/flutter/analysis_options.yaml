@@ -1,5 +1,7 @@
-# The fixture takes the analyser's defaults, not the root's, which
-# include a package the fixture does not resolve.
+# The root's strict modes and lint rules hold the fixture as well, through
+# the lints package it resolves for itself.
+include: ../../analysis_options.yaml
+
 analyzer:
   exclude:
     - build/**

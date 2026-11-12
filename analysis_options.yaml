@@ -1,8 +1,8 @@
 include: package:lints/recommended.yaml
 
 analyzer:
-  # The Flutter fixture resolves against the Flutter SDK, which flutter test
-  # resolves and checks.
+  # The Flutter fixture resolves against the Flutter SDK, so flutter analyze
+  # checks it from its own directory.
   exclude:
     - fixture/flutter/**
   errors:

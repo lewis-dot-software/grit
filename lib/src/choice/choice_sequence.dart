@@ -8,9 +8,6 @@ final class ChoiceSequence implements Comparable<ChoiceSequence> {
   /// The sequence of [choices], in order.
   ChoiceSequence(Iterable<Choice> choices) : choices = .unmodifiable(choices);
 
-  /// The sequence of no choices, the smallest of all.
-  static final ChoiceSequence empty = .new(const []);
-
   /// The choices, in the order the run made them.
   final List<Choice> choices;
 

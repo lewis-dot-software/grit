@@ -6,6 +6,7 @@ import '../engine/call_site.dart';
 import '../engine/clock.dart';
 import '../engine/outcome.dart';
 import '../engine/run.dart';
+import '../engine/body.dart';
 import '../engine/search.dart';
 import '../report/report.dart';
 import 'settings.dart';

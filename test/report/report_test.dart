@@ -18,7 +18,7 @@ Threw _threw({
   draws,
   notes,
   error: StateError(message),
-  stackTrace: StackTrace.empty,
+  stackTrace: .empty,
   failure: (type: StateError, frame: .new(.parse('file:///a_test.dart'), 7)),
 );
 
@@ -240,7 +240,7 @@ void main() {
         const [],
         const [],
         error: ArgumentError('odd'),
-        stackTrace: StackTrace.empty,
+        stackTrace: .empty,
         failure: (
           type: ArgumentError,
           frame: .new(.parse('file:///a_test.dart'), 9),
@@ -263,7 +263,7 @@ void main() {
         const [],
         const [],
         error: StateError('first\nsecond\n'),
-        stackTrace: StackTrace.empty,
+        stackTrace: .empty,
         failure: (type: StateError, frame: null),
       );
       expect(
@@ -284,7 +284,7 @@ void main() {
         const [],
         const [],
         error: ArgumentError('odd'),
-        stackTrace: StackTrace.empty,
+        stackTrace: .empty,
         failure: (type: ArgumentError, frame: null),
       );
       expect(

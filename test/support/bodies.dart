@@ -1,4 +1,4 @@
-import 'package:grit/src/engine/search.dart';
+import 'package:grit/src/engine/body.dart';
 import 'package:grit/src/gen/gen.dart';
 
 /// A body that fails on its first run alone.

@@ -98,6 +98,6 @@ String _rejected(int rejected) =>
     rejected == 1 ? '1 run was rejected' : '$rejected runs were rejected';
 
 /// [time] in milliseconds under a second, and in seconds to a tenth above.
-String _time(Duration time) => time < const Duration(seconds: 1)
+String _time(Duration time) => time < const .new(seconds: 1)
     ? '${time.inMilliseconds} ms'
     : '${(time.inMilliseconds / 1000).toStringAsFixed(1)} s';

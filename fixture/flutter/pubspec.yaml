@@ -14,3 +14,4 @@ dev_dependencies:
     sdk: flutter
   grit:
     path: ../..
+  lints: ^6.1.0

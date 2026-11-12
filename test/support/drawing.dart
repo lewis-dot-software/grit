@@ -43,7 +43,7 @@ final class Stopped<T> extends Drawing<T> {
 Drawing<T> drawFrom<T>(Gen<T> gen, ChoiceSequence sequence) {
   final ChoiceSource source = .fixed(sequence);
   late final T value;
-  final Status status = run(source, () => value = Draw(source)(gen));
+  final Status status = run(source, () => value = RunDraw(source)(gen));
   return switch (status) {
     .returned => Drew(value, source.record),
     .overrun || .rejected || .failed => Stopped(status, source.record),

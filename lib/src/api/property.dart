@@ -2,7 +2,7 @@ import 'package:meta/meta.dart';
 import 'package:test/test.dart';
 
 import '../engine/call_site.dart';
-import '../engine/search.dart';
+import '../engine/body.dart';
 import 'property_run.dart';
 import 'settings.dart';
 
@@ -11,8 +11,9 @@ import 'settings.dart';
 /// outcome but a pass.
 ///
 /// [testOn], [skip], [tags], [onPlatform] and [retry] are `test`'s own. The
-/// test is declared with no timeout, since no deadline fails a property. Each search of a
-/// retry draws a seed of its own where [settings] names none.
+/// test is declared with no timeout, since no deadline fails a property.
+/// Each search of a retry draws a seed of its own where [settings] names
+/// none.
 @isTest
 void property(
   Object? description,
@@ -26,7 +27,7 @@ void property(
 }) {
   // The stack is read here, at the declaration, since the test's own body
   // runs with no frame of the consumer's beneath it.
-  final CallSite callSite = .of(StackTrace.current);
+  final CallSite callSite = .of(.current);
   test(
     description,
     () => PropertyRun.of(settings ?? .new(), callSite: callSite).check(body),

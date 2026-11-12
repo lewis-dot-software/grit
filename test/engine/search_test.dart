@@ -5,6 +5,7 @@ import 'package:grit/src/engine/budget.dart';
 import 'package:grit/src/engine/call_site.dart';
 import 'package:grit/src/engine/clock.dart';
 import 'package:grit/src/engine/search.dart';
+import 'package:grit/src/gen/gen.dart';
 import 'package:grit/src/shrink/shrink.dart';
 import 'package:test/test.dart';
 
@@ -148,7 +149,7 @@ final class _Body {
   _Way wayOn(ChoiceSequence sequence) {
     final List<int> record;
     try {
-      record = _shape(Draw(.fixed(sequence)));
+      record = _shape(RunDraw(.fixed(sequence)));
     } on Exception {
       // The source stopped the run, overrun or rejected.
       return .none;

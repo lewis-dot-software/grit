@@ -289,9 +289,9 @@ void main() {
     });
 
     test('the empty first failure ends at once, proposing nothing', () {
-      final Shrink start = .start(.empty);
+      final Shrink start = .start(sequenceOf([]));
       expect(start, isA<Shrunk>());
-      expect(start.current, ChoiceSequence.empty);
+      expect(start.current, sequenceOf([]));
     });
   });
 

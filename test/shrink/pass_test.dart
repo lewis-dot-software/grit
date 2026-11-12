@@ -207,7 +207,7 @@ void main() {
 
   test('every pass proposes nothing from the empty sequence', () {
     for (final Pass pass in Pass.values) {
-      expect(pass.candidates(.empty), isEmpty, reason: pass.name);
+      expect(pass.candidates(sequenceOf([])), isEmpty, reason: pass.name);
     }
   });
 }

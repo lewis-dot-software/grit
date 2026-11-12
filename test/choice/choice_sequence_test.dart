@@ -35,8 +35,8 @@ void main() {
     });
 
     test('the empty sequence is smaller than every other', () {
-      expect(ChoiceSequence.empty.isSmallerThan(sequenceOf([0])), isTrue);
-      expect(ChoiceSequence.empty.choices, isEmpty);
+      expect(sequenceOf([]).isSmallerThan(sequenceOf([0])), isTrue);
+      expect(sequenceOf([]).choices, isEmpty);
     });
 
     test('sorting puts sequences in shortlex order', () {

@@ -1,6 +1,7 @@
 import 'package:grit/grit.dart';
 import 'package:grit/src/choice/choice_source.dart';
 import 'package:grit/src/choice/status.dart';
+import 'package:grit/src/gen/gen.dart';
 import 'package:test/test.dart';
 
 import '../support/drawing.dart';
@@ -143,8 +144,11 @@ void main() {
 
     test('ends the run where its body throws', () {
       final Gen<int> gen = .build((Draw draw) => throw StateError('broken'));
-      expect(drawFrom(gen, .empty), isA<Stopped<int>>());
-      expect((drawFrom(gen, .empty) as Stopped<int>).status, Status.failed);
+      expect(drawFrom(gen, sequenceOf([])), isA<Stopped<int>>());
+      expect(
+        (drawFrom(gen, sequenceOf([])) as Stopped<int>).status,
+        Status.failed,
+      );
     });
   });
 
@@ -210,7 +214,7 @@ void main() {
     test('keeps each value the property\'s body drew, with its label, and '
         'none drawn inside a generator', () {
       final ChoiceSource source = .fixed(sequenceOf([1, 1, 2, 0]));
-      final Draw draw = .new(source);
+      final RunDraw draw = .new(source);
       final bool flag = draw(.boolean(), label: 'flag');
       final List<int> xs = draw(.list(.integer(min: 0, max: 3)));
       expect(flag, isTrue);
@@ -231,7 +235,7 @@ void main() {
     test('keeps each value\'s text as the draw returned it, whatever the '
         'body does to the value after', () {
       final ChoiceSource source = .fixed(sequenceOf([1, 0, 1, 1, 0]));
-      final Draw draw = .new(source);
+      final RunDraw draw = .new(source);
       final List<int> xs = draw(.list(.integer(min: 0, max: 1)));
       expect(xs, [0, 1]);
       xs
@@ -242,8 +246,8 @@ void main() {
     });
 
     test('keeps no value from a draw the source stopped', () {
-      final ChoiceSource source = .fixed(.empty);
-      final Draw draw = .new(source);
+      final ChoiceSource source = .fixed(sequenceOf([]));
+      final RunDraw draw = .new(source);
       expect(run(source, () => draw(.boolean())), Status.overrun);
       expect(draw.draws, isEmpty);
     });
@@ -251,7 +255,7 @@ void main() {
     test('rejects the run where an assumption is false, and goes on where '
         'it is true', () {
       final ChoiceSource source = .fixed(sequenceOf([1]));
-      final Draw draw = .new(source);
+      final RunDraw draw = .new(source);
       expect(
         run(source, () {
           draw.assume(true);
@@ -261,7 +265,7 @@ void main() {
       );
 
       final ChoiceSource rejecting = .fixed(sequenceOf([0, 1]));
-      final Draw rejected = .new(rejecting);
+      final RunDraw rejected = .new(rejecting);
       expect(
         run(rejecting, () {
           rejected.assume(rejected(.boolean()));
@@ -275,7 +279,7 @@ void main() {
     test('keeps each line noted, in order, from the body and from inside a '
         'generator', () {
       final ChoiceSource source = .fixed(sequenceOf([1]));
-      final Draw draw = .new(source);
+      final RunDraw draw = .new(source);
       draw.note('first');
       draw(
         .build((Draw inner) {
@@ -289,7 +293,7 @@ void main() {
 
     test('names a generator by dot shorthand where one is expected', () {
       final ChoiceSource source = .fixed(sequenceOf([1, 3, 0]));
-      final Draw draw = .new(source);
+      final RunDraw draw = .new(source);
       final List<int> xs = draw(.list(.integer()));
       expect(xs, [2]);
     });
@@ -318,7 +322,7 @@ void main() {
       final Generator generator = draw(anyGenerator, label: 'generator');
       final ChoiceSequence sequence = draw(_sequence, label: 'sequence');
       final ChoiceSource source = .fixed(sequence);
-      final Draw inner = .new(source);
+      final RunDraw inner = .new(source);
       late final String returned;
       final Status status = run(source, () {
         final Object? value = inner(generator.gen);

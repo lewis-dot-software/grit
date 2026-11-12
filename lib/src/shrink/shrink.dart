@@ -83,9 +83,9 @@ Shrink _seek({
       return Shrinking._(current, pass: pass, at: at, accepted: accepted);
     }
     if (pass.index + 1 < Pass.values.length) {
-      pass = Pass.values[pass.index + 1];
+      pass = .values[pass.index + 1];
     } else if (accepted) {
-      pass = Pass.values.first;
+      pass = .values.first;
       accepted = false;
     } else {
       return Shrunk._(current);

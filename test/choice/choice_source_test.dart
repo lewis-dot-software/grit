@@ -141,7 +141,7 @@ void main() {
     });
 
     test('ends overrun at a weighted choice past its end', () {
-      final ChoiceSource source = .fixed(.empty);
+      final ChoiceSource source = .fixed(sequenceOf([]));
       expect(run(source, () => source.weigh(.new(0.5))), Status.overrun);
     });
   });
@@ -336,12 +336,12 @@ void main() {
     });
 
     test('is rejected where the body rejected it', () {
-      final ChoiceSource source = .fixed(.empty);
+      final ChoiceSource source = .fixed(sequenceOf([]));
       expect(run(source, source.reject), Status.rejected);
     });
 
     test('stays the source\'s stop where the body caught it and returned', () {
-      final ChoiceSource source = .fixed(.empty);
+      final ChoiceSource source = .fixed(sequenceOf([]));
       final Status status = run(source, () {
         try {
           source.choose(.new(1));
@@ -373,7 +373,7 @@ void main() {
       (
         'an overrun',
         .overrun,
-        () => .fixed(.empty),
+        () => .fixed(sequenceOf([])),
         (ChoiceSource source) => source.choose(.new(1)),
       ),
       (
@@ -415,7 +415,7 @@ void main() {
           expect(() => then(source), throwsException);
           expect(source.status(threw: false), stopped);
           expect(source.status(threw: true), stopped);
-          expect(source.record, ChoiceSequence.empty);
+          expect(source.record, sequenceOf([]));
         });
       }
     }

@@ -6,14 +6,15 @@ Gen<int> _integer({required int min, required int max}) {
   if (min > max) {
     throw ArgumentError('The minimum $min is above the maximum $max');
   }
-  final int width = max - min;
-  if (width < 0) {
+  // The range's width is taken exactly, since `max - min` wraps past the
+  // largest int.
+  if (BigInt.from(max) - .from(min) > .from(Choice.largest.value)) {
     throw ArgumentError(
       'The range from $min to $max holds more values than a choice does',
     );
   }
   final int target = 0.clamp(min, max);
-  final Bound bound = .new(width);
+  final Bound bound = .new(max - min);
   return ._(
     (Draw draw) => _zigzag(
       draw._source.choose(bound).value,
