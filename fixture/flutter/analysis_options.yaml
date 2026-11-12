@@ -1,0 +1,5 @@
+# The fixture takes the analyser's defaults, not the root's, which
+# include a package the fixture does not resolve.
+analyzer:
+  exclude:
+    - build/**

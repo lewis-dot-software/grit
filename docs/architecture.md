@@ -60,7 +60,7 @@ The outcome is a sealed type, one subtype a row:
 | Flaky | The failing sequence, and the replay that did not fail as it did |
 | Gave up | How many runs were rejected and overran |
 
-Every outcome carries the search's warnings, a slow property among them. `runProperty` returns the outcome, and `property` and `forAll` are its bindings to `package:test`, failing the test on every outcome but passed. The report is a pure function of the outcome.
+Every outcome carries the search's warnings, a slow property among them. `runProperty` returns the outcome, and `property` and `forAll` are its bindings to `package:test`, failing the test on every outcome but passed. The report is a pure function of the outcome and the seed the search filled from, which it names so the search can be repeated.
 
 ## Shrinking
 
@@ -115,8 +115,8 @@ property('sorting twice is sorting once', (draw) {
 
 | Entry | Is |
 |---|---|
-| `property` | A test declared, taking `test`'s own options |
-| `forAll` | A search inside a test that stands, such as a `testWidgets` |
+| `property` | A test declared with no timeout, taking `test`'s other options |
+| `forAll` | A search inside a test that stands, such as a `testWidgets`, bounded by that test's own timeout |
 | `runProperty` | A search returning its outcome, with no test failed |
 | `Draw.call` | A value drawn from a generator, with an optional label the report prints |
 | `Draw.assume` | A run rejected where its condition is false |
@@ -145,7 +145,7 @@ flowchart TD
   api --> gen["gen"]
   api --> choice["choice"]
   report --> engine
-  report --> choice
+  report --> gen
   engine --> store
   engine --> shrink["shrink"]
   engine --> gen
@@ -158,7 +158,7 @@ flowchart TD
 | Layer | Holds | Imports |
 |---|---|---|
 | `api` | The entries, the settings and their defaults, the binding to `package:test`, and the composition root | `report`, `engine`, `store`, `gen`, `choice` |
-| `report` | The outcome as the failure message | `engine`, `choice` |
+| `report` | The outcome as the failure message | `engine`, `gen` |
 | `engine` | The search: generation, the replays, the shrink driver under the budget, the warnings, the outcome, and every read of a stack | `store`, `shrink`, `gen`, `choice` |
 | `store` | Failing sequences under `.dart_tool/grit/` | `choice` |
 | `shrink` | The step function and its passes | `choice` |
@@ -201,7 +201,7 @@ The web would change three things:
 
 So the web is a later cut of those parts and not a rewrite.
 
-grit is one package. A Lean package under `lean/` models the step function and proves the proof's statements, which `CLAUDE.md`'s intent holds, and a grit property ties the model to the Dart code.
+grit is one package. A Flutter package under `fixture/flutter/` resolves it beside `flutter_test` and runs it inside a `testWidgets`, since `flutter_test` pins the `test_api` that grit's `test` must match. A Lean package under `lean/` models the step function and proves the proof's statements, which `CLAUDE.md`'s intent holds, and a grit property ties the model to the Dart code.
 
 ## Testing grit
 

@@ -1,0 +1,16 @@
+name: grit_flutter_fixture
+description: A Flutter package that resolves grit beside flutter_test and runs it there.
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  grit:
+    path: ../..
