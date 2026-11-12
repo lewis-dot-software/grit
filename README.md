@@ -6,4 +6,8 @@ grit is a property-based testing library for Dart. You state what should hold fo
 
 <!-- office doc index -->
 
+## Docs
+
+- [Architecture](docs/architecture.md) `knowledge` - A property's body draws its inputs through a choice source, and every choice it makes is recorded as a natural number.
+
 <!-- /office doc index -->
