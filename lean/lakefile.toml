@@ -1,0 +1,15 @@
+name = "grit"
+defaultTargets = ["Shrink", "Audit", "shrink-model"]
+
+[leanOptions]
+warningAsError = true
+
+[[lean_lib]]
+name = "Shrink"
+
+[[lean_lib]]
+name = "Audit"
+
+[[lean_exe]]
+name = "shrink-model"
+root = "Main"

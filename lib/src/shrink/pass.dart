@@ -176,7 +176,8 @@ Iterable<_Build> _moveValue(List<Choice> choices) sync* {
 /// side of the zigzag alone, and never lower a value on the other.
 Iterable<int> _probes(int value) sync* {
   if (value == 0) return;
-  final int pair = (value + 1) >> 1;
+  // Half of value, rounded up, with no overflow at Choice.largest.
+  final int pair = value - (value >> 1);
   yield 0;
   for (int low = 1; low < pair;) {
     final int middle = low + (pair - low) ~/ 2;

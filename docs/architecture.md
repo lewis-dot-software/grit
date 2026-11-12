@@ -202,7 +202,7 @@ The web would change three things:
 
 So the web is a later cut of those parts and not a rewrite.
 
-grit is one package. A Flutter package under `fixture/flutter/` resolves it beside `flutter_test` and runs it inside a `testWidgets`, since `flutter_test` pins the `test_api` that grit's `test` must match. A Lean package under `lean/` models the step function and proves the proof's statements, which `CLAUDE.md`'s intent holds, and a grit property ties the model to the Dart code.
+grit is one package. A Flutter package under `fixture/flutter/` resolves it beside `flutter_test` and runs it inside a `testWidgets`, since `flutter_test` pins the `test_api` that grit's `test` must match. A Lean package under `lean/` models the step function and proves the proof's statements, which `CLAUDE.md`'s intent holds, and a grit property ties the model to the Dart code ([proofs.md](proofs.md)).
 
 ## Testing grit
 

@@ -106,6 +106,15 @@ void main() {
     ]);
   });
 
+  test('lowering the largest choice probes halfway up as for any other, '
+      'with no overflow past it', () {
+    expect(_candidates(.lowerChoice, [Choice.largest.value]).take(3), [
+      [0],
+      [0x3FFFFFFFFFFFFFFF],
+      [0x4000000000000000],
+    ]);
+  });
+
   test('lowering a choice probes both choices of each pair, so an integer '
       'lowers on either side of the value it shrinks towards', () {
     expect(_candidates(.lowerChoice, [4]), [

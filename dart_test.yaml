@@ -1,1 +1,6 @@
 timeout: none
+
+tags:
+  # The model test, which builds lean/ and needs elan. `dart test -x lean`
+  # leaves it out by choice, and nothing leaves it out by default.
+  lean:

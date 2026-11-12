@@ -6,6 +6,7 @@ import 'package:grit/src/shrink/shrink.dart';
 import 'package:test/test.dart';
 
 import '../support/inputs.dart';
+import '../support/oracle.dart';
 import '../support/shrinking.dart';
 import '../support/small.dart';
 
@@ -61,47 +62,11 @@ void _hold(bool holds, List<_Step> path) {
   if (!holds) fail('$path');
 }
 
-/// An oracle drawn for the checks on grit, which answers as `answers` say
-/// in turn, from the first again once they run out, and never fails a
-/// candidate shorter than `shortest`.
-///
-/// An oracle that refuses deletions leaves the passes after them a long
-/// sequence to work on, where one that accepts them shrinks it to a few
-/// choices before they run.
-typedef _Oracle = ({List<bool> answers, int shortest});
-
-/// Answers each true at odds from 1 in 2 to 1 in 8, so some oracles accept
-/// seldom enough for the passes after zeroing to see choices other than 0.
-final Gen<List<bool>> _anyAnswers = .build((Draw draw) {
-  final int falses = draw(.integer(min: 1, max: 7));
-  return draw(.list(.integer(min: 0, max: falses).map((int i) => i == falses)));
-});
-
-/// An oracle for shrinking [first], drawn through [draw], which refuses
-/// every deletion or a candidate shorter than a length drawn.
-_Oracle _drawOracle(Draw draw, ChoiceSequence first) => (
-  answers: draw(_anyAnswers, label: 'answers'),
-  shortest: draw(
-    .build(
-      (Draw draw) => draw(.boolean())
-          ? first.choices.length
-          : draw(.integer(min: 0, max: first.choices.length)),
-    ),
-    label: 'shortest',
-  ),
-);
-
-/// The [k]th answer of [oracle], to [candidate].
-bool _answer(_Oracle oracle, int k, ChoiceSequence candidate) =>
-    candidate.choices.length >= oracle.shortest &&
-    oracle.answers.isNotEmpty &&
-    oracle.answers[k % oracle.answers.length];
-
 /// The path from shrinking [first] to its end, each candidate told as
 /// failing as [oracle] answers it in turn, with the state it ends in.
 ///
 /// Fails the test where the path passes [_endlessOnGrit] steps.
-(List<_Step>, Shrunk) _answered(ChoiceSequence first, _Oracle oracle) {
+(List<_Step>, Shrunk) _answered(ChoiceSequence first, Oracle oracle) {
   final List<_Step> path = [];
   Shrink shrink = .start(first);
   while (true) {
@@ -115,7 +80,7 @@ bool _answer(_Oracle oracle, int k, ChoiceSequence candidate) =>
         if (path.length >= _endlessOnGrit) {
           fail('$first passed $_endlessOnGrit steps');
         }
-        final bool failed = _answer(oracle, path.length, candidate);
+        final bool failed = answerOf(oracle, path.length, candidate);
         path.add((from: current, candidate: candidate, failed: failed));
         shrink = shrink.told(failed: failed);
     }
@@ -406,7 +371,7 @@ void main() {
       Draw draw,
     ) {
       final ChoiceSequence first = draw(anySequence, label: 'first failure');
-      _answered(first, _drawOracle(draw, first));
+      _answered(first, drawOracle(draw, first));
     });
 
     property('Every accepted candidate is shortlex smaller than the sequence '
@@ -414,7 +379,7 @@ void main() {
       final ChoiceSequence first = draw(anySequence, label: 'first failure');
       final (List<_Step> path, Shrunk end) = _answered(
         first,
-        _drawOracle(draw, first),
+        drawOracle(draw, first),
       );
       expect(_acceptsOnlySmaller(path, end), isTrue);
     });
@@ -424,7 +389,7 @@ void main() {
       final ChoiceSequence first = draw(anySequence, label: 'first failure');
       final (List<_Step> path, Shrunk end) = _answered(
         first,
-        _drawOracle(draw, first),
+        drawOracle(draw, first),
       );
       expect(_holdsOnlyFailures(first, path, end), isTrue);
     });
@@ -432,7 +397,7 @@ void main() {
     property('Shrinking the result again accepts nothing, so the result is a '
         'fixed point.', (Draw draw) {
       final ChoiceSequence first = draw(anySequence, label: 'first failure');
-      final _Oracle oracle = _drawOracle(draw, first);
+      final Oracle oracle = drawOracle(draw, first);
       // An oracle answers alike each time it is asked of one candidate, each
       // candidate first asked taking its next answer.
       final Map<ChoiceSequence, bool> told = {};
@@ -440,7 +405,7 @@ void main() {
         .start(first),
         (ChoiceSequence candidate) => told.putIfAbsent(
           candidate,
-          () => _answer(oracle, told.length, candidate),
+          () => answerOf(oracle, told.length, candidate),
         ),
       );
       expect(_acceptsAgain(end, told), isFalse);

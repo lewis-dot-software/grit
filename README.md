@@ -9,5 +9,6 @@ grit is a property-based testing library for Dart. You state what should hold fo
 ## Docs
 
 - [Architecture](docs/architecture.md) `knowledge` - A property's body draws its inputs through a choice source, and every choice it makes is recorded as a natural number.
+- [Shrinker proofs](docs/proofs.md) `knowledge` - The shrinker's step function is tested against a model of it written in Lean, and the properties Dan ruled on are proved of that model, by the office's proofs method (`standard/proofs.md` in the office).
 
 <!-- /office doc index -->
