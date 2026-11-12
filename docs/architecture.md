@@ -75,7 +75,7 @@ Why shrinking always ends:
 - Each pass proposes finitely many candidates from one sequence, and the passes are finitely many.
 - The step function ends on a round of every pass that accepts nothing.
 
-The budget then bounds how long shrinking takes, never whether it ends. It counts steps, each one run of a candidate, and wall time from shrinking's start, with defaults in `api`'s settings that no consumer has to set. The two replays are not steps. A spent budget ends shrinking at the smallest failing sequence found so far.
+The budget then bounds how long shrinking takes, never whether it ends. It counts steps, each one run of a candidate, and wall time from shrinking's start, with defaults in `api`'s settings that no consumer has to set. The two replays are not steps, nor is a candidate the step function proposes again in one shrinking, which the engine tells its answer with no run. A spent budget ends shrinking at the smallest failing sequence found so far.
 
 A pass is a function from the current sequence to its candidates, and the step function chooses among them:
 

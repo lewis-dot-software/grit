@@ -5,6 +5,7 @@ import 'package:grit/src/choice/status.dart';
 import 'package:grit/src/shrink/shrink.dart';
 import 'package:test/test.dart';
 
+import '../support/shrinking.dart';
 import '../support/small.dart';
 
 /// The longest sequence and the largest choice the exhaustive checks reach.
@@ -59,18 +60,6 @@ void _hold(bool holds, List<_Step> path) {
 Iterable<ChoiceSequence> get _firstFailures =>
     everySequence(length: _length, bound: _bound);
 
-/// The state [shrink] ends in, told of each candidate whether [fails].
-Shrunk _shrunk(Shrink shrink, bool Function(ChoiceSequence) fails) {
-  while (true) {
-    switch (shrink) {
-      case Shrunk():
-        return shrink;
-      case Shrinking():
-        shrink = shrink.told(failed: fails(shrink.candidate));
-    }
-  }
-}
-
 /// Whether [body] fails, run on the choices of [sequence] alone.
 bool Function(ChoiceSequence) _failsOn(void Function(ChoiceSource) body) =>
     (ChoiceSequence sequence) {
@@ -83,7 +72,7 @@ bool Function(ChoiceSequence) _failsOn(void Function(ChoiceSource) body) =>
 ChoiceSequence _smallest(List<int> first, void Function(ChoiceSource) body) {
   final bool Function(ChoiceSequence) fails = _failsOn(body);
   expect(fails(sequenceOf(first)), isTrue, reason: '$first must fail');
-  return _shrunk(.start(sequenceOf(first)), fails).current;
+  return shrunk(.start(sequenceOf(first)), fails).current;
 }
 
 /// Each element of a list drawn behind a "one more" choice, each from 0 to
@@ -180,7 +169,7 @@ void main() {
     });
 
     test('a first failure no candidate of which fails is its own smallest', () {
-      final Shrunk end = _shrunk(.start(sequenceOf([3, 1, 2])), (_) => false);
+      final Shrunk end = shrunk(.start(sequenceOf([3, 1, 2])), (_) => false);
       expect(end.current, sequenceOf([3, 1, 2]));
     });
 
@@ -271,7 +260,7 @@ void main() {
           }
           oracles++;
           bool accepted = false;
-          _shrunk(.start(end.current), (ChoiceSequence candidate) {
+          shrunk(.start(end.current), (ChoiceSequence candidate) {
             final bool failed = answers[candidate] ?? true;
             accepted |= failed;
             return failed;

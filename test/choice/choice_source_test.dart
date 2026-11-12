@@ -222,6 +222,47 @@ void main() {
       }
     });
 
+    test('at edges of 1 fills every choice at 0 or at its bound, each in '
+        'turn', () {
+      for (final int bound in [0, 1, 3, 1000, 1 << 40]) {
+        final ChoiceSource source = .random(
+          .new(bound),
+          limit: 200,
+          edges: .new(1),
+        );
+        final Set<Choice> filled = {
+          for (int i = 0; i < 200; i++) source.choose(.new(bound)),
+        };
+        expect(filled, <Choice>{.new(0), .new(bound)}, reason: '$bound');
+      }
+    });
+
+    test('at edges of 1/2 fills about half its choices at 0 or at its bound, '
+        'and the rest within it', () {
+      final Bound bound = .new(1000);
+      final ChoiceSource source = .random(
+        .new(3),
+        limit: 1000,
+        edges: .new(0.5),
+      );
+      final List<Choice> filled = [
+        for (int i = 0; i < 1000; i++) source.choose(bound),
+      ];
+      final int edges = filled
+          .where((Choice c) => c.value == 0 || c.value == bound.value)
+          .length;
+      expect(edges, inInclusiveRange(400, 600));
+      expect(filled.every(bound.admits), isTrue);
+    });
+
+    test('weighs at its own odds whatever its edges', () {
+      final ChoiceSource source = .random(.new(0), limit: 100, edges: .new(1));
+      for (int i = 0; i < 50; i++) {
+        expect(source.weigh(.new(0)), isFalse);
+        expect(source.weigh(.new(1)), isTrue);
+      }
+    });
+
     test('counts a weighted choice against its limit', () {
       final ChoiceSource source = .random(.new(0), limit: 1);
       expect(

@@ -16,7 +16,11 @@ sealed class ChoiceSource {
 
   /// A source that fills each choice at random from [random], up to [limit]
   /// choices a run.
-  factory ChoiceSource.random(Random random, {required int limit}) =
+  ///
+  /// At [edges], a choice is filled at 0 or at its bound, each alike, and
+  /// otherwise uniformly within its bound. A weighted choice is filled at its
+  /// own odds whatever [edges] is.
+  factory ChoiceSource.random(Random random, {required int limit, Odds edges}) =
       _RandomSource._;
 
   /// A source that hands over [sequence]'s choices in order, and never fills.
@@ -72,12 +76,13 @@ sealed class ChoiceSource {
 /// A source that fills each choice at random, up to a limit on the choices
 /// one run may make.
 final class _RandomSource extends ChoiceSource {
-  _RandomSource._(this._random, {required int limit})
+  _RandomSource._(this._random, {required int limit, this._edges = .never})
     : _limit = RangeError.checkNotNegative(limit, 'limit'),
       super._();
 
   final Random _random;
   final int _limit;
+  final Odds _edges;
 
   /// The width of the widest bound [Random.nextInt] fills in one call.
   static const int _wordBits = 32;
@@ -85,6 +90,11 @@ final class _RandomSource extends ChoiceSource {
   @override
   Choice _fill(Bound bound) {
     _overrunAtLimit();
+    // A uniform fill draws nothing for the edges, so it fills as it would
+    // with no edges at all.
+    if (_edges != .never && _random.nextDouble() < _edges.value) {
+      return _random.nextBool() ? .new(0) : .new(bound.value);
+    }
     if (bound.value < 1 << _wordBits) {
       return .new(_random.nextInt(bound.value + 1));
     }
