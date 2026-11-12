@@ -5,7 +5,8 @@ enum Status {
   overrun,
 
   /// The run ended as invalid: an assumption that was false, a filter that
-  /// gave up, or a fixed choice above the bound its generator asks for.
+  /// gave up, a set short of its minimum size once its retries were spent,
+  /// or a fixed choice above the bound its generator asks for.
   rejected,
 
   /// The body returned.

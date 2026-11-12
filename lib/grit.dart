@@ -15,4 +15,4 @@ export 'src/engine/frame.dart';
 export 'src/engine/outcome.dart';
 export 'src/engine/run.dart';
 export 'src/engine/shrink_end.dart';
-export 'src/gen/gen.dart' show Draw, Drawn, Gen;
+export 'src/gen/gen.dart' show Alphabet, Draw, Drawn, Gen;

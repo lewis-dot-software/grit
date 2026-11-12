@@ -4,6 +4,7 @@ import 'package:grit/src/choice/status.dart';
 import 'package:grit/src/gen/gen.dart';
 import 'package:test/test.dart';
 
+import '../support/bits.dart';
 import '../support/drawing.dart';
 import '../support/generator.dart';
 import '../support/predicate.dart';
@@ -14,9 +15,6 @@ import '../support/small.dart';
 /// The largest choice and length the exhaustive checks reach.
 const int _bound = 3;
 const int _length = 5;
-
-/// More zeros than any generator [simpleGenerator] draws reads.
-final ChoiceSequence _zeros = sequenceOf(.filled(1024, 0));
 
 /// A sequence of small choices, which a generator mostly draws from to its
 /// end, or one of choices at any scale, which mostly stops it.
@@ -55,6 +53,11 @@ final Map<String, Gen<Object?>> _generators = {
   'a list': .list(.integer(min: 0, max: 2)),
   'a bounded list': .list(.boolean(), minLength: 1, maxLength: 2),
   'a list of lists': .list(.list(.boolean())),
+  'a string': .string(alphabet: .of('ab')),
+  'a bounded string': .string(alphabet: .digits, minLength: 1, maxLength: 2),
+  'one of a few generators': .oneOf([.boolean(), .integer(min: 0, max: 2)]),
+  'a set': .set(.integer(min: 0, max: 2)),
+  'a bounded set': .set(.boolean(), minSize: 1, maxSize: 2),
   'a mapped generator': .integer(min: 0, max: 3).map((int i) => i * 10),
   'a filtered generator': .integer(min: 0, max: 3).filter((int i) => i.isEven),
   'a built generator': .build((Draw draw) {
@@ -65,8 +68,9 @@ final Map<String, Gen<Object?>> _generators = {
 
 void main() {
   group('every generator', () {
-    test('Each of `.integer`, `.boolean`, `.list` and `.element` draws its '
-        'documented simplest value from all-zero choices.', () {
+    test('Each of `.integer`, `.boolean`, `.list`, `.element`, `.string`, '
+        '`.oneOf` and `.set` draws its documented simplest value from '
+        'all-zero choices.', () {
       final ChoiceSequence zeros = sequenceOf(.filled(64, 0));
       final List<(String, Gen<Object?>, Object?)> cases = [
         for (int min = -4; min <= 4; min++)
@@ -100,6 +104,34 @@ void main() {
         ),
         ('an element', .element(['a', 'b', 'c']), 'a'),
         ('an element of one value', .element([7]), 7),
+        ('a string', .string(), ''),
+        ('a string with a minimum length', .string(minLength: 2), '00'),
+        (
+          'a string of letters with a minimum length',
+          .string(alphabet: .letters, minLength: 3),
+          'AAA',
+        ),
+        (
+          'a string of a string\'s characters',
+          .string(alphabet: .of('xyz'), minLength: 1),
+          'x',
+        ),
+        (
+          'one of a few generators',
+          .oneOf([.integer(min: 3, max: 5), .boolean()]),
+          3,
+        ),
+        ('a set', .set(.integer()), <int>{}),
+        (
+          'a set with a minimum size of 1',
+          .set(.integer(min: 3, max: 5), minSize: 1),
+          {3},
+        ),
+        (
+          'a set with a maximum size of 0',
+          .set(.boolean(), maxSize: 0),
+          <bool>{},
+        ),
       ];
       for (final (String name, Gen<Object?> gen, Object? simplest) in cases) {
         final Drawing<Object?> drawing = drawFrom(gen, zeros);
@@ -291,6 +323,17 @@ void main() {
       expect(draw.notes, ['first', 'inside', 'last']);
     });
 
+    test('keeps the value one of a few generators drew, never the generator '
+        'it chose', () {
+      final ChoiceSource source = .fixed(sequenceOf([1, 2]));
+      final RunDraw draw = .new(source);
+      final int value = draw(
+        .oneOf([.integer(min: 0, max: 9), .integer(min: 10, max: 19)]),
+      );
+      expect(value, 12);
+      expect([for (final Drawn drawn in draw.draws) drawn.value], [12]);
+    });
+
     test('names a generator by dot shorthand where one is expected', () {
       final ChoiceSource source = .fixed(sequenceOf([1, 3, 0]));
       final RunDraw draw = .new(source);
@@ -300,10 +343,14 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
-    property('Each of `.integer`, `.boolean`, `.list` and `.element` draws '
-        'its documented simplest value from all-zero choices.', (Draw draw) {
+    property('Each of `.integer`, `.boolean`, `.list`, `.element`, '
+        '`.string`, `.oneOf` and `.set` draws its documented simplest value '
+        'from all-zero choices.', (Draw draw) {
       final Simple simple = draw(simpleGenerator, label: 'generator');
-      final Drawing<Object?> drawing = drawFrom(simple.generator.gen, _zeros);
+      final Drawing<Object?> drawing = drawFrom(
+        simple.generator.gen,
+        sequenceOf(zeros),
+      );
       expect(drawing, isA<Drew<Object?>>());
       expect((drawing as Drew<Object?>).value, simple.simplest);
     });

@@ -29,8 +29,9 @@ String report(Outcome outcome, {required int seed, required String settings}) {
     GaveUp(:final int rejected, :final int overran) =>
       'The property gave up: ${_rejected(rejected)} and $overran overran '
           'before enough returned. A run is rejected by an assume that is '
-          'false or a filter that finds no value, and overruns where it makes '
-          'more choices than one run may.',
+          'false, a filter that finds no value or a set that finds too few '
+          'distinct elements, and overruns where it makes more choices than '
+          'one run may.',
   };
   return '$body\n\nSeed $seed. Repeat this search with '
       '`settings: $settings`.';

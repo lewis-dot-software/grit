@@ -100,9 +100,10 @@ void main() {
           settings: _settings,
         ),
         'The property gave up: 990 runs were rejected and 10 overran before '
-        'enough returned. A run is rejected by an assume that is false or a '
-        'filter that finds no value, and overruns where it makes more choices '
-        'than one run may.\n'
+        'enough returned. A run is rejected by an assume that is false, a '
+        'filter that finds no value or a set that finds too few distinct '
+        'elements, and overruns where it makes more choices than one run '
+        'may.\n'
         '\n'
         'Seed 7. Repeat this search with `settings: Settings(seed: 7)`.',
       );

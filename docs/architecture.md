@@ -22,7 +22,7 @@ A run ends in one of four statuses:
 | Status | Means |
 |---|---|
 | `overrun` | More choices asked for than the source holds, past a fixed sequence's end or generation's limit |
-| `rejected` | An `assume` that was false, a filter that gave up, or a fixed sequence's choice above the bound its generator asks for |
+| `rejected` | An `assume` that was false, a filter that gave up, a set short of its minimum size once its retries were spent, or a fixed sequence's choice above the bound its generator asks for |
 | `returned` | A body that returned |
 | `failed` | A body that threw |
 
@@ -132,9 +132,10 @@ The rules every generator obeys:
 - Choices: drawn only through the choice source, with no `Random` of its own and nothing else read.
 - Simplest value: named in its doc comment, the one choice 0 gives.
 - Collections: each element behind a "one more" choice, read as one more whatever it holds inside the minimum, and the collection ending on a choice of 0, one that can only be 0 at its maximum, so deleting a span deletes an element whole.
+- Strings: a list of code points, each one choice of its index in an `Alphabet`, simplest first, so a string's length counts code points and a string shrinks as a list does.
 - Distribution: none of it. A generator sets only its choices' bounds and a "one more" choice's odds.
 
-The bias towards a choice's bounds on early runs lives in the choice source's random fill, one home for every generator. A filter retries a bounded number of times, then rejects the run.
+The bias towards a choice's bounds on early runs lives in the choice source's random fill, one home for every generator. A filter retries a bounded number of times, then rejects the run. A set draws again as many times where a draw repeats an element it holds, then ends where it stands, or rejects the run under its minimum.
 
 ## Layers
 

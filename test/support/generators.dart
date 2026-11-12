@@ -1,10 +1,11 @@
 import 'package:grit/grit.dart';
 
+import 'alphabets.dart';
 import 'generator.dart';
 import 'predicate.dart';
 
-/// A generator of `.integer`, `.boolean`, `.list` or `.element`, with the
-/// simplest value its docs give it.
+/// A generator of `.integer`, `.boolean`, `.element`, `.list`, `.string`,
+/// `.oneOf` or `.set`, with the simplest value its docs give it.
 typedef Simple = ({Generator generator, Object? simplest});
 
 /// The largest magnitude a range's ends reach at each of its scales, the
@@ -22,17 +23,21 @@ final Gen<(int, int)> integerRange = .build((Draw draw) {
 });
 
 /// The kinds of generator [simpleGenerator] draws.
-enum _Simple { integer, boolean, element, list }
+enum _Simple { integer, boolean, element, list, string, oneOf, set }
 
-/// A generator of `.integer`, `.boolean`, `.element` or `.list`, a list's
-/// element itself a list at most twice over.
+/// The kinds of [_Simple] built on other generators.
+const Set<_Simple> _nested = {.list, .oneOf, .set};
+
+/// A generator of `.integer`, `.boolean`, `.element`, `.list`, `.string`,
+/// `.oneOf` or `.set`, one built on others itself built on others at most
+/// twice over.
 final Gen<Simple> simpleGenerator = _simple(2);
 
 Gen<Simple> _simple(int depth) => .build((Draw draw) {
   final _Simple kind = draw(
     .element([
       for (final _Simple kind in _Simple.values)
-        if (kind != .list || depth > 0) kind,
+        if (!_nested.contains(kind) || depth > 0) kind,
     ]),
   );
   switch (kind) {
@@ -72,6 +77,48 @@ Gen<Simple> _simple(int depth) => .build((Draw draw) {
           ),
         ),
         simplest: List<Object?>.filled(minLength, element.simplest),
+      );
+    case .string:
+      final Letters letters = draw(.element(presets));
+      final int minLength = draw(.integer(min: 0, max: 4));
+      final int? maxLength = draw(.boolean())
+          ? minLength + draw(.integer(min: 0, max: 4))
+          : null;
+      return (
+        generator: .new(
+          'a string of ${letters.name}, from $minLength to '
+          '${maxLength ?? 'any number'} long',
+          .string(
+            alphabet: letters.alphabet,
+            minLength: minLength,
+            maxLength: maxLength,
+          ),
+        ),
+        simplest: letters.simplest * minLength,
+      );
+    case .oneOf:
+      final List<Simple> options = draw(
+        .list(_simple(depth - 1), minLength: 1, maxLength: 3),
+      );
+      return (
+        generator: .new(
+          'one of ${[for (final Simple option in options) option.generator]}',
+          .oneOf([for (final Simple option in options) option.generator.gen]),
+        ),
+        simplest: options.first.simplest,
+      );
+    case .set:
+      // A set's simplest value is documented only at a minimum size of 0.
+      final Simple element = draw(_simple(depth - 1));
+      final int? maxSize = draw(.boolean())
+          ? draw(.integer(min: 0, max: 4))
+          : null;
+      return (
+        generator: .new(
+          'a set of ${element.generator}, up to ${maxSize ?? 'any number'}',
+          .set(element.generator.gen, maxSize: maxSize),
+        ),
+        simplest: <Object?>{},
       );
   }
 });

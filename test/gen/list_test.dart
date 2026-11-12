@@ -2,6 +2,7 @@ import 'package:grit/grit.dart';
 import 'package:grit/src/choice/status.dart';
 import 'package:test/test.dart';
 
+import '../support/bits.dart';
 import '../support/drawing.dart';
 import '../support/generator.dart';
 import '../support/small.dart';
@@ -21,14 +22,6 @@ final List<Generator> _bitElements = [
   ),
   .new('a list of lists of booleans', .list(.list(.boolean()))),
 ];
-
-/// A bit, 1 twice as often as 0, so a list read from bits runs past its
-/// minimum length more often than not.
-final Gen<int> _bit = .element([0, 1, 1]);
-
-/// More zeros than any list of [_bitElements] reads to its end, wherever the
-/// bits before them stop.
-final List<int> _ending = .filled(64, 0);
 
 /// The span of [record] that holds each element of a list of [element]'s
 /// values at least [minLength] long, each from its "one more" choice to the
@@ -241,19 +234,10 @@ void main() {
         minLength: minLength,
         maxLength: maxLength,
       );
-      // Runs of bits flattened, so a record reaches dozens of choices where
-      // one list's averages a handful.
-      final List<int> bits = draw(
-        .list(.list(_bit)).map(
-          (List<List<int>> runs) => [
-            for (final List<int> bits in runs) ...bits,
-          ],
-        ),
-        label: 'bits',
-      );
+      final List<int> bits = draw(bitRuns, label: 'bits');
       final Drawing<List<Object?>> drawing = drawFrom(
         gen,
-        sequenceOf([...bits, ..._ending]),
+        sequenceOf([...bits, ...zeros]),
       );
       // A list at its minimum length has no shorter list to draw.
       draw.assume(
