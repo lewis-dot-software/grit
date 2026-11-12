@@ -4,8 +4,6 @@ grit is a property-based testing library for Dart. You state what should hold fo
 
 **Status:** v0.1.0 Engine is the current milestone.
 
-## Docs
-
 <!-- office doc index -->
 
 <!-- /office doc index -->
