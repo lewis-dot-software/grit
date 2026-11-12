@@ -1,10 +1,11 @@
+import 'package:grit/grit.dart';
 import 'package:grit/src/choice/bound.dart';
-import 'package:grit/src/choice/choice_sequence.dart';
 import 'package:grit/src/choice/choice_source.dart';
 import 'package:grit/src/choice/status.dart';
 import 'package:grit/src/shrink/shrink.dart';
 import 'package:test/test.dart';
 
+import '../support/inputs.dart';
 import '../support/shrinking.dart';
 import '../support/small.dart';
 
@@ -18,6 +19,10 @@ const int _bound = 2;
 /// The most steps a path may take before it is held never to end, far past
 /// the longest path the exhaustive checks follow.
 const int _endless = 1000;
+
+/// The most steps a shrinking of grit's drawn first failures may take before
+/// it is held never to end, far past the longest any of them takes.
+const int _endlessOnGrit = 1000000;
 
 /// One step of a path: the current sequence, the candidate it proposed, and
 /// whether the candidate was told as failing.
@@ -54,6 +59,109 @@ void _everyPath(
 /// only then since a path prints slowly.
 void _hold(bool holds, List<_Step> path) {
   if (!holds) fail('$path');
+}
+
+/// An oracle drawn for the checks on grit, which answers as `answers` say
+/// in turn, from the first again once they run out, and never fails a
+/// candidate shorter than `shortest`.
+///
+/// An oracle that refuses deletions leaves the passes after them a long
+/// sequence to work on, where one that accepts them shrinks it to a few
+/// choices before they run.
+typedef _Oracle = ({List<bool> answers, int shortest});
+
+/// Answers each true at odds from 1 in 2 to 1 in 8, so some oracles accept
+/// seldom enough for the passes after zeroing to see choices other than 0.
+final Gen<List<bool>> _anyAnswers = .build((Draw draw) {
+  final int falses = draw(.integer(min: 1, max: 7));
+  return draw(.list(.integer(min: 0, max: falses).map((int i) => i == falses)));
+});
+
+/// An oracle for shrinking [first], drawn through [draw], which refuses
+/// every deletion or a candidate shorter than a length drawn.
+_Oracle _drawOracle(Draw draw, ChoiceSequence first) => (
+  answers: draw(_anyAnswers, label: 'answers'),
+  shortest: draw(
+    .build(
+      (Draw draw) => draw(.boolean())
+          ? first.choices.length
+          : draw(.integer(min: 0, max: first.choices.length)),
+    ),
+    label: 'shortest',
+  ),
+);
+
+/// The [k]th answer of [oracle], to [candidate].
+bool _answer(_Oracle oracle, int k, ChoiceSequence candidate) =>
+    candidate.choices.length >= oracle.shortest &&
+    oracle.answers.isNotEmpty &&
+    oracle.answers[k % oracle.answers.length];
+
+/// The path from shrinking [first] to its end, each candidate told as
+/// failing as [oracle] answers it in turn, with the state it ends in.
+///
+/// Fails the test where the path passes [_endlessOnGrit] steps.
+(List<_Step>, Shrunk) _answered(ChoiceSequence first, _Oracle oracle) {
+  final List<_Step> path = [];
+  Shrink shrink = .start(first);
+  while (true) {
+    switch (shrink) {
+      case Shrunk():
+        return (path, shrink);
+      case Shrinking(
+        :final ChoiceSequence current,
+        :final ChoiceSequence candidate,
+      ):
+        if (path.length >= _endlessOnGrit) {
+          fail('$first passed $_endlessOnGrit steps');
+        }
+        final bool failed = _answer(oracle, path.length, candidate);
+        path.add((from: current, candidate: candidate, failed: failed));
+        shrink = shrink.told(failed: failed);
+    }
+  }
+}
+
+/// Whether each candidate [path] told as failing became the current
+/// sequence, in the next step or as [end]'s, and was shortlex smaller than
+/// the one it replaced.
+bool _acceptsOnlySmaller(List<_Step> path, Shrunk end) {
+  for (int i = 0; i < path.length; i++) {
+    final _Step step = path[i];
+    if (!step.failed) continue;
+    final ChoiceSequence next = i + 1 < path.length
+        ? path[i + 1].from
+        : end.current;
+    if (next != step.candidate || !step.candidate.isSmallerThan(step.from)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Whether every current sequence along [path] from [first], and [end]'s,
+/// is [first] or a candidate told as failing before it.
+bool _holdsOnlyFailures(ChoiceSequence first, List<_Step> path, Shrunk end) {
+  final Set<ChoiceSequence> toldFailing = {first};
+  for (final _Step step in path) {
+    if (!toldFailing.contains(step.from)) return false;
+    if (step.failed) toldFailing.add(step.candidate);
+  }
+  return toldFailing.contains(end.current);
+}
+
+/// Whether shrinking [end]'s result again accepts a candidate, each told as
+/// [told] answered it, and as failing where it was never asked of, so a
+/// candidate the first shrinking never proposed is accepted where shrinking
+/// again proposes it.
+bool _acceptsAgain(Shrunk end, Map<ChoiceSequence, bool> told) {
+  bool accepted = false;
+  shrunk(.start(end.current), (ChoiceSequence candidate) {
+    final bool failed = told[candidate] ?? true;
+    accepted |= failed;
+    return failed;
+  });
+  return accepted;
 }
 
 /// Every small sequence, each a first failure the exhaustive checks shrink.
@@ -251,35 +359,22 @@ void main() {
     test('Every accepted candidate is shortlex smaller than the sequence it '
         'replaces.', () {
       for (final ChoiceSequence first in _firstFailures) {
-        _everyPath(.start(first), (List<_Step> path, Shrunk end) {
-          final List<ChoiceSequence> currents = [
-            for (final _Step step in path) step.from,
-            end.current,
-          ];
-          for (int i = 0; i < path.length; i++) {
-            final _Step step = path[i];
-            if (!step.failed) continue;
-            _hold(
-              currents[i + 1] == step.candidate &&
-                  step.candidate.isSmallerThan(step.from),
-              path,
-            );
-          }
-        });
+        _everyPath(
+          .start(first),
+          (List<_Step> path, Shrunk end) =>
+              _hold(_acceptsOnlySmaller(path, end), path),
+        );
       }
     });
 
     test('The current sequence is always the first failure or one the oracle '
         'said failed.', () {
       for (final ChoiceSequence first in _firstFailures) {
-        _everyPath(.start(first), (List<_Step> path, Shrunk end) {
-          final Set<ChoiceSequence> toldFailing = {first};
-          for (final _Step step in path) {
-            _hold(toldFailing.contains(step.from), path);
-            if (step.failed) toldFailing.add(step.candidate);
-          }
-          _hold(toldFailing.contains(end.current), path);
-        });
+        _everyPath(
+          .start(first),
+          (List<_Step> path, Shrunk end) =>
+              _hold(_holdsOnlyFailures(first, path, end), path),
+        );
       }
     });
 
@@ -289,9 +384,7 @@ void main() {
       for (final ChoiceSequence first in _firstFailures) {
         _everyPath(.start(first), (List<_Step> path, Shrunk end) {
           // A path that told one candidate both ways answers as no oracle
-          // does. Any other is an oracle's, which fails each candidate it
-          // was never asked of, so a candidate the first shrinking never
-          // proposed is accepted where shrinking again proposes it.
+          // does. Any other is an oracle's.
           final Map<ChoiceSequence, bool> answers = {};
           for (final _Step step in path) {
             if (answers[step.candidate] case final bool told
@@ -301,16 +394,56 @@ void main() {
             answers[step.candidate] = step.failed;
           }
           oracles++;
-          bool accepted = false;
-          shrunk(.start(end.current), (ChoiceSequence candidate) {
-            final bool failed = answers[candidate] ?? true;
-            accepted |= failed;
-            return failed;
-          });
-          _hold(!accepted, path);
+          _hold(!_acceptsAgain(end, answers), path);
         });
       }
       expect(oracles, greaterThan(0));
+    });
+  });
+
+  group('on grit, over larger first failures and answers', () {
+    property('Shrinking always ends, whatever the oracle answers.', (
+      Draw draw,
+    ) {
+      final ChoiceSequence first = draw(anySequence, label: 'first failure');
+      _answered(first, _drawOracle(draw, first));
+    });
+
+    property('Every accepted candidate is shortlex smaller than the sequence '
+        'it replaces.', (Draw draw) {
+      final ChoiceSequence first = draw(anySequence, label: 'first failure');
+      final (List<_Step> path, Shrunk end) = _answered(
+        first,
+        _drawOracle(draw, first),
+      );
+      expect(_acceptsOnlySmaller(path, end), isTrue);
+    });
+
+    property('The current sequence is always the first failure or one the '
+        'oracle said failed.', (Draw draw) {
+      final ChoiceSequence first = draw(anySequence, label: 'first failure');
+      final (List<_Step> path, Shrunk end) = _answered(
+        first,
+        _drawOracle(draw, first),
+      );
+      expect(_holdsOnlyFailures(first, path, end), isTrue);
+    });
+
+    property('Shrinking the result again accepts nothing, so the result is a '
+        'fixed point.', (Draw draw) {
+      final ChoiceSequence first = draw(anySequence, label: 'first failure');
+      final _Oracle oracle = _drawOracle(draw, first);
+      // An oracle answers alike each time it is asked of one candidate, each
+      // candidate first asked taking its next answer.
+      final Map<ChoiceSequence, bool> told = {};
+      final Shrunk end = shrunk(
+        .start(first),
+        (ChoiceSequence candidate) => told.putIfAbsent(
+          candidate,
+          () => _answer(oracle, told.length, candidate),
+        ),
+      );
+      expect(_acceptsAgain(end, told), isFalse);
     });
   });
 }

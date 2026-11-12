@@ -1,11 +1,34 @@
-import 'package:grit/src/choice/choice.dart';
-import 'package:grit/src/choice/choice_sequence.dart';
+import 'package:grit/grit.dart';
 import 'package:grit/src/choice/status.dart';
-import 'package:grit/src/gen/gen.dart';
 import 'package:test/test.dart';
 
 import '../support/drawing.dart';
+import '../support/generator.dart';
 import '../support/small.dart';
+
+/// Elements whose every choice is 0 or 1, so a sequence of bits draws a list
+/// of them wherever it starts, unless a list among them at its maximum
+/// length reads a 1 where only 0 ends it.
+final List<Generator> _bitElements = [
+  .new('a boolean', .boolean()),
+  .new('an integer from 0 to 1', .integer(min: 0, max: 1)),
+  .new('an integer from -1 to 0', .integer(min: -1, max: 0)),
+  .new('an element of a and b', .element(['a', 'b'])),
+  .new('a list of booleans', .list(.boolean())),
+  .new(
+    'a list of booleans from 1 to 2 long',
+    .list(.boolean(), minLength: 1, maxLength: 2),
+  ),
+  .new('a list of lists of booleans', .list(.list(.boolean()))),
+];
+
+/// A bit, 1 twice as often as 0, so a list read from bits runs past its
+/// minimum length more often than not.
+final Gen<int> _bit = .element([0, 1, 1]);
+
+/// More zeros than any list of [_bitElements] reads to its end, wherever the
+/// bits before them stop.
+final List<int> _ending = .filled(64, 0);
 
 /// The span of [record] that holds each element of a list of [element]'s
 /// values at least [minLength] long, each from its "one more" choice to the
@@ -26,6 +49,37 @@ List<(int, int)> _spans<E>(
     at = end;
   }
   return spans;
+}
+
+/// Checks that deleting each element's span from the record [drew] read
+/// draws from [gen], a list of [element]'s values at least [minLength] long,
+/// the same list with that element removed.
+void _expectEachDeletion<E>(
+  Gen<List<E>> gen,
+  Gen<E> element,
+  Drew<List<E>> drew, {
+  required int minLength,
+  String? reason,
+}) {
+  final ChoiceSequence record = drew.record;
+  final List<(int, int)> spans = _spans(element, record, minLength: minLength);
+  expect(spans, hasLength(drew.value.length), reason: '$reason: $record');
+  for (int i = 0; i < spans.length; i++) {
+    final (int start, int end) = spans[i];
+    final ChoiceSequence shorter = .new([
+      ...record.choices.take(start),
+      ...record.choices.skip(end),
+    ]);
+    final String deleting = '$reason: $record less $start to $end';
+    final Drawing<List<E>> drawing = drawFrom(gen, shorter);
+    expect(drawing, isA<Drew<List<E>>>(), reason: deleting);
+    expect(
+      (drawing as Drew<List<E>>).value,
+      [...drew.value]..removeAt(i),
+      reason: deleting,
+    );
+    expect(drawing.record, shorter, reason: deleting);
+  }
 }
 
 void main() {
@@ -85,30 +139,22 @@ void main() {
           value: final List<Object?> list,
           :final ChoiceSequence record,
         )) {
-          final List<(int, int)> spans = _spans(
-            element,
-            record,
-            minLength: minLength,
-          );
-          expect(spans, hasLength(list.length), reason: '$record');
-          if (list.length == minLength) continue;
-          for (int i = 0; i < spans.length; i++) {
-            final (int start, int end) = spans[i];
-            final ChoiceSequence shorter = .new([
-              ...record.choices.take(start),
-              ...record.choices.skip(end),
-            ]);
-            final Drawing<List<Object?>> drawing = drawFrom(gen, shorter);
-            final String reason = '$name: $record less $start to $end';
-            expect(drawing, isA<Drew<List<Object?>>>(), reason: reason);
+          if (list.length == minLength) {
             expect(
-              (drawing as Drew<List<Object?>>).value,
-              [...list]..removeAt(i),
-              reason: reason,
+              _spans(element, record, minLength: minLength),
+              hasLength(list.length),
+              reason: '$record',
             );
-            expect(drawing.record, shorter, reason: reason);
-            deleted++;
+            continue;
           }
+          _expectEachDeletion(
+            gen,
+            element,
+            .new(list, record),
+            minLength: minLength,
+            reason: name,
+          );
+          deleted += list.length;
         }
       }
       // The check proves nothing where no sequence draws an element to
@@ -172,6 +218,52 @@ void main() {
       expect(
         () => Gen.list(.boolean(), minLength: 2, maxLength: 1),
         throwsArgumentError,
+      );
+    });
+  });
+
+  group('on grit, over larger inputs', () {
+    property('Deleting one element\'s span from a list\'s record draws the '
+        'same list with that element removed.', (Draw draw) {
+      final Generator element = draw(.element(_bitElements), label: 'element');
+      final int minLength = draw(
+        .integer(min: 0, max: 4),
+        label: 'minimum length',
+      );
+      final int? maxLength = draw(.boolean())
+          ? draw(
+              .integer(min: minLength, max: minLength + 8),
+              label: 'maximum length',
+            )
+          : null;
+      final Gen<List<Object?>> gen = .list(
+        element.gen,
+        minLength: minLength,
+        maxLength: maxLength,
+      );
+      // Runs of bits flattened, so a record reaches dozens of choices where
+      // one list's averages a handful.
+      final List<int> bits = draw(
+        .list(.list(_bit)).map(
+          (List<List<int>> runs) => [
+            for (final List<int> bits in runs) ...bits,
+          ],
+        ),
+        label: 'bits',
+      );
+      final Drawing<List<Object?>> drawing = drawFrom(
+        gen,
+        sequenceOf([...bits, ..._ending]),
+      );
+      // A list at its minimum length has no shorter list to draw.
+      draw.assume(
+        drawing is Drew<List<Object?>> && drawing.value.length > minLength,
+      );
+      _expectEachDeletion(
+        gen,
+        element.gen,
+        drawing as Drew<List<Object?>>,
+        minLength: minLength,
       );
     });
   });

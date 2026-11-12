@@ -1,15 +1,48 @@
-import 'package:grit/src/choice/choice_sequence.dart';
+import 'package:grit/grit.dart';
 import 'package:grit/src/choice/choice_source.dart';
 import 'package:grit/src/choice/status.dart';
-import 'package:grit/src/gen/gen.dart';
 import 'package:test/test.dart';
 
 import '../support/drawing.dart';
+import '../support/generator.dart';
+import '../support/predicate.dart';
+import '../support/generators.dart';
+import '../support/inputs.dart';
 import '../support/small.dart';
 
 /// The largest choice and length the exhaustive checks reach.
 const int _bound = 3;
 const int _length = 5;
+
+/// More zeros than any generator [simpleGenerator] draws reads.
+final ChoiceSequence _zeros = sequenceOf(.filled(1024, 0));
+
+/// A sequence of small choices, which a generator mostly draws from to its
+/// end, or one of choices at any scale, which mostly stops it.
+final Gen<ChoiceSequence> _sequence = .build(
+  (Draw draw) => draw(draw(.boolean()) ? smallSequence : anySequence),
+);
+
+/// What filtering [gen] by [accepts] draws from [sequence], read off drawing
+/// [gen] alone up to three times, each from where the one before it ended.
+Drawing<Object?> _filtered(
+  Gen<Object?> gen,
+  bool Function(Object? value) accepts,
+  ChoiceSequence sequence,
+) {
+  ChoiceSequence upTo(int length) => .new(sequence.choices.take(length));
+  int at = 0;
+  for (int i = 0; i < 3; i++) {
+    switch (drawFrom(gen, .new(sequence.choices.skip(at)))) {
+      case Stopped(:final Status status, :final ChoiceSequence record):
+        return Stopped(status, upTo(at + record.choices.length));
+      case Drew(:final Object? value, :final ChoiceSequence record):
+        at += record.choices.length;
+        if (accepts(value)) return Drew(value, upTo(at));
+    }
+  }
+  return Stopped(.rejected, upTo(at));
+}
 
 /// Generators of every kind the stage has, each built on the others, so a
 /// property checked over them is checked over each.
@@ -81,21 +114,11 @@ void main() {
           length: _length,
           bound: _bound,
         )) {
-          final Drawing<Object?> first = drawFrom(gen, sequence);
-          final Drawing<Object?> second = drawFrom(gen, sequence);
-          final String reason = '$name from $sequence';
-          expect(second.record, first.record, reason: reason);
-          switch ((first, second)) {
-            case (Drew(value: final Object? a), Drew(value: final Object? b)):
-              expect(b, a, reason: reason);
-            case (
-              Stopped(status: final Status a),
-              Stopped(status: final Status b),
-            ):
-              expect(b, a, reason: reason);
-            case (Drew(), Stopped()) || (Stopped(), Drew()):
-              fail('$reason drew $first, then $second');
-          }
+          expectAlike(
+            drawFrom(gen, sequence),
+            drawFrom(gen, sequence),
+            reason: '$name from $sequence',
+          );
         }
       }
     });
@@ -256,6 +279,45 @@ void main() {
       final Draw draw = .new(source);
       final List<int> xs = draw(.list(.integer()));
       expect(xs, [2]);
+    });
+  });
+
+  group('on grit, over larger inputs', () {
+    property('Each of `.integer`, `.boolean`, `.list` and `.element` draws '
+        'its documented simplest value from all-zero choices.', (Draw draw) {
+      final Simple simple = draw(simpleGenerator, label: 'generator');
+      final Drawing<Object?> drawing = drawFrom(simple.generator.gen, _zeros);
+      expect(drawing, isA<Drew<Object?>>());
+      expect((drawing as Drew<Object?>).value, simple.simplest);
+    });
+
+    property('The same sequence always draws the same value.', (Draw draw) {
+      final Generator generator = draw(anyGenerator, label: 'generator');
+      final ChoiceSequence sequence = draw(_sequence, label: 'sequence');
+      expectAlike(
+        drawFrom(generator.gen, sequence),
+        drawFrom(generator.gen, sequence),
+      );
+    });
+
+    property('A filtered generator only ever draws a value its predicate '
+        'accepts, and rejects the run once its retries are spent.', (
+      Draw draw,
+    ) {
+      final Generator base = draw(anyGenerator, label: 'generator');
+      final Predicate predicate = draw(
+        .element(Predicate.values),
+        label: 'predicate',
+      );
+      final ChoiceSequence sequence = draw(_sequence, label: 'sequence');
+      final Drawing<Object?> drawing = drawFrom(
+        base.gen.filter(predicate.accepts),
+        sequence,
+      );
+      if (drawing case Drew(:final Object? value)) {
+        expect(predicate.accepts(value), isTrue);
+      }
+      expectAlike(drawing, _filtered(base.gen, predicate.accepts, sequence));
     });
   });
 }

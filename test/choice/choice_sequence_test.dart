@@ -1,8 +1,15 @@
-import 'package:grit/src/choice/choice.dart';
-import 'package:grit/src/choice/choice_sequence.dart';
+import 'package:grit/grit.dart';
 import 'package:test/test.dart';
 
+import '../support/inputs.dart';
 import '../support/small.dart';
+
+/// Whether [a] and [b] hold the same choices, told with no appeal to the
+/// order.
+bool _sameChoices(ChoiceSequence a, ChoiceSequence b) =>
+    a.choices.length == b.choices.length &&
+    [for (int i = 0; i < a.choices.length; i++) i]
+        .every((int i) => a.choices[i] == b.choices[i]);
 
 void main() {
   group('shortlex', () {
@@ -117,5 +124,24 @@ void main() {
 
   test('a negative choice is a bug, thrown', () {
     expect(() => Choice(-1), throwsRangeError);
+  });
+
+  group('on grit, over larger inputs', () {
+    property('For any two different sequences, exactly one is shortlex '
+        'smaller than the other.', (Draw draw) {
+      // The two share a prefix, so they differ at a later choice as often as
+      // by their lengths.
+      final List<Choice> prefix = draw(.list(anyChoice), label: 'prefix');
+      final ChoiceSequence a = .new([
+        ...prefix,
+        ...draw(.list(anyChoice), label: 'a after it'),
+      ]);
+      final ChoiceSequence b = .new([
+        ...prefix,
+        ...draw(.list(anyChoice), label: 'b after it'),
+      ]);
+      draw.assume(!_sameChoices(a, b));
+      expect(a.isSmallerThan(b) != b.isSmallerThan(a), isTrue);
+    });
   });
 }

@@ -1,9 +1,14 @@
+import 'package:grit/grit.dart';
 import 'package:grit/src/choice/status.dart';
-import 'package:grit/src/gen/gen.dart';
 import 'package:test/test.dart';
 
 import '../support/drawing.dart';
+import '../support/generators.dart';
 import '../support/small.dart';
+
+/// Where in a range a drawn choice lies: anywhere within it, or at one of
+/// the seams an off-by-one lands on.
+enum _Seam { anywhere, farEnd, turn }
 
 /// The value [gen] draws from the one choice [choice].
 int _drawn(Gen<int> gen, int choice) =>
@@ -125,6 +130,51 @@ void main() {
     test('a range holding more values than a choice does is thrown', () {
       expect(() => Gen.integer(min: 1 << 63, max: 0), throwsArgumentError);
       expect(() => Gen.integer(min: -1, max: -1 >>> 1), throwsArgumentError);
+    });
+  });
+
+  group('on grit, over larger inputs', () {
+    property('An integer always draws within its range, and a smaller choice '
+        'never draws a value further from its target.', (Draw draw) {
+      final (int min, int max) = draw(integerRange, label: 'range');
+      final int target = 0.clamp(min, max);
+      final int width = max - min;
+      // The choice where the zigzag runs out of one side and counts on along
+      // the other, a seam beside the range's far end.
+      final int turn =
+          2 * (target - min < max - target ? target - min : max - target);
+      final int choice = draw(
+        .build(
+          (Draw draw) => switch (draw(.element(_Seam.values))) {
+            .anywhere => draw(.integer(min: 0, max: width)),
+            .farEnd => width,
+            .turn =>
+              turn +
+                  draw(
+                    .integer(
+                      min: turn == 0 ? 0 : -1,
+                      max: turn == width ? 0 : 1,
+                    ),
+                  ),
+          },
+        ),
+        label: 'choice',
+      );
+      final int smaller = draw(
+        .build(
+          (Draw draw) => draw(.boolean())
+              ? (choice == 0 ? 0 : choice - 1)
+              : draw(.integer(min: 0, max: choice)),
+        ),
+        label: 'smaller choice',
+      );
+      final Gen<int> gen = .integer(min: min, max: max);
+      final int value = _drawn(gen, choice);
+      expect(value, inInclusiveRange(min, max));
+      expect(
+        (_drawn(gen, smaller) - target).abs(),
+        lessThanOrEqualTo((value - target).abs()),
+      );
     });
   });
 }

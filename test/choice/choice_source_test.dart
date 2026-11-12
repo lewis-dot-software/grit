@@ -1,19 +1,61 @@
 import 'dart:math';
 
+import 'package:grit/grit.dart';
 import 'package:grit/src/choice/bound.dart';
-import 'package:grit/src/choice/choice.dart';
-import 'package:grit/src/choice/choice_sequence.dart';
 import 'package:grit/src/choice/choice_source.dart';
 import 'package:grit/src/choice/odds.dart';
 import 'package:grit/src/choice/status.dart';
 import 'package:test/test.dart';
 
 import '../support/fixed_random.dart';
+import '../support/inputs.dart';
 import '../support/small.dart';
 
 /// The largest choice and length the exhaustive checks reach.
 const int _bound = 3;
 const int _length = 4;
+
+/// The bound every choice lies within.
+final Bound _widest = .new(Choice.largest.value);
+
+/// Odds from 0 to 1 in hundredths.
+final Gen<Odds> _odds = .integer(
+  min: 0,
+  max: 100,
+).map((int hundredths) => .new(hundredths / 100));
+
+/// One ask a run makes of its source.
+sealed class _Ask {
+  _Ask._();
+}
+
+/// An ask for a choice up to [bound].
+final class _Choose extends _Ask {
+  _Choose(this.bound) : super._();
+
+  final Bound bound;
+
+  @override
+  String toString() => 'choose up to $bound';
+}
+
+/// An ask for a weighted choice at [odds].
+final class _Weigh extends _Ask {
+  _Weigh(this.odds) : super._();
+
+  final Odds odds;
+
+  @override
+  String toString() => 'weigh at $odds';
+}
+
+/// An ask for a choice up to a bound at any scale, or for a weighted choice
+/// at any odds.
+final Gen<_Ask> _ask = .build(
+  (Draw draw) => draw(.boolean())
+      ? _Weigh(draw(_odds))
+      : _Choose(.new(draw(anyChoice).value)),
+);
 
 void main() {
   group('a fixed source', () {
@@ -391,6 +433,84 @@ void main() {
     test('odds outside 0 to 1 are thrown', () {
       for (final double odds in [-0.1, 1.1, .nan]) {
         expect(() => Odds(odds), throwsRangeError, reason: '$odds');
+      }
+    });
+  });
+
+  group('on grit, over larger inputs', () {
+    property('A fixed source hands a run exactly its sequence\'s choices in '
+        'order, and a run that asks past its end ends overrun.', (Draw draw) {
+      final ChoiceSequence sequence = draw(anySequence, label: 'sequence');
+      final int size = sequence.choices.length;
+      final int asks = draw(.integer(min: 0, max: size + 4), label: 'asks');
+      final ChoiceSource source = .fixed(sequence);
+      final List<Choice> handed = [];
+      final Status status = run(source, () {
+        for (int i = 0; i < asks; i++) {
+          handed.add(source.choose(_widest));
+        }
+      });
+      expect(handed, sequence.choices.take(min(asks, size)));
+      expect(source.record.choices, handed);
+      expect(status, asks > size ? Status.overrun : Status.returned);
+    });
+
+    property('A random fill never gives a choice above the bound asked for, '
+        'nor more choices than its limit.', (Draw draw) {
+      final int seed = draw(.integer(min: 0, max: 0xFFFFFFFF), label: 'seed');
+      final int limit = draw(.integer(min: 0, max: 64), label: 'limit');
+      final ChoiceSource source = .random(
+        .new(seed),
+        limit: limit,
+        edges: draw(_odds, label: 'edges'),
+      );
+      final List<_Ask> asks = draw(.list(_ask), label: 'asks');
+      final List<(Bound, Choice)> handed = [];
+      final Status status = run(source, () {
+        for (final _Ask ask in asks) {
+          handed.add(switch (ask) {
+            _Choose(:final Bound bound) => (bound, source.choose(bound)),
+            _Weigh(:final Odds odds) => (
+              .binary,
+              .new(source.weigh(odds) ? 1 : 0),
+            ),
+          });
+        }
+      });
+      for (final (Bound bound, Choice choice) in handed) {
+        expect(bound.admits(choice), isTrue, reason: '$choice above $bound');
+      }
+      expect(source.record.choices, hasLength(handed.length));
+      expect(handed.length, lessThanOrEqualTo(limit));
+      expect(status, asks.length > limit ? Status.overrun : Status.returned);
+    });
+
+    property('A fixed choice above the bound a generator now asks for ends '
+        'the run rejected.', (Draw draw) {
+      // Each choice is asked for under the bound drawn beside it, each at a
+      // scale of its own, so a choice lies above its bound as often as not.
+      final List<(Choice, Choice)> pairs = draw(
+        .list(.build((Draw draw) => (draw(anyChoice), draw(anyChoice)))),
+        label: 'choices and bounds',
+      );
+      final ChoiceSequence sequence = .new([
+        for (final (Choice choice, _) in pairs) choice,
+      ]);
+      final ChoiceSource source = .fixed(sequence);
+      final Status status = run(source, () {
+        for (final (_, Choice bound) in pairs) {
+          source.choose(.new(bound.value));
+        }
+      });
+      final int firstAbove = pairs.indexWhere(
+        ((Choice, Choice) pair) => pair.$1.value > pair.$2.value,
+      );
+      if (firstAbove == -1) {
+        expect(status, Status.returned);
+        expect(source.record, sequence);
+      } else {
+        expect(status, Status.rejected);
+        expect(source.record.choices, sequence.choices.take(firstAbove));
       }
     });
   });

@@ -1,14 +1,10 @@
 import 'dart:math';
 
-import 'package:grit/src/choice/choice_sequence.dart';
+import 'package:grit/grit.dart';
 import 'package:grit/src/engine/budget.dart';
 import 'package:grit/src/engine/call_site.dart';
 import 'package:grit/src/engine/clock.dart';
-import 'package:grit/src/engine/outcome.dart';
-import 'package:grit/src/engine/run.dart';
 import 'package:grit/src/engine/search.dart';
-import 'package:grit/src/engine/shrink_end.dart';
-import 'package:grit/src/gen/gen.dart';
 import 'package:grit/src/shrink/shrink.dart';
 import 'package:test/test.dart';
 
@@ -102,6 +98,9 @@ final class _Body {
   /// How many runs there have been.
   int runs = 0;
 
+  /// The same body, with no run yet.
+  _Body get afresh => .new(name, _shape, _fails);
+
   /// The record of the first run that threw, with the way it failed and its
   /// place among the runs, where one has.
   ({ChoiceSequence record, _Way way, int run})? first;
@@ -140,33 +139,129 @@ final class _Body {
   String toString() => name;
 }
 
+/// Fails where the record is at least [key], choice by choice.
+_Fails _failingFrom(ChoiceSequence key) => (_, List<int> record) {
+  final List<int> at = [for (final c in key.choices) c.value];
+  final bool fails =
+      record.length >= at.length &&
+      [for (int i = 0; i < at.length; i++) i]
+          .every((int i) => record[i] >= at[i]);
+  return fails ? .stateHere : .none;
+};
+
+/// Fails in a way the record mixes with [key], so a smaller record often
+/// fails another way.
+_Fails _failingMixed(ChoiceSequence key) => (_, List<int> record) {
+  int mix = key.choices.length;
+  for (int i = 0; i < record.length; i++) {
+    final int k = key.choices.isEmpty
+        ? 1
+        : key.choices[i % key.choices.length].value + 1;
+    mix = mix * 5 + record[i] * k;
+  }
+  return .values[mix % _Way.values.length];
+};
+
 /// Bodies that fail as their record alone says, each built afresh.
 List<_Body Function()> get _deterministic => [
   for (final MapEntry(key: String shape, value: _Shape draw) in _shapes.entries)
     for (final ChoiceSequence key in everySequence(length: 2, bound: 3)) ...[
-      // Fails where the record is at least the key, choice by choice.
-      () => .new('$shape, failing from $key', draw, (_, List<int> record) {
-        final List<int> at = [for (final c in key.choices) c.value];
-        final bool fails =
-            record.length >= at.length &&
-            [for (int i = 0; i < at.length; i++) i]
-                .every((int i) => record[i] >= at[i]);
-        return fails ? .stateHere : .none;
-      }),
-      // Fails in a way the record mixes with the key, so a smaller record
-      // often fails another way.
-      () => .new('$shape, failing mixed by $key', draw, (_, List<int> record) {
-        int mix = key.choices.length;
-        for (int i = 0; i < record.length; i++) {
-          final int k = key.choices.isEmpty
-              ? 1
-              : key.choices[i % key.choices.length].value + 1;
-          mix = mix * 5 + record[i] * k;
-        }
-        return .values[mix % _Way.values.length];
-      }),
+      () => .new('$shape, failing from $key', draw, _failingFrom(key)),
+      () => .new('$shape, failing mixed by $key', draw, _failingMixed(key)),
     ],
 ];
+
+/// One part of a drawn body's shape, which draws as it says and returns the
+/// choices it read.
+sealed class _Part {
+  _Part._(this.bound);
+
+  /// The largest choice the part reads.
+  final int bound;
+
+  /// The choices the part reads, drawn through [draw].
+  List<int> drawn(Draw draw);
+}
+
+/// A part that draws one choice.
+final class _OneChoice extends _Part {
+  _OneChoice(super.bound) : super._();
+
+  @override
+  List<int> drawn(Draw draw) => [draw(.integer(min: 0, max: bound))];
+
+  @override
+  String toString() => 'a choice up to $bound';
+}
+
+/// A part that draws a list of choices.
+final class _ListOf extends _Part {
+  _ListOf(super.bound) : super._();
+
+  @override
+  List<int> drawn(Draw draw) => [
+    for (final int x in draw(.list(.integer(min: 0, max: bound)))) ...[1, x],
+    0,
+  ];
+
+  @override
+  String toString() => 'a list of choices up to $bound';
+}
+
+/// A part that draws one choice and rejects the run where it lies below
+/// [least].
+final class _AtLeast extends _Part {
+  _AtLeast(super.bound, this.least) : super._();
+
+  final int least;
+
+  @override
+  List<int> drawn(Draw draw) {
+    final int x = draw(.integer(min: 0, max: bound));
+    draw.assume(x >= least);
+    return [x];
+  }
+
+  @override
+  String toString() => 'a choice up to $bound, assumed at least $least';
+}
+
+/// The kinds of part a drawn body's shape is made of.
+enum _PartKind { oneChoice, listOf, atLeast }
+
+/// A part of any kind, reading choices up to a bound at one of a few scales.
+final Gen<_Part> _anyPart = .build((Draw draw) {
+  final int bound = draw(.element([3, 15, 255, 65535]));
+  return switch (draw(.element(_PartKind.values))) {
+    .oneChoice => _OneChoice(bound),
+    .listOf => _ListOf(bound),
+    .atLeast => _AtLeast(bound, draw(.integer(min: 0, max: bound))),
+  };
+});
+
+/// A body that fails as its record alone says, drawing a shape of a few
+/// parts and failing from a key, or mixed by it.
+final Gen<_Body> _anyBody = .build((Draw draw) {
+  final List<_Part> parts = draw(.list(_anyPart, maxLength: 6));
+  final ChoiceSequence key = draw(
+    .list(
+      .integer(min: 0, max: 15).map(Choice.new),
+      maxLength: 4,
+    ).map(ChoiceSequence.new),
+  );
+  final bool mixed = draw(.boolean());
+  return .new(
+    '$parts, failing ${mixed ? 'mixed by' : 'from'} $key',
+    (Draw draw) => [for (final _Part part in parts) ...part.drawn(draw)],
+    mixed ? _failingMixed(key) : _failingFrom(key),
+  );
+});
+
+/// A seed for a search grit draws.
+final Gen<int> _anySeed = .integer(min: 0, max: 0xFFFFFFFF);
+
+/// The most choices a run of a drawn body may make, past most of its lists.
+const int _drawnLimit = 64;
 
 /// Each deterministic body's search from each seed, with the body after it.
 Future<void> _eachSearch(
@@ -185,6 +280,143 @@ Future<void> _eachSearch(
       await check(body, seed, outcome);
     }
   }
+}
+
+/// Checks the searches of [body] from [seed] under a bound of [bound] steps,
+/// and under as many milliseconds by a clock that moves one a read, against
+/// [whole], its search with no bound, and returns whether the step bound ran
+/// out.
+///
+/// Each search runs a fresh copy of [body], at most [limit] choices a run.
+Future<bool> _expectBounded(
+  _Body body, {
+  required int seed,
+  required int bound,
+  required Failed whole,
+  int limit = 24,
+}) async {
+  final String reason = '$body from $seed, $bound steps';
+  final _Body stepped = body.afresh;
+  final Failed byStep = await _search(
+    seed: seed,
+    limit: limit,
+    budget: (steps: bound, time: _unbounded.time),
+  ).run(stepped.call) as Failed;
+  expect(byStep.steps, stepped.steps, reason: reason);
+  expect(byStep.steps, lessThanOrEqualTo(bound), reason: reason);
+  final bool ranOut = whole.steps > bound;
+  if (ranOut) {
+    expect(byStep.end, ShrinkEnd.steps, reason: reason);
+    expect(byStep.steps, bound, reason: reason);
+  } else {
+    expect(byStep.end, ShrinkEnd.shrunk, reason: reason);
+    expect(byStep.sequence, whole.sequence, reason: reason);
+  }
+
+  // Shrinking reads the clock once at its start and once before each run,
+  // so a bound of as many milliseconds lets one run fewer start.
+  final Duration time = .new(milliseconds: bound);
+  final int allowed = bound == 0 ? 0 : bound - 1;
+  final _Body timed = body.afresh;
+  final Failed byTime = await _search(
+    seed: seed,
+    clock: FakeClock([const .new(milliseconds: 1)]),
+    limit: limit,
+    budget: (steps: _unbounded.steps, time: time),
+  ).run(timed.call) as Failed;
+  expect(byTime.steps, timed.steps, reason: '$reason, $time');
+  if (whole.steps > allowed) {
+    expect(byTime.end, ShrinkEnd.time, reason: '$reason, $time');
+    expect(byTime.steps, allowed, reason: '$reason, $time');
+    expect(byTime.time, greaterThanOrEqualTo(time), reason: '$reason, $time');
+  } else {
+    expect(byTime.end, ShrinkEnd.shrunk, reason: '$reason, $time');
+    expect(byTime.sequence, whole.sequence, reason: '$reason, $time');
+  }
+  return ranOut;
+}
+
+/// Checks that [outcome], the search of [body], is never flaky, and where it
+/// failed, that shrinking accepted only the candidates [body] fails on as it
+/// first failed, by its own rule, and returns how many candidates failed
+/// another way.
+int _expectAcceptedAlike(_Body body, Outcome outcome) {
+  expect(outcome, isNot(isA<Flaky>()), reason: '$body');
+  if (outcome is! Failed) return 0;
+  final ({ChoiceSequence record, _Way way, int run}) first = body.first!;
+  int crossed = 0;
+  final Shrunk alike = shrunk(.start(first.record), (ChoiceSequence candidate) {
+    final _Way way = body.wayOn(candidate);
+    if (way != .none && way != first.way) crossed++;
+    return way == first.way;
+  });
+  expect(outcome.sequence, alike.current, reason: '$body');
+  expect(body.wayOn(outcome.sequence), first.way, reason: '$body');
+  return crossed;
+}
+
+/// Checks that [ticking] came to the verdict [frozen] did: a pass of as many
+/// runs, a give-up of as many runs rejected and overrun, or a failure or a
+/// flake of any size.
+void _expectSameVerdict(Outcome ticking, Outcome frozen, {String? reason}) {
+  switch (frozen) {
+    case Passed(:final int runs):
+      expect(
+        ticking,
+        isA<Passed>().having((o) => o.runs, 'runs', runs),
+        reason: reason,
+      );
+    case GaveUp(:final int rejected, :final int overran):
+      expect(
+        ticking,
+        isA<GaveUp>()
+            .having((o) => o.rejected, 'rejected', rejected)
+            .having((o) => o.overran, 'overran', overran),
+        reason: reason,
+      );
+    case Failed():
+      expect(ticking, isA<Failed>(), reason: reason);
+    case Flaky():
+      expect(ticking, isA<Flaky>(), reason: reason);
+  }
+}
+
+/// How a search of a body that fails by its run's place came out.
+enum _ByRun {
+  /// It never failed.
+  passed,
+
+  /// Both replays failed as the first failure did.
+  failed,
+
+  /// The first replay did not fail as the first failure did.
+  flakyOnFirstReplay,
+
+  /// The first replay failed alike, and the final replay did not.
+  flakyOnFinalReplay,
+}
+
+/// Checks [outcome], the search of [body], which fails as [at] says of each
+/// run's place, against the replays it made, and returns how it came out.
+_ByRun _expectFlakyUnlessReplayed(
+  _Body body,
+  _Way Function(int run) at,
+  Outcome outcome, {
+  String? reason,
+}) {
+  if (body.first == null) {
+    expect(outcome, isA<Passed>(), reason: reason);
+    return .passed;
+  }
+  final _Way first = at(body.first!.run);
+  final bool replayed = at(body.first!.run + 1) == first;
+  final bool lastReplayed = at(body.runs - 1) == first;
+  if (replayed && lastReplayed) {
+    expect(outcome, isA<Failed>(), reason: reason);
+    return .failed;
+  }
+  expect(outcome, isA<Flaky>(), reason: reason);
+  return replayed ? .flakyOnFinalReplay : .flakyOnFirstReplay;
 }
 
 void main() {
@@ -430,77 +662,22 @@ void main() {
 
     test('Shrinking never runs more steps than its bound, and an outcome whose '
         'bound ran out names that bound.', () async {
-      final Map<(String, int), Failed> unbounded = {};
+      int failed = 0;
       await _eachSearch((_Body body, int seed, Outcome outcome) async {
-        if (outcome is Failed) unbounded[('$body', seed)] = outcome;
+        if (outcome is! Failed) return;
+        failed++;
+        for (final int bound in [0, 1, 2, 3, 5, 8]) {
+          await _expectBounded(body, seed: seed, bound: bound, whole: outcome);
+        }
       });
-      expect(unbounded, isNotEmpty);
-      for (final int bound in [0, 1, 2, 3, 5, 8]) {
-        await _eachSearch(budget: (steps: bound, time: _unbounded.time), (
-          _Body body,
-          int seed,
-          Outcome outcome,
-        ) async {
-          final Failed? whole = unbounded[('$body', seed)];
-          if (whole == null) return;
-          final String reason = '$body from $seed, $bound steps';
-          final Failed failed = outcome as Failed;
-          expect(failed.steps, body.steps, reason: reason);
-          expect(failed.steps, lessThanOrEqualTo(bound), reason: reason);
-          if (whole.steps > bound) {
-            expect(failed.end, ShrinkEnd.steps, reason: reason);
-            expect(failed.steps, bound, reason: reason);
-          } else {
-            expect(failed.end, ShrinkEnd.shrunk, reason: reason);
-            expect(failed.sequence, whole.sequence, reason: reason);
-          }
-        });
-        // A clock that moves a millisecond a read, under a bound of as many.
-        // Shrinking reads it once at its start and once before each run, so
-        // the bound lets one run fewer than its milliseconds start.
-        final Duration time = .new(milliseconds: bound);
-        final int allowed = bound == 0 ? 0 : bound - 1;
-        await _eachSearch(
-          budget: (steps: _unbounded.steps, time: time),
-          clock: () => FakeClock([const .new(milliseconds: 1)]),
-          (_Body body, int seed, Outcome outcome) async {
-            final Failed? whole = unbounded[('$body', seed)];
-            if (whole == null) return;
-            final String reason = '$body from $seed, $time';
-            final Failed failed = outcome as Failed;
-            expect(failed.steps, body.steps, reason: reason);
-            if (whole.steps > allowed) {
-              expect(failed.end, ShrinkEnd.time, reason: reason);
-              expect(failed.steps, allowed, reason: reason);
-              expect(failed.time, greaterThanOrEqualTo(time), reason: reason);
-            } else {
-              expect(failed.end, ShrinkEnd.shrunk, reason: reason);
-              expect(failed.sequence, whole.sequence, reason: reason);
-            }
-          },
-        );
-      }
+      expect(failed, greaterThan(0));
     });
 
     test('A candidate that fails with another error type or from another frame '
         'is never accepted.', () async {
       int crossed = 0;
       await _eachSearch((_Body body, _, Outcome outcome) async {
-        expect(outcome, isNot(isA<Flaky>()), reason: '$body');
-        if (outcome is! Failed) return;
-        final ({ChoiceSequence record, _Way way, int run}) first = body.first!;
-        // The step function told as failing only the candidates the body
-        // fails on its first failure's way, by its own rule, which the
-        // search must reach alike.
-        final Shrunk alike = shrunk(.start(first.record), (
-          ChoiceSequence candidate,
-        ) {
-          final _Way way = body.wayOn(candidate);
-          if (way != .none && way != first.way) crossed++;
-          return way == first.way;
-        });
-        expect(outcome.sequence, alike.current, reason: '$body');
-        expect(body.wayOn(outcome.sequence), first.way, reason: '$body');
+        crossed += _expectAcceptedAlike(body, outcome);
       });
       // Some candidate failed another way, so the check reaches the rule.
       expect(crossed, greaterThan(0));
@@ -532,28 +709,11 @@ void main() {
             int seed,
             Outcome outcome,
           ) async {
-            final Outcome still = frozen[('$body', seed)]!;
-            final String reason = '$body from $seed, ticking $ticks';
-            switch (still) {
-              case Passed(:final int runs):
-                expect(
-                  outcome,
-                  isA<Passed>().having((o) => o.runs, 'runs', runs),
-                  reason: reason,
-                );
-              case GaveUp(:final int rejected, :final int overran):
-                expect(
-                  outcome,
-                  isA<GaveUp>()
-                      .having((o) => o.rejected, 'rejected', rejected)
-                      .having((o) => o.overran, 'overran', overran),
-                  reason: reason,
-                );
-              case Failed():
-                expect(outcome, isA<Failed>(), reason: reason);
-              case Flaky():
-                expect(outcome, isA<Flaky>(), reason: reason);
-            }
+            _expectSameVerdict(
+              outcome,
+              frozen[('$body', seed)]!,
+              reason: '$body from $seed, ticking $ticks',
+            );
           });
         }
         expect(frozen.values.whereType<Passed>(), isNotEmpty);
@@ -584,20 +744,19 @@ void main() {
             seed: seed,
             runs: 3,
           ).run(body.call);
-          final String reason = '$body from $seed';
-          if (body.first == null) {
-            expect(outcome, isA<Passed>(), reason: reason);
-            continue;
-          }
-          final _Way first = at(body.first!.run);
-          final bool replayed = at(body.first!.run + 1) == first;
-          final bool lastReplayed = at(body.runs - 1) == first;
-          if (replayed && lastReplayed) {
-            expect(outcome, isA<Failed>(), reason: reason);
-          } else {
-            if (replayed) flakyLast++;
-            flaky++;
-            expect(outcome, isA<Flaky>(), reason: reason);
+          switch (_expectFlakyUnlessReplayed(
+            body,
+            at,
+            outcome,
+            reason: '$body from $seed',
+          )) {
+            case .passed || .failed:
+              break;
+            case .flakyOnFirstReplay:
+              flaky++;
+            case .flakyOnFinalReplay:
+              flaky++;
+              flakyLast++;
           }
         }
       }
@@ -617,6 +776,153 @@ void main() {
       ]) {
         expect(make, throwsRangeError);
       }
+    });
+  });
+
+  group('on grit, over larger bodies', () {
+    test('A failed outcome\'s sequence fails again, the same way, when '
+        'replayed.', () async {
+      int failed = 0;
+      await forAll((Draw draw) async {
+        final _Body body = draw(_anyBody, label: 'body');
+        final Outcome outcome = await _search(
+          seed: draw(_anySeed, label: 'seed'),
+          limit: _drawnLimit,
+        ).run(body.call);
+        if (outcome is! Failed) return;
+        failed++;
+        expect(body.wayOn(outcome.sequence), body.first!.way);
+      });
+      expect(failed, greaterThan(0));
+    });
+
+    test('A failed outcome\'s sequence is never larger than the first failure '
+        'found.', () async {
+      int failed = 0;
+      await forAll((Draw draw) async {
+        final _Body body = draw(_anyBody, label: 'body');
+        final Outcome outcome = await _search(
+          seed: draw(_anySeed, label: 'seed'),
+          limit: _drawnLimit,
+        ).run(body.call);
+        if (outcome is! Failed) return;
+        failed++;
+        expect(body.first!.record.isSmallerThan(outcome.sequence), isFalse);
+      });
+      expect(failed, greaterThan(0));
+    });
+
+    test('Shrinking never runs more steps than its bound, and an outcome whose '
+        'bound ran out names that bound.', () async {
+      int ranOut = 0;
+      await forAll((Draw draw) async {
+        final _Body body = draw(_anyBody, label: 'body');
+        final int seed = draw(_anySeed, label: 'seed');
+        final int bound = draw(.integer(min: 0, max: 64), label: 'bound');
+        final Outcome whole = await _search(
+          seed: seed,
+          limit: _drawnLimit,
+        ).run(body.call);
+        if (whole is! Failed) return;
+        final bool spent = await _expectBounded(
+          body,
+          seed: seed,
+          bound: bound,
+          whole: whole,
+          limit: _drawnLimit,
+        );
+        if (spent) ranOut++;
+      });
+      expect(ranOut, greaterThan(0));
+    });
+
+    test('A candidate that fails with another error type or from another frame '
+        'is never accepted.', () async {
+      int crossed = 0;
+      await forAll((Draw draw) async {
+        final _Body body = draw(_anyBody, label: 'body');
+        final Outcome outcome = await _search(
+          seed: draw(_anySeed, label: 'seed'),
+          limit: _drawnLimit,
+        ).run(body.call);
+        crossed += _expectAcceptedAlike(body, outcome);
+      });
+      expect(crossed, greaterThan(0));
+    });
+
+    test(
+      'The clock never changes a verdict: the same seed passes or fails '
+      'alike under any clock, and only the failure\'s size can differ.',
+      () async {
+        final Set<Type> verdicts = {};
+        await forAll((Draw draw) async {
+          final _Body body = draw(_anyBody, label: 'body');
+          final int seed = draw(_anySeed, label: 'seed');
+          final List<Duration> ticks = draw(
+            .list(
+              .integer(min: 0, max: 3).map((int ms) => .new(milliseconds: ms)),
+            ),
+            label: 'ticks',
+          );
+          final Budget budget = (
+            steps: _unbounded.steps,
+            time: .new(
+              milliseconds: draw(.integer(min: 0, max: 8), label: 'time'),
+            ),
+          );
+          final Outcome frozen = await _search(
+            seed: seed,
+            limit: _drawnLimit,
+            budget: budget,
+          ).run(body.call);
+          final Outcome ticking = await _search(
+            seed: seed,
+            clock: FakeClock(ticks),
+            limit: _drawnLimit,
+            budget: budget,
+          ).run(body.afresh.call);
+          verdicts.add(frozen.runtimeType);
+          _expectSameVerdict(ticking, frozen);
+        });
+        expect(verdicts, containsAll([Passed, Failed, GaveUp]));
+      },
+    );
+
+    test('A body that fails once and not on replay ends flaky, never '
+        'failed.', () async {
+      int flaky = 0;
+      // Of them, those whose first replay failed alike and whose final
+      // replay did not.
+      int flakyLast = 0;
+      await forAll((Draw draw) async {
+        // The body fails as its run's place in the ways says, and returns on
+        // every run past their end.
+        final List<_Way> ways = draw(
+          .list(.element(_Way.values)),
+          label: 'ways',
+        );
+        _Way at(int run) => run < ways.length ? ways[run] : .none;
+        final _Body body = .new(
+          'failing by run as $ways',
+          _shapes['one choice']!,
+          (int run, _) => at(run),
+        );
+        final Outcome outcome = await _search(
+          seed: draw(_anySeed, label: 'seed'),
+          runs: draw(.integer(min: 1, max: 8), label: 'runs'),
+        ).run(body.call);
+        switch (_expectFlakyUnlessReplayed(body, at, outcome)) {
+          case .passed || .failed:
+            break;
+          case .flakyOnFirstReplay:
+            flaky++;
+          case .flakyOnFinalReplay:
+            flaky++;
+            flakyLast++;
+        }
+      });
+      expect(flaky, greaterThan(0));
+      expect(flakyLast, greaterThan(0));
     });
   });
 }
