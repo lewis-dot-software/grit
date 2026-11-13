@@ -63,7 +63,7 @@ String _case(Threw run) => [
   else
     'It drew:\n${run.draws.map(_drawn).join('\n')}',
   if (run.notes.isNotEmpty) 'It noted:\n${run.notes.map(_indented).join('\n')}',
-  'It threw:\n${_error(run.error)}',
+  'It threw:\n${_indented('${run.error}')}',
 ].join('\n\n');
 
 /// One value's text as it was drawn, under its label where it has one.
@@ -80,16 +80,16 @@ String _replayed(Run replay) => switch (replay) {
   Threw(:final Object error) =>
     'it threw another way, ${error.runtimeType} from '
         '${replay.failure.frame ?? 'a stack grit could not read'}:\n'
-        '${_error(error)}',
+        '${_indented('$error')}',
 };
 
-/// [error]'s text indented under its heading, with no line of spaces from
-/// a trailing newline.
-String _error(Object error) => _indented('$error'.trimRight());
-
-/// [text] with every line indented under its heading.
-String _indented(String text) =>
-    text.split('\n').map((String line) => '  $line').join('\n');
+/// [text] indented under its heading, its trailing whitespace trimmed and
+/// each empty line left empty, so no line is spaces the text did not hold.
+String _indented(String text) => text
+    .trimRight()
+    .split('\n')
+    .map((String line) => line.isEmpty ? line : '  $line')
+    .join('\n');
 
 String _steps(int steps) => steps == 1 ? '1 step' : '$steps steps';
 

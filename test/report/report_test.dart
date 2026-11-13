@@ -1,7 +1,4 @@
-import 'package:grit/src/engine/outcome.dart';
-import 'package:grit/src/engine/run.dart';
-import 'package:grit/src/engine/shrink_end.dart';
-import 'package:grit/src/gen/gen.dart';
+import 'package:grit/grit.dart';
 import 'package:grit/src/report/report.dart';
 import 'package:test/test.dart';
 
@@ -189,7 +186,8 @@ void main() {
       );
     });
 
-    test('indents every line of a value and an error under its heading', () {
+    test('indents every line of a value and an error that is not empty '
+        'under its heading', () {
       final Threw run = _threw(
         draws: [(label: 'text', value: 'one\ntwo', text: 'one\ntwo')],
         message: 'first\nsecond\n',
@@ -207,6 +205,94 @@ void main() {
           '\n',
         ),
       );
+    });
+
+    test('prints a value and a note ending in a newline with no line of '
+        'spaces', () {
+      final Threw run = _threw(
+        draws: [(label: 'body', value: 'x\n', text: 'x\n')],
+        notes: ['body x\n'],
+      );
+      expect(
+        report(_failed(run), seed: 7, settings: _settings),
+        contains(
+          'It drew:\n'
+          '  body: x\n'
+          '\n'
+          'It noted:\n'
+          '  body x\n'
+          '\n'
+          'It threw:\n',
+        ),
+      );
+    });
+
+    test('leaves an empty line inside a value, a note or an error empty', () {
+      final Threw run = _threw(
+        draws: [(label: null, value: 'one\n\ntwo', text: 'one\n\ntwo')],
+        notes: ['three\n\nfour'],
+        message: 'five\n\nsix',
+      );
+      expect(
+        report(_failed(run), seed: 7, settings: _settings),
+        contains(
+          'It drew:\n'
+          '  one\n'
+          '\n'
+          '  two\n'
+          '\n'
+          'It noted:\n'
+          '  three\n'
+          '\n'
+          '  four\n'
+          '\n'
+          'It threw:\n'
+          '  Bad state: five\n'
+          '\n'
+          '  six\n',
+        ),
+      );
+    });
+  });
+
+  group('on grit, over larger inputs', () {
+    /// A text over letters, spaces and newlines, which a report indents.
+    final Gen<String> text = .string(alphabet: .of('a \n'), maxLength: 8);
+
+    property('Whatever a note\'s or a drawn value\'s text holds, the report '
+        'prints it under its heading line for line, two spaces opening each '
+        'line that is not empty, with its trailing whitespace trimmed and no '
+        'line the indent alone.', (Draw draw) {
+      final String drawn = draw(text, label: 'drawn');
+      final String noted = draw(text, label: 'noted');
+      final String printed = report(
+        _failed(
+          _threw(
+            draws: [(label: null, value: drawn, text: drawn)],
+            notes: [noted],
+          ),
+        ),
+        seed: 7,
+        settings: _settings,
+      );
+      final RegExpMatch parts = RegExp(
+        r'It drew:\n(.*)\n\nIt noted:\n(.*)\n\nIt threw:',
+        dotAll: true,
+      ).firstMatch(printed)!;
+      for (final (String written, String? part) in [
+        (drawn, parts[1]),
+        (noted, parts[2]),
+      ]) {
+        final List<String> lines = part!.split('\n');
+        expect(lines, everyElement(isNot('  ')));
+        expect(lines, everyElement(anyOf(isEmpty, startsWith('  '))));
+        expect(
+          lines
+              .map((String line) => line.isEmpty ? line : line.substring(2))
+              .join('\n'),
+          written.trimRight(),
+        );
+      }
     });
   });
 
