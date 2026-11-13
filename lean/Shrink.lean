@@ -3,6 +3,7 @@ import Shrink.Pass
 import Shrink.Step
 import Shrink.Shortlex
 import Shrink.Answers
+import Shrink.Seeking
 import Shrink.Ending
 import Shrink.Failing
 

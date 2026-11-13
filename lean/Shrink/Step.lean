@@ -2,15 +2,22 @@ import Shrink.Pass
 
 /-!
 The step function: a state of shrinking proposes a candidate and is told whether its run failed as the first failure
-did, as the Dart's `Shrink` steps.
+did, and where it did, the spans the run made, as the Dart's `Shrink` steps.
 -/
 
 namespace Grit
+
+/-- What a candidate's run is told as: failing as the first failure did, making `spans`, or not failing. -/
+inductive Answer where
+  | failing (spans : List Span)
+  | notFailing
 
 /-- A state that proposes `candidate` and waits to be told whether its run failed. -/
 structure Shrinking where
   /-- The smallest sequence told as failing so far, or the first failure where none has been. -/
   current : Seq
+  /-- The spans `current`'s run made. -/
+  spans : List Span
   /-- The sequence to run next. -/
   candidate : Seq
   /-- The pass that proposed `candidate`. -/
@@ -32,46 +39,52 @@ def Shrink.current : Shrink → Seq
   | .shrinking s => s.current
   | .shrunk current => current
 
-/-- The state proposing the first of `cs` smaller than `current`, the first of `cs` at `position` among the candidates
-`pass` proposes, or none where no candidate of `cs` is smaller. -/
-def firstSmaller (current : Seq) (pass : Pass) (accepted : Bool) : Nat → List Seq → Option Shrinking
-  | _, [] => none
-  | position, c :: cs =>
-    if smaller c current then some ⟨current, c, pass, position, cs, accepted⟩
-    else firstSmaller current pass accepted (position + 1) cs
+/-- The state proposing the first of `cs` smaller than `current`, whose run made `spans`, the first of `cs` at
+`position` among the candidates `pass` proposes, or none where no candidate of `cs` is smaller. -/
+def firstSmaller (current : Seq) (spans : List Span) (pass : Pass) (accepted : Bool) (position : Nat)
+    (cs : List Seq) : Option Shrinking :=
+  match cs with
+  | [] => none
+  | c :: rest =>
+    if smaller c current then some ⟨current, spans, c, pass, position, rest, accepted⟩
+    else firstSmaller current spans pass accepted (position + 1) rest
 
-/-- The state proposing the first candidate smaller than `current` that any of `passes` proposes, the passes taken in
-order, or none where none proposes one. -/
-def inPasses (current : Seq) (accepted : Bool) : List Pass → Option Shrinking
+/-- The state proposing the first candidate smaller than `current`, whose run made `spans`, that any of `passes`
+proposes, the passes taken in order, or none where none proposes one. -/
+def inPasses (current : Seq) (spans : List Span) (accepted : Bool) (passes : List Pass) : Option Shrinking :=
+  match passes with
   | [] => none
   | p :: ps =>
-    match firstSmaller current p accepted 0 (p.candidates current) with
+    match firstSmaller current spans p accepted 0 (p.candidates current spans) with
     | some s => some s
-    | none => inPasses current accepted ps
+    | none => inPasses current spans accepted ps
 
 /-- The first state from the candidates `cs` of `pass` on, the first at `position`, that proposes a candidate smaller
-than `current`, moving through the later passes and into a new round as each runs out, or ended where a round ends with
-nothing `accepted`. -/
-def seek (current : Seq) (pass : Pass) (position : Nat) (cs : List Seq) (accepted : Bool) : Shrink :=
-  match firstSmaller current pass accepted position cs with
+than `current`, whose run made `spans`, moving through the later passes and into a new round as each runs out, or
+ended where a round ends with nothing `accepted`. -/
+def seek (current : Seq) (spans : List Span) (pass : Pass) (position : Nat) (cs : List Seq) (accepted : Bool) :
+    Shrink :=
+  match firstSmaller current spans pass accepted position cs with
   | some s => .shrinking s
   | none =>
-    match inPasses current accepted pass.later with
+    match inPasses current spans accepted pass.later with
     | some s => .shrinking s
     | none =>
       if accepted then
-        match inPasses current false Pass.all with
+        match inPasses current spans false Pass.all with
         | some s => .shrinking s
         | none => .shrunk current
       else .shrunk current
 
-/-- The first state of shrinking `first`, a sequence whose run failed. -/
-def start (first : Seq) : Shrink :=
-  seek first .deleteSpan 0 (Pass.deleteSpan.candidates first) false
+/-- The first state of shrinking `first`, a sequence whose run failed making `spans`. -/
+def start (first : Seq) (spans : List Span) : Shrink :=
+  seek first spans .deleteSpan 0 (Pass.deleteSpan.candidates first spans) false
 
-/-- The state after `s`'s candidate's run, which `failed` as the first failure did or not. -/
-def told (s : Shrinking) (failed : Bool) : Shrink :=
-  if failed then seek s.candidate s.pass s.position ((s.pass.candidates s.candidate).drop s.position) true
-  else seek s.current s.pass (s.position + 1) s.rest s.accepted
+/-- The state after `s`'s candidate's run, told as `answer`. -/
+def told (s : Shrinking) (answer : Answer) : Shrink :=
+  match answer with
+  | .failing spans =>
+    seek s.candidate spans s.pass s.position ((s.pass.candidates s.candidate spans).drop s.position) true
+  | .notFailing => seek s.current s.spans s.pass (s.position + 1) s.rest s.accepted
 
 end Grit

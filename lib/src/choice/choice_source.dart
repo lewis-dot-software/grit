@@ -45,6 +45,9 @@ sealed class ChoiceSource {
   /// The choices handed over so far, in order.
   ChoiceSequence get record => .new(_record);
 
+  /// How many choices have been handed over so far.
+  int get length => _record.length;
+
   /// A choice from 0 to [bound], naming [edges], each within [bound], as
   /// choices a random fill's edges reach.
   Choice choose(Bound bound, {List<Choice> edges = const []}) {

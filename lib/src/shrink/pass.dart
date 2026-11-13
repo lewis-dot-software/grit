@@ -1,5 +1,6 @@
 import '../choice/choice.dart';
 import '../choice/choice_sequence.dart';
+import '../choice/span.dart';
 
 /// One way of proposing smaller sequences: a function from the current
 /// sequence to its candidates, in a fixed order.
@@ -14,6 +15,11 @@ enum Pass {
   /// The lowered choice is one such as a length, read before the span it
   /// counts.
   deleteSpan,
+
+  /// Each draw's span replaced by the span of each draw beneath it, the
+  /// draws taken in the order they began, so a part of a value takes the
+  /// place of the part it sits in.
+  liftSpan,
 
   /// Each span of 8, 4, 3, 2 or 1 choices set to 0, the spans in the order
   /// [deleteSpan] takes them.
@@ -35,6 +41,12 @@ enum Pass {
   /// or 2 apart swapped, each from the end back.
   reorder,
 
+  /// Each two sibling draws' spans swapped, the draws taken in the order
+  /// they began: two draws with the same draw around both, or two the
+  /// property's body made, so two parts of a value change places whatever
+  /// their widths.
+  swapSpan,
+
   /// Value moved from each choice to the one 8, 4, 3, 2 or 1 places after
   /// it, the earlier lowered as [lowerChoice] lowers it and the later raised
   /// by as much, then by 1 less where more than 1 moved, each where that
@@ -44,19 +56,22 @@ enum Pass {
   /// of its zigzag, where one choice is one value and not two.
   moveValue;
 
-  /// The candidates this pass proposes from [sequence], in order, from the
-  /// one at [from] on.
+  /// The candidates this pass proposes from [sequence], whose run made
+  /// [spans], in order, from the one at [from] on.
   ///
   /// The candidates before [from] are passed over unbuilt.
   Iterable<ChoiceSequence> candidates(
-    ChoiceSequence sequence, {
+    ChoiceSequence sequence,
+    List<Span> spans, {
     int from = 0,
   }) => switch (this) {
     deleteSpan => _deleteSpans(sequence.choices),
+    liftSpan => _liftSpans(sequence.choices, spans),
     zeroSpan => _zeroSpans(sequence.choices),
     lowerChoice => _lowerChoices(sequence.choices),
     lowerTogether => _lowerTogether(sequence.choices),
     reorder => _reorder(sequence.choices),
+    swapSpan => _swapSpans(sequence.choices, spans),
     moveValue => _moveValue(sequence.choices),
   }.skip(from).map((_Build build) => build());
 }
@@ -88,6 +103,20 @@ Iterable<_Build> _deleteSpans(List<Choice> choices) sync* {
           ...choices.skip(start + width),
         ]);
       }
+    }
+  }
+}
+
+Iterable<_Build> _liftSpans(List<Choice> choices, List<Span> spans) sync* {
+  for (int i = 0; i < spans.length; i++) {
+    final Span outer = spans[i];
+    for (int j = i + 1; j < spans.length && spans[j].depth > outer.depth; j++) {
+      final Span inner = spans[j];
+      yield () => .new([
+        ...choices.take(outer.start),
+        ..._of(choices, inner),
+        ...choices.skip(outer.start + outer.width),
+      ]);
     }
   }
 }
@@ -147,6 +176,27 @@ Iterable<_Build> _reorder(List<Choice> choices) sync* {
   }
 }
 
+Iterable<_Build> _swapSpans(List<Choice> choices, List<Span> spans) sync* {
+  for (int i = 0; i < spans.length; i++) {
+    final Span first = spans[i];
+    for (
+      int j = i + 1;
+      j < spans.length && spans[j].depth >= first.depth;
+      j++
+    ) {
+      final Span second = spans[j];
+      if (second.depth > first.depth) continue;
+      yield () => .new([
+        ...choices.take(first.start),
+        ..._of(choices, second),
+        ...choices.sublist(first.start + first.width, second.start),
+        ..._of(choices, first),
+        ...choices.skip(second.start + second.width),
+      ]);
+    }
+  }
+}
+
 Iterable<_Build> _moveValue(List<Choice> choices) sync* {
   for (final int apart in _widths) {
     for (int i = 0; i + apart < choices.length; i++) {
@@ -187,6 +237,10 @@ Iterable<int> _probes(int value) sync* {
   }
   if (value.isEven) yield value - 1;
 }
+
+/// The choices of [choices] that [span] holds.
+List<Choice> _of(List<Choice> choices, Span span) =>
+    choices.sublist(span.start, span.start + span.width);
 
 /// [choices] with each place [replacements] names holding its choice.
 ChoiceSequence _replaced(List<Choice> choices, Map<int, Choice> replacements) =>

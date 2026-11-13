@@ -1,9 +1,10 @@
 import '../choice/choice_sequence.dart';
+import '../choice/span.dart';
 import 'pass.dart';
 
 /// One state of shrinking a failing sequence: a step function over the
 /// current sequence, which is always the first failure or a candidate told as
-/// failing.
+/// failing, and the spans its run made.
 ///
 /// A round takes every [Pass] in order, each proposing its candidates of the
 /// current sequence. A candidate no smaller than the current sequence is never
@@ -13,11 +14,13 @@ import 'pass.dart';
 sealed class Shrink {
   Shrink._(this.current);
 
-  /// The first state of shrinking [firstFailure], a sequence whose run failed.
-  factory Shrink.start(ChoiceSequence firstFailure) => _seek(
+  /// The first state of shrinking [firstFailure], a sequence whose run failed
+  /// making [spans].
+  factory Shrink.start(ChoiceSequence firstFailure, List<Span> spans) => _seek(
     current: firstFailure,
+    spans: spans,
     pass: .values.first,
-    at: .first(Pass.values.first.candidates(firstFailure).iterator),
+    at: .first(Pass.values.first.candidates(firstFailure, spans).iterator),
     accepted: false,
   );
 
@@ -31,11 +34,14 @@ sealed class Shrink {
 final class Shrinking extends Shrink {
   Shrinking._(
     super.current, {
+    required this._spans,
     required this._pass,
     required this._at,
     required this._accepted,
   }) : super._();
 
+  /// The spans [current]'s run made.
+  final List<Span> _spans;
   final Pass _pass;
   final _Candidate _at;
 
@@ -45,19 +51,28 @@ final class Shrinking extends Shrink {
   /// The sequence to run next, always shortlex smaller than [current].
   ChoiceSequence get candidate => _at.sequence;
 
-  /// The state after [candidate]'s run, which [failed] as the first failure
-  /// did or not.
-  Shrink told({required bool failed}) => failed
-      ? _seek(
-          current: candidate,
-          pass: _pass,
-          at: .first(
-            _pass.candidates(candidate, from: _at.position).iterator,
-            position: _at.position,
-          ),
-          accepted: true,
-        )
-      : _seek(current: current, pass: _pass, at: _at.next, accepted: _accepted);
+  /// The state after [candidate]'s run failed as the first failure did,
+  /// making [spans].
+  Shrink toldFailing(List<Span> spans) => _seek(
+    current: candidate,
+    spans: spans,
+    pass: _pass,
+    at: .first(
+      _pass.candidates(candidate, spans, from: _at.position).iterator,
+      position: _at.position,
+    ),
+    accepted: true,
+  );
+
+  /// The state after [candidate]'s run did not fail as the first failure
+  /// did.
+  Shrink toldNotFailing() => _seek(
+    current: current,
+    spans: _spans,
+    pass: _pass,
+    at: _at.next,
+    accepted: _accepted,
+  );
 }
 
 /// The state shrinking ends in: a round of every pass accepted nothing from
@@ -67,10 +82,11 @@ final class Shrunk extends Shrink {
 }
 
 /// The first state from [at] on that proposes a candidate smaller than
-/// [current], moving through the passes and into a new round as each runs
+/// [current], whose run made [spans], moving through the passes and into a new round as each runs
 /// out, or [Shrunk] where a round ends with nothing [accepted].
 Shrink _seek({
   required ChoiceSequence current,
+  required List<Span> spans,
   required Pass pass,
   required _Candidate? at,
   required bool accepted,
@@ -80,7 +96,13 @@ Shrink _seek({
       at = at.next;
     }
     if (at != null) {
-      return Shrinking._(current, pass: pass, at: at, accepted: accepted);
+      return Shrinking._(
+        current,
+        spans: spans,
+        pass: pass,
+        at: at,
+        accepted: accepted,
+      );
     }
     if (pass.index + 1 < Pass.values.length) {
       pass = .values[pass.index + 1];
@@ -90,7 +112,7 @@ Shrink _seek({
     } else {
       return Shrunk._(current);
     }
-    at = .first(pass.candidates(current).iterator);
+    at = .first(pass.candidates(current, spans).iterator);
   }
 }
 

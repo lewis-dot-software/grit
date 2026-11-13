@@ -11,4 +11,8 @@ final class RunDraw extends Draw {
 
   /// The lines noted, in order.
   List<String> get notes => .unmodifiable(_notes);
+
+  /// The span of each draw made, the property's body's and those inside a
+  /// [Gen.build] body alike, in the order the draws began.
+  List<Span> get spans => .unmodifiable(_spans);
 }

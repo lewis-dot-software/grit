@@ -1,5 +1,5 @@
 /-!
-A run's record of choices, and the shortlex order shrinking descends.
+A run's record of choices, the span of each draw it made, and the shortlex order shrinking descends.
 -/
 
 namespace Grit
@@ -10,8 +10,17 @@ abbrev Seq := List Nat
 /-- The largest choice the Dart VM's integers hold. -/
 def largest : Nat := 2 ^ 63 - 1
 
+/-- The stretch of a run's record one draw made: `width` choices from `start`, with `depth` draws in progress around
+it. A run's spans are listed in the order their draws began. -/
+structure Span where
+  start : Nat
+  width : Nat
+  depth : Nat
+  deriving DecidableEq, Repr
+
 /-- Whether `a` is smaller than `b` at their first difference, read over the two alike in length. -/
-def lexLess : Seq → Seq → Bool
+def lexLess (a b : Seq) : Bool :=
+  match a, b with
   | x :: xs, y :: ys => x < y || (x == y && lexLess xs ys)
   | _, _ => false
 

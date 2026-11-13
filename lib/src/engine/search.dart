@@ -4,6 +4,7 @@ import 'dart:math';
 import '../choice/choice_sequence.dart';
 import '../choice/choice_source.dart';
 import '../choice/odds.dart';
+import '../choice/span.dart';
 import '../choice/status.dart';
 import '../choice/sweep.dart';
 import '../gen/gen.dart';
@@ -102,7 +103,7 @@ final class Search {
         near: isEarly ? _near : .never,
         edges: isEarly ? _edges : .never,
       );
-      switch (await _ran(body, source)) {
+      switch ((await _ran(body, source)).run) {
         case Returned():
           returned++;
           continue;
@@ -122,22 +123,22 @@ final class Search {
 
   /// The first replay of [first], then shrinking where it fails alike.
   Future<Outcome> _confirm(Body body, Threw first) async {
-    final Run replay = await _replay(body, first.record);
-    if (!first.failedAlike(replay)) return Flaky(first, replay);
-    return _shrink(body, first);
+    final _Ran replay = await _replay(body, first.record);
+    if (!first.failedAlike(replay.run)) return Flaky(first, replay.run);
+    return _shrink(body, first, replay.spans);
   }
 
-  /// Shrinking from [first] under the budget, then the final replay of the
-  /// smallest failing sequence.
+  /// Shrinking from [first], whose run made [spans], under the budget, then
+  /// the final replay of the smallest failing sequence.
   ///
   /// The smallest failing sequence is the choices its run read, which may be
   /// fewer than the candidate it ran on holds.
-  Future<Outcome> _shrink(Body body, Threw first) async {
+  Future<Outcome> _shrink(Body body, Threw first, List<Span> spans) async {
     final Duration start = _clock.elapsed;
-    final _Shrunk shrunk = await _shrunk(body, first, start);
+    final _Shrunk shrunk = await _shrunk(body, first, spans, start);
     final Duration time = _clock.elapsed - start;
     final ChoiceSequence smallest = shrunk.smallest.record;
-    final Run replay = await _replay(body, smallest);
+    final Run replay = (await _replay(body, smallest)).run;
     return switch (replay) {
       final Threw last when first.failedAlike(last) => Failed(
         smallest,
@@ -153,15 +154,21 @@ final class Search {
     };
   }
 
-  /// Where shrinking from [first], started at [start] by the clock, ends:
-  /// at the step function's end, or where the budget runs out.
-  Future<_Shrunk> _shrunk(Body body, Threw first, Duration start) async {
+  /// Where shrinking from [first], whose run made [spans], started at
+  /// [start] by the clock, ends: at the step function's end, or where the
+  /// budget runs out.
+  Future<_Shrunk> _shrunk(
+    Body body,
+    Threw first,
+    List<Span> spans,
+    Duration start,
+  ) async {
     // A candidate told as failing becomes the current sequence, and the step
     // function proposes only candidates smaller than that, so one told as
     // failing is never proposed again. Only those told as not failing repeat.
     final Set<ChoiceSequence> notFailing = {};
     Threw smallest = first;
-    Shrink shrink = .start(first.record);
+    Shrink shrink = .start(first.record, spans);
     int steps = 0;
     _Shrunk ended(ShrinkEnd end) =>
         (smallest: smallest, steps: steps, end: end);
@@ -171,29 +178,29 @@ final class Search {
           return ended(.shrunk);
         case Shrinking(:final ChoiceSequence candidate)
             when notFailing.contains(candidate):
-          shrink = shrink.told(failed: false);
+          shrink = shrink.toldNotFailing();
         case Shrinking(:final ChoiceSequence candidate):
           if (steps >= _budget.steps) return ended(.steps);
           if (_clock.elapsed - start >= _budget.time) return ended(.time);
-          final Run run = await _replay(body, candidate);
+          final _Ran ran = await _replay(body, candidate);
           steps++;
-          if (run case final Threw threw when first.failedAlike(threw)) {
+          if (ran.run case final Threw threw when first.failedAlike(threw)) {
             smallest = threw;
-            shrink = shrink.told(failed: true);
+            shrink = shrink.toldFailing(ran.spans);
           } else {
             notFailing.add(candidate);
-            shrink = shrink.told(failed: false);
+            shrink = shrink.toldNotFailing();
           }
       }
     }
   }
 
   /// A run of [body] on [sequence]'s choices alone.
-  Future<Run> _replay(Body body, ChoiceSequence sequence) =>
+  Future<_Ran> _replay(Body body, ChoiceSequence sequence) =>
       _ran(body, .fixed(sequence));
 
   /// A run of [body] on [source]'s choices.
-  Future<Run> _ran(Body body, ChoiceSource source) async {
+  Future<_Ran> _ran(Body body, ChoiceSource source) async {
     final RunDraw draw = .new(source);
     (Object, StackTrace)? thrown;
     try {
@@ -205,7 +212,7 @@ final class Search {
     }
     final Status status = source.status(threw: thrown != null);
     final ChoiceSequence record = source.record;
-    return switch ((status, thrown)) {
+    final Run run = switch ((status, thrown)) {
       (.failed, (final Object error, final StackTrace stackTrace)) => Threw(
         record,
         draw.draws,
@@ -221,6 +228,7 @@ final class Search {
         'A run ended $status where its body ${thrown == null ? 'returned' : 'threw'}',
       ),
     };
+    return (run: run, spans: draw.spans);
   }
 }
 
@@ -231,3 +239,9 @@ final class Search {
 /// - `steps`: how many candidates it ran.
 /// - `end`: what ended it.
 typedef _Shrunk = ({Threw smallest, int steps, ShrinkEnd end});
+
+/// A run, with the span of each draw it made.
+///
+/// - `run`: the run, by how it ended.
+/// - `spans`: the span of each draw it made, in the order the draws began.
+typedef _Ran = ({Run run, List<Span> spans});

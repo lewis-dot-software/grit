@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:grit/grit.dart';
 import 'package:grit/src/choice/choice_source.dart';
+import 'package:grit/src/choice/span.dart';
 import 'package:grit/src/engine/budget.dart';
 import 'package:grit/src/engine/call_site.dart';
 import 'package:grit/src/engine/clock.dart';
@@ -114,6 +115,19 @@ final Map<String, _Shape> _shapes = {
 /// How a body fails on the [run]th of its runs, which read [record].
 typedef _Fails = _Way Function(int run, List<int> record);
 
+/// A body's run on a fixed sequence:
+///
+/// - `way`: the way it failed, or [_Way.none].
+/// - `spans`: the spans its draws made.
+typedef _Ran = ({_Way way, List<Span> spans});
+
+/// A body's first run that threw:
+///
+/// - `record`: the choices it read.
+/// - `way`: the way it failed.
+/// - `run`: its place among the body's runs.
+typedef _First = ({ChoiceSequence record, _Way way, int run});
+
 /// A body that draws as its shape says and fails as its [_fails] says,
 /// logging each run.
 final class _Body {
@@ -131,7 +145,7 @@ final class _Body {
 
   /// The record of the first run that threw, with the way it failed and its
   /// place among the runs, where one has.
-  ({ChoiceSequence record, _Way way, int run})? first;
+  _First? first;
 
   void call(Draw draw) {
     final int run = runs++;
@@ -148,14 +162,37 @@ final class _Body {
   /// [_Way.none] where its draws stop short.
   ///
   /// Only a body that fails as its record alone says has one way a sequence.
-  _Way wayOn(ChoiceSequence sequence) {
+  _Way wayOn(ChoiceSequence sequence) => ranOn(sequence).way;
+
+  /// The way this body fails on [sequence]'s choices alone, as [wayOn]
+  /// reads it, with the spans its draws made.
+  _Ran ranOn(ChoiceSequence sequence) {
     final ChoiceSource source = .fixed(sequence);
+    final RunDraw draw = .new(source);
     late final List<int> record;
-    return switch (run(source, () => record = _shape(RunDraw(source)))) {
+    final _Way way = switch (run(source, () => record = _shape(draw))) {
       .returned => _fails(0, record),
       .overrun || .rejected => .none,
       .failed => throw StateError('The shape of $name threw on $sequence'),
     };
+    return (way: way, spans: draw.spans);
+  }
+
+  /// The oracle the search's shrinking of this body is told by: a candidate
+  /// fails where it fails as the first failure did, making the spans its
+  /// draws made, and [onWay] is told each candidate's way.
+  List<Span>? Function(ChoiceSequence) failingAlike([
+    void Function(_Way way)? onWay,
+  ]) => (ChoiceSequence candidate) {
+    final _Ran ran = ranOn(candidate);
+    onWay?.call(ran.way);
+    return ran.way == first!.way ? ran.spans : null;
+  };
+
+  /// The first state of the search's shrinking of this body's first failure.
+  Shrink get shrinkStart {
+    final ChoiceSequence record = first!.record;
+    return .start(record, ranOn(record).spans);
   }
 
   /// How many candidates the search ran in shrinking: every run but
@@ -403,13 +440,14 @@ Future<bool> _expectBounded(
 int _expectAcceptedAlike(_Body body, Outcome outcome) {
   expect(outcome, isNot(isA<Flaky>()), reason: '$body');
   if (outcome is! Failed) return 0;
-  final ({ChoiceSequence record, _Way way, int run}) first = body.first!;
+  final _First first = body.first!;
   int crossed = 0;
-  final Shrunk alike = shrunk(.start(first.record), (ChoiceSequence candidate) {
-    final _Way way = body.wayOn(candidate);
-    if (way != .none && way != first.way) crossed++;
-    return way == first.way;
-  });
+  final Shrunk alike = shrunk(
+    body.shrinkStart,
+    body.failingAlike((_Way way) {
+      if (way != .none && way != first.way) crossed++;
+    }),
+  );
   expect(outcome.sequence, alike.current, reason: '$body');
   expect(body.wayOn(outcome.sequence), first.way, reason: '$body');
   return crossed;
@@ -819,13 +857,13 @@ void main() {
       int repeated = 0;
       await _eachSearch((_Body body, _, Outcome outcome) async {
         if (outcome is! Failed) return;
-        final ({ChoiceSequence record, _Way way, int run}) first = body.first!;
         final Set<ChoiceSequence> proposed = {};
         int proposals = 0;
-        shrunk(.start(first.record), (ChoiceSequence candidate) {
+        final List<Span>? Function(ChoiceSequence) alike = body.failingAlike();
+        shrunk(body.shrinkStart, (ChoiceSequence candidate) {
           proposals++;
           proposed.add(candidate);
-          return body.wayOn(candidate) == first.way;
+          return alike(candidate);
         });
         if (proposals > proposed.length) repeated++;
         expect(outcome.steps, proposed.length, reason: '$body');

@@ -13,7 +13,7 @@ The shrinker is a pure step function that imports nothing of grit's but `choice`
 
 A choice is a natural number from 0 to its bound, and 0 is the simplest. Every generator is built on choices, by an encoding that gives simpler values at smaller choices: an integer zigzags out from the value it shrinks towards, and a float takes an order that puts simple floats first.
 
-A run is one execution of the body. Its record is its sequence of choices. One sequence is smaller than another when it is shorter, or the same length and smaller at its first difference. That order, shortlex, is the one every part of grit means by smaller. A span is a stretch of consecutive choices in one sequence.
+A run is one execution of the body. Its record is its sequence of choices. One sequence is smaller than another when it is shorter, or the same length and smaller at its first difference. That order, shortlex, is the one every part of grit means by smaller. A span is a stretch of consecutive choices in one sequence. A draw's span is the stretch its draw made, the draws inside it among them, and a run records each draw's span beside its sequence, in the order the draws began, with how many draws were in progress around it.
 
 The choice source hands a run its choices. In generation it fills each at random, up to a limit on the choices one run may make. A candidate in shrinking, and a replay, hand over a fixed sequence and never fill, so a run that asks for more than the sequence holds ends there.
 
@@ -64,7 +64,7 @@ Every outcome carries the search's warnings, a slow property among them. `runPro
 
 ## Shrinking
 
-The shrinker is a step function: it proposes a candidate sequence, is told whether the candidate's run failed as the first failure did, and proposes the next. It is pure, so async, time and I/O stay with the engine, which drives it, awaits each run and holds the budget.
+The shrinker is a step function: it proposes a candidate sequence, is told whether the candidate's run failed as the first failure did, with the spans of its draws where it did, and proposes the next. It is pure, so async, time and I/O stay with the engine, which drives it, awaits each run and holds the budget.
 
 The engine decides what counts as the same failure: the same error type, thrown from the same frame. The frame is the first in the package of the property's call site, or where none is, the first outside the Dart SDK and every test package, grit's among them. A candidate that fails any other way is told to the shrinker as not failing, so a case never slips from one bug to another. Both replays hold to the same rule.
 
@@ -80,13 +80,15 @@ The budget then bounds how long shrinking takes, never whether it ends. It count
 A pass is a function from the current sequence to its candidates, and the step function chooses among them:
 
 - Deleting a span, alone and with the choice before it lowered by one, since that choice may be the span's length.
+- Lifting a draw's span into the place of a draw it sits in, so a part of a value takes the place of the part around it.
 - Zeroing a span.
 - Lowering a choice by binary search, over the pairs of choices an integer's zigzag puts at one distance, so a value lowers on either side of the one it shrinks towards.
 - Lowering two choices by the same amount, so two values tied to each other fall together.
 - Sorting a span, and swapping two.
+- Swapping two sibling draws' spans, two with the same draw around both, so two parts of a value change places whatever their widths.
 - Moving value from one choice to another.
 
-A pass for one kind of value, floats or strings, is added where shrink quality shows the need. It needs the record to carry each draw's span and its kind beside the sequence, since a bare sequence cannot say where a kind's choices sit, and that change is settled with the pass.
+A pass for one kind of value, floats or strings, is added where shrink quality shows the need. It needs the record to carry each draw's kind beside its span, since a span alone cannot say what kind of value its choices make, and that change is settled with the pass.
 
 The step function's current sequence is always one it was told failed. The final replay then holds that every sequence the outcome reports as failed still fails.
 
@@ -165,7 +167,7 @@ flowchart TD
 | `store` | Failing sequences under `.dart_tool/grit/` | `choice` |
 | `shrink` | The step function and its passes | `choice` |
 | `gen` | `Gen`, `Draw`, and every generator and combinator | `choice` |
-| `choice` | A choice, the sequence and its order, the token, the choice source and a run's status | Nothing of grit's |
+| `choice` | A choice, the sequence and its order, a draw's span, the token, the choice source and a run's status | Nothing of grit's |
 
 The table is the rule's home, and the rules new code obeys are:
 

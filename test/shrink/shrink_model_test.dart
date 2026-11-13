@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:grit/grit.dart';
+import 'package:grit/src/choice/span.dart';
 import 'package:grit/src/shrink/shrink.dart';
 import 'package:test/test.dart';
 
@@ -13,14 +14,26 @@ import '../support/inputs.dart';
 import '../support/lake.dart';
 import '../support/oracle.dart';
 import '../support/shrinking.dart';
+import '../support/spans.dart';
 
 /// [sequence] written `[1,2]`, as the model writes it.
 String _written(ChoiceSequence sequence) => '[${sequence.choices.join(',')}]';
 
+/// The spans of [sequence]'s run, as [spansOf] gives them, each written
+/// `start:width:depth` and joined by commas, as the model reads them.
+String _spans(ChoiceSequence sequence) => [
+  for (final Span span in spansOf(sequence))
+    '${span.start}:${span.width}:${span.depth}',
+].join(',');
+
 /// The model's request to shrink [first], told each answer of [path] in
-/// turn.
-String _request(ChoiceSequence first, List<ShrinkStep> path) =>
-    '${first.choices.join(',')}\t${[for (final ShrinkStep step in path) step.failed ? '1' : '0'].join()}';
+/// turn, each run making the spans [spansOf] gives it.
+String _request(ChoiceSequence first, List<ShrinkStep> path) => [
+  first.choices.join(','),
+  _spans(first),
+  for (final ShrinkStep step in path)
+    step.failed ? '1/${_spans(step.candidate)}' : '0',
+].join('\t');
 
 /// What the model answers where it proposes each of [path]'s candidates and
 /// ends at [end].
@@ -89,10 +102,10 @@ void main() {
     final String expected = _expected(path, end);
     final String actual = await ask(_request(first, path));
     if (actual != expected) fail(_parting(expected, actual));
-  }, settings: .new(runs: 1000));
+  }, settings: .new(runs: 2000));
 
   test('the Lean model refuses a request it cannot read, naming it', () async {
-    for (final String request in ['1,x\t0', '1\t2', '1']) {
+    for (final String request in ['1,x\t', '1\t0:1', '1\t\t2', '1']) {
       expect(await ask(request), 'refused $request', reason: request);
     }
   });

@@ -334,6 +334,33 @@ void main() {
       expect([for (final Drawn drawn in draw.draws) drawn.value], [12]);
     });
 
+    test('keeps the span of each draw, the property\'s body\'s and those '
+        'inside a generator, in the order the draws began, with the draws in '
+        'progress around each', () {
+      final ChoiceSource source = .fixed(sequenceOf([1, 1, 2, 0]));
+      final RunDraw draw = .new(source);
+      draw(.boolean());
+      draw(.list(.integer(min: 0, max: 3)));
+      expect(draw.spans, [
+        (start: 0, width: 1, depth: 0),
+        (start: 1, width: 3, depth: 0),
+        (start: 2, width: 1, depth: 1),
+      ]);
+    });
+
+    test('keeps the span of a draw the source stopped, as far as it read', () {
+      final ChoiceSource source = .fixed(sequenceOf([1, 1]));
+      final RunDraw draw = .new(source);
+      expect(
+        run(source, () => draw(.list(.integer(min: 0, max: 3)))),
+        Status.overrun,
+      );
+      expect(draw.spans, [
+        (start: 0, width: 2, depth: 0),
+        (start: 1, width: 1, depth: 1),
+      ]);
+    });
+
     test('names a generator by dot shorthand where one is expected', () {
       final ChoiceSource source = .fixed(sequenceOf([1, 3, 0]));
       final RunDraw draw = .new(source);

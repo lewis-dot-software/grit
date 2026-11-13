@@ -1,8 +1,8 @@
 import Shrink.Sequence
 
 /-!
-The passes: each a function from the current sequence to its candidates, in a fixed order, as the Dart's `Pass`
-proposes them.
+The passes: each a function from the current sequence, and the spans its run made, to its candidates, in a fixed
+order, as the Dart's `Pass` proposes them.
 -/
 
 namespace Grit
@@ -10,20 +10,25 @@ namespace Grit
 /-- One way of proposing smaller sequences. -/
 inductive Pass where
   | deleteSpan
+  | liftSpan
   | zeroSpan
   | lowerChoice
   | lowerTogether
   | reorder
+  | swapSpan
   | moveValue
   deriving DecidableEq, Repr
 
 /-- The passes a round takes after `p`, in order. -/
-def Pass.later : Pass → List Pass
-  | .deleteSpan => [.zeroSpan, .lowerChoice, .lowerTogether, .reorder, .moveValue]
-  | .zeroSpan => [.lowerChoice, .lowerTogether, .reorder, .moveValue]
-  | .lowerChoice => [.lowerTogether, .reorder, .moveValue]
-  | .lowerTogether => [.reorder, .moveValue]
-  | .reorder => [.moveValue]
+def Pass.later (p : Pass) : List Pass :=
+  match p with
+  | .deleteSpan => [.liftSpan, .zeroSpan, .lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue]
+  | .liftSpan => [.zeroSpan, .lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue]
+  | .zeroSpan => [.lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue]
+  | .lowerChoice => [.lowerTogether, .reorder, .swapSpan, .moveValue]
+  | .lowerTogether => [.reorder, .swapSpan, .moveValue]
+  | .reorder => [.swapSpan, .moveValue]
+  | .swapSpan => [.moveValue]
   | .moveValue => []
 
 /-- Every pass, in the order a round takes them. -/
@@ -59,6 +64,26 @@ def probes (value : Nat) : List Nat :=
 /-- The choice at `i` of `cs`, or 0 where `cs` holds none there. -/
 def choiceAt (cs : Seq) (i : Nat) : Nat := cs.getD i 0
 
+/-- The choices of `cs` that `span` holds. -/
+def slice (cs : Seq) (span : Span) : Seq := (cs.drop span.start).take span.width
+
+/-- The spans of `spans` beneath a draw at `depth` that they follow: each deeper than `depth`, up to the first that is
+not. -/
+def beneath (depth : Nat) (spans : List Span) : List Span :=
+  match spans with
+  | [] => []
+  | s :: rest => if depth < s.depth then s :: beneath depth rest else []
+
+/-- The siblings of a draw at `depth` among the spans of `spans` that follow it: each at `depth`, up to the first
+shallower than it. -/
+def siblings (depth : Nat) (spans : List Span) : List Span :=
+  match spans with
+  | [] => []
+  | s :: rest =>
+    if s.depth < depth then []
+    else if s.depth = depth then s :: siblings depth rest
+    else siblings depth rest
+
 /-- Each span of 8, 4, 3, 2 or 1 choices deleted, the widest first and each width from the end back, each deletion
 followed by the same with the choice before the span lowered by 1, where that choice is above 0. -/
 def deleteSpans (cs : Seq) : List Seq :=
@@ -67,6 +92,16 @@ def deleteSpans (cs : Seq) : List Seq :=
       if start > 0 ∧ choiceAt cs (start - 1) > 0 then
         [cs.take (start - 1) ++ [choiceAt cs (start - 1) - 1] ++ cs.drop (start + width)]
       else []
+
+/-- Each draw's span of `spans` replaced by the span of each draw beneath it, the draws taken in the order they
+began. -/
+def liftSpans (cs : Seq) (spans : List Span) : List Seq :=
+  match spans with
+  | [] => []
+  | outer :: rest =>
+    (beneath outer.depth rest).map (fun inner =>
+      cs.take outer.start ++ slice cs inner ++ cs.drop (outer.start + outer.width)) ++
+      liftSpans cs rest
 
 /-- Each span of 8, 4, 3, 2 or 1 choices set to 0, the spans in the order `deleteSpans` takes them. -/
 def zeroSpans (cs : Seq) : List Seq :=
@@ -97,6 +132,17 @@ def reorders (cs : Seq) : List Seq :=
   ((widths.filter (· > 1)).flatMap fun apart => (startsBack cs.length (apart + 1)).map fun i =>
     (cs.set i (choiceAt cs (i + apart))).set (i + apart) (choiceAt cs i))
 
+/-- Each two sibling draws' spans of `spans` swapped, the draws taken in the order they began. -/
+def swapSpans (cs : Seq) (spans : List Span) : List Seq :=
+  match spans with
+  | [] => []
+  | first :: rest =>
+    (siblings first.depth rest).map (fun second =>
+      cs.take first.start ++ slice cs second ++
+        (cs.drop (first.start + first.width)).take (second.start - (first.start + first.width)) ++
+        slice cs first ++ cs.drop (second.start + second.width)) ++
+      swapSpans cs rest
+
 /-- Value moved from each choice to the one 8, 4, 3, 2 or 1 places after it, the earlier lowered to each of its
 `probes` and the later raised by as much, then by 1 less where more than 1 moved, each where that stays within
 `largest`. -/
@@ -110,13 +156,16 @@ def moveValues (cs : Seq) : List Seq :=
       ((moved :: if moved > 1 then [moved - 1] else []).filter (· ≤ largest - target)).map fun raised =>
         (cs.set i lowered).set j (target + raised)
 
-/-- The candidates `p` proposes from `cs`, in order. -/
-def Pass.candidates : Pass → Seq → List Seq
-  | .deleteSpan => deleteSpans
-  | .zeroSpan => zeroSpans
-  | .lowerChoice => lowerChoices
-  | .lowerTogether => lowerTogethers
-  | .reorder => reorders
-  | .moveValue => moveValues
+/-- The candidates `p` proposes from `cs`, whose run made `spans`, in order. -/
+def Pass.candidates (p : Pass) (cs : Seq) (spans : List Span) : List Seq :=
+  match p with
+  | .deleteSpan => deleteSpans cs
+  | .liftSpan => liftSpans cs spans
+  | .zeroSpan => zeroSpans cs
+  | .lowerChoice => lowerChoices cs
+  | .lowerTogether => lowerTogethers cs
+  | .reorder => reorders cs
+  | .swapSpan => swapSpans cs spans
+  | .moveValue => moveValues cs
 
 end Grit

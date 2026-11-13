@@ -1,15 +1,26 @@
-import 'package:grit/src/choice/choice.dart';
-import 'package:grit/src/choice/choice_sequence.dart';
+import 'dart:math';
+
+import 'package:grit/grit.dart';
+import 'package:grit/src/choice/choice_source.dart';
+import 'package:grit/src/choice/span.dart';
+import 'package:grit/src/gen/gen.dart';
 import 'package:grit/src/shrink/pass.dart';
 import 'package:test/test.dart';
 
+import '../support/drawing.dart';
 import '../support/small.dart';
 
-/// The candidates [pass] proposes from [values] from the one at [from] on,
-/// each as its values.
-List<List<int>> _candidates(Pass pass, List<int> values, {int from = 0}) => [
+/// The candidates [pass] proposes from [values], whose run made [spans],
+/// from the one at [from] on, each as its values.
+List<List<int>> _candidates(
+  Pass pass,
+  List<int> values, {
+  List<Span> spans = const [],
+  int from = 0,
+}) => [
   for (final ChoiceSequence candidate in pass.candidates(
     sequenceOf(values),
+    spans,
     from: from,
   ))
     [for (final Choice choice in candidate.choices) choice.value],
@@ -17,6 +28,22 @@ List<List<int>> _candidates(Pass pass, List<int> values, {int from = 0}) => [
 
 /// Nine choices, from 9 down to 1.
 final List<int> _nineDown = [for (int i = 9; i >= 1; i--) i];
+
+/// Five choices drawn as one draw holding two, the first of which holds one
+/// draw of its own:
+///
+/// - The whole, from 0, 5 wide.
+/// - `[1, 2]`, from 1, holding `[2]`.
+/// - `[3, 4]`, from 3.
+final List<Span> _nested = [
+  (start: 0, width: 5, depth: 0),
+  (start: 1, width: 2, depth: 1),
+  (start: 2, width: 1, depth: 2),
+  (start: 3, width: 2, depth: 1),
+];
+
+/// A list of lists of integers, so its elements' spans differ in width.
+final Gen<List<List<int>>> _lists = .list(.list(.integer(min: 0, max: 9)));
 
 void main() {
   test('deleting a span deletes each span, the widest first and each width '
@@ -185,6 +212,74 @@ void main() {
     expect(_candidates(.moveValue, _nineDown).first, moved);
   });
 
+  test('lifting a span puts each span beneath a draw in its place, each draw '
+      'from the first', () {
+    expect(_candidates(.liftSpan, [7, 1, 2, 3, 4], spans: _nested), [
+      [1, 2],
+      [2],
+      [3, 4],
+      [7, 2, 3, 4],
+    ]);
+  });
+
+  test('swapping spans swaps two draws with the same draw around both, '
+      'whatever their widths', () {
+    expect(_candidates(.swapSpan, [7, 1, 2, 3, 4], spans: _nested), [
+      [7, 3, 4, 1, 2],
+    ]);
+  });
+
+  test("swapping spans swaps two draws of the property's body", () {
+    final List<Span> spans = [
+      (start: 0, width: 1, depth: 0),
+      (start: 1, width: 2, depth: 0),
+      (start: 3, width: 1, depth: 0),
+    ];
+    expect(_candidates(.swapSpan, [5, 1, 2, 3], spans: spans), [
+      [1, 2, 5, 3],
+      [3, 1, 2, 5],
+      [5, 3, 1, 2],
+    ]);
+  });
+
+  test('a pass over spans proposes nothing from a run that made none', () {
+    for (final Pass pass in [Pass.liftSpan, Pass.swapSpan]) {
+      expect(_candidates(pass, _nineDown), isEmpty, reason: pass.name);
+    }
+  });
+
+  property(
+    "Swapping two sibling spans in a list's record draws the list with those "
+    'two elements swapped.',
+    (Draw draw) {
+      final ChoiceSource source = .random(
+        Random(draw(.integer(min: 0), label: 'seed')),
+        limit: 1000,
+      );
+      final RunDraw run = .new(source);
+      final List<List<int>> list = run(_lists);
+      draw.assume(list.length >= 2);
+      final int i = draw(.integer(min: 0, max: list.length - 2), label: 'i');
+      final int j = draw(
+        .integer(min: i + 1, max: list.length - 1),
+        label: 'j',
+      );
+      final List<List<int>> swapped = [...list];
+      swapped[i] = list[j];
+      swapped[j] = list[i];
+      expect([
+        for (final ChoiceSequence candidate in Pass.swapSpan.candidates(
+          source.record,
+          run.spans,
+        ))
+          if (drawFrom(_lists, candidate) case Drew(
+            :final List<List<int>> value,
+          ))
+            value,
+      ], contains(equals(swapped)));
+    },
+  );
+
   test('a pass from a place proposes the candidates from that place on', () {
     expect(_candidates(.deleteSpan, [1, 2, 3], from: 4), [
       [1, 2],
@@ -193,11 +288,19 @@ void main() {
       [0, 3],
       [2, 3],
     ]);
+    // Three draws of three choices each, each holding a draw of its first.
+    final List<Span> spans = [
+      for (int start = 0; start < 9; start += 3) ...[
+        (start: start, width: 3, depth: 0),
+        (start: start, width: 1, depth: 1),
+      ],
+    ];
     for (final Pass pass in Pass.values) {
-      final List<List<int>> all = _candidates(pass, _nineDown);
+      final List<List<int>> all = _candidates(pass, _nineDown, spans: spans);
+      expect(all, isNotEmpty, reason: pass.name);
       for (int from = 0; from <= all.length + 1; from++) {
         expect(
-          _candidates(pass, _nineDown, from: from),
+          _candidates(pass, _nineDown, spans: spans, from: from),
           all.skip(from),
           reason: '${pass.name} from $from',
         );
@@ -207,7 +310,7 @@ void main() {
 
   test('every pass proposes nothing from the empty sequence', () {
     for (final Pass pass in Pass.values) {
-      expect(pass.candidates(sequenceOf([])), isEmpty, reason: pass.name);
+      expect(_candidates(pass, []), isEmpty, reason: pass.name);
     }
   });
 }
