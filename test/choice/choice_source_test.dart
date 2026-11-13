@@ -5,6 +5,7 @@ import 'package:grit/src/choice/bound.dart';
 import 'package:grit/src/choice/choice_source.dart';
 import 'package:grit/src/choice/odds.dart';
 import 'package:grit/src/choice/status.dart';
+import 'package:grit/src/choice/sweep.dart';
 import 'package:test/test.dart';
 
 import '../support/fixed_random.dart';
@@ -29,14 +30,16 @@ sealed class _Ask {
   _Ask._();
 }
 
-/// An ask for a choice up to [bound].
+/// An ask for a choice up to [bound], naming [edges].
 final class _Choose extends _Ask {
-  _Choose(this.bound) : super._();
+  _Choose(this.bound, {this.edges = const []}) : super._();
 
   final Bound bound;
+  final List<Choice> edges;
 
   @override
-  String toString() => 'choose up to $bound';
+  String toString() =>
+      'choose up to $bound${edges.isEmpty ? '' : ' naming $edges'}';
 }
 
 /// An ask for a weighted choice at [odds].
@@ -49,13 +52,57 @@ final class _Weigh extends _Ask {
   String toString() => 'weigh at $odds';
 }
 
-/// An ask for a choice up to a bound at any scale, or for a weighted choice
-/// at any odds.
-final Gen<_Ask> _ask = .build(
-  (Draw draw) => draw(.boolean())
-      ? _Weigh(draw(_odds))
-      : _Choose(.new(draw(anyChoice).value)),
+/// An ask for a choice up to a bound at any scale, naming a few edges
+/// within it, or for a weighted choice at any odds.
+final Gen<_Ask> _ask = .build((Draw draw) {
+  if (draw(.boolean())) return _Weigh(draw(_odds));
+  final Bound bound = .new(draw(anyChoice).value);
+  return _Choose(bound, edges: draw(_edgesWithin(bound)));
+});
+
+/// A few edges within [bound], its ends and its middle among them.
+Gen<List<Choice>> _edgesWithin(Bound bound) => .list(
+  .oneOf([
+    .element([0, bound.value, bound.value ~/ 2]),
+    .integer(min: 0, max: bound.value),
+  ]).map(Choice.new),
+  maxLength: 3,
 );
+
+/// The bounds the exhaustive checks of a random fill ask under, by the
+/// choice that names each: a bound of 0, a bit, a few values and the
+/// largest a choice holds, where a step past it would wrap.
+final List<Bound> _scaled = [
+  .new(0),
+  .binary,
+  .new(_bound),
+  .new(Choice.largest.value),
+];
+
+/// The odds the exhaustive checks fill at: never, even and always.
+final List<Odds> _someOdds = [.never, .new(0.5), .new(1)];
+
+/// The choices a random fill hands [asks], each a choice under the bound
+/// [_scaled] names where its value names one, naming the edges 0 and the
+/// bound's middle, and a weighted choice where it is one past, each with the
+/// bound it lies within.
+List<(Bound, Choice)> _handedTo(ChoiceSource source, ChoiceSequence asks) {
+  final List<(Bound, Choice)> handed = [];
+  run(source, () {
+    for (final Choice ask in asks.choices) {
+      if (ask.value == _scaled.length) {
+        handed.add((.binary, .new(source.weigh(.new(0.5)) ? 1 : 0)));
+      } else {
+        final Bound bound = _scaled[ask.value];
+        handed.add((
+          bound,
+          source.choose(bound, edges: [.new(0), .new(bound.value ~/ 2)]),
+        ));
+      }
+    }
+  });
+  return handed;
+}
 
 void main() {
   group('a fixed source', () {
@@ -171,6 +218,178 @@ void main() {
       }
     });
 
+    test('at edges of 1 fills a choice that names edges at 0, at its bound or '
+        'at each edge it names, each in turn', () {
+      final Bound bound = .new(1000);
+      final List<Choice> edges = [.new(1), .new(500), .new(999)];
+      final ChoiceSource source = .random(.new(5), limit: 400, edges: .new(1));
+      final List<Choice> filled = [
+        for (int i = 0; i < 400; i++) source.choose(bound, edges: edges),
+      ];
+      expect(filled.toSet(), <Choice>{.new(0), .new(bound.value), ...edges});
+      // Each of the five is filled about a fifth of the time, its spread
+      // about 8, so a count past 30 off it is no fill alike.
+      for (final Choice edge in [.new(0), .new(bound.value), ...edges]) {
+        expect(
+          filled.where((Choice c) => c == edge).length,
+          inInclusiveRange(50, 110),
+          reason: '$edge in $filled',
+        );
+      }
+    });
+
+    test('at near of 1 fills a choice under an earlier one\'s bound at it or '
+        'one either side of it, each in turn, within the bound', () {
+      // Each first choice is filled at an edge, 0 or the bound, so the
+      // second is filled beside an end, where a step past it stays put.
+      for (final Bound bound in [.new(1000), .new(Choice.largest.value)]) {
+        final Map<Choice, Set<Choice>> besides = {};
+        for (int seed = 0; seed < 200; seed++) {
+          final ChoiceSource source = .random(
+            .new(seed),
+            limit: 2,
+            near: .new(1),
+            edges: .new(1),
+          );
+          final Choice first = source.choose(bound);
+          (besides[first] ??= {}).add(source.choose(bound));
+        }
+        expect(besides, {
+          Choice(0): {Choice(0), Choice(1)},
+          Choice(bound.value): {Choice(bound.value), Choice(bound.value - 1)},
+        }, reason: '$bound');
+      }
+    });
+
+    test('at a sweep fills a choice that names edges at each in turn, the '
+        'first runs that make it, whatever its odds, and as its odds say '
+        'after', () {
+      final Bound bound = .new(1 << 40);
+      final List<Choice> edges = [.new(1), .new(500), .new(999)];
+      final Sweep sweep = .new();
+      final List<Choice> filled = [
+        for (int run = 0; run < 4; run++)
+          ChoiceSource.random(
+            .new(run),
+            limit: 1,
+            sweep: sweep,
+            near: .new(1),
+            edges: .never,
+          ).choose(bound, edges: edges),
+      ];
+      expect(filled.take(3), edges);
+      // A uniform fill this wide lands on a named edge next to never.
+      expect(edges, isNot(contains(filled.last)));
+    });
+
+    test('at a sweep fills each choice alike of a run at the named edges in '
+        'turn, apart from the others', () {
+      final Bound bound = .new(9);
+      final List<Choice> edges = [.new(4), .new(7)];
+      final Sweep sweep = .new();
+      final List<List<Choice>> filled = [
+        for (int run = 0; run < 2; run++)
+          () {
+            final ChoiceSource source = .random(
+              .new(run),
+              limit: 4,
+              sweep: sweep,
+            );
+            return [
+              source.choose(bound, edges: edges),
+              source.choose(.new(8), edges: edges),
+              source.choose(bound, edges: edges),
+              source.choose(bound, edges: [.new(4)]),
+            ];
+          }(),
+      ];
+      expect(filled, [
+        [Choice(4), Choice(4), Choice(4), Choice(4)],
+        [Choice(7), Choice(7), Choice(7), filled[1][3]],
+      ]);
+    });
+
+    test('at a sweep fills a choice that names no edge as it would without '
+        'one', () {
+      for (int seed = 0; seed < 20; seed++) {
+        ChoiceSequence filled({Sweep? sweep}) {
+          final ChoiceSource source = .random(
+            .new(seed),
+            limit: 5,
+            sweep: sweep,
+            near: .new(0.5),
+            edges: .new(0.5),
+          );
+          source
+            ..choose(.new(1000))
+            ..choose(.new(1000))
+            ..weigh(.new(0.5))
+            ..choose(.new(1 << 40))
+            ..choose(.new(1000));
+          return source.record;
+        }
+
+        expect(filled(sweep: .new()), filled(), reason: '$seed');
+      }
+    });
+
+    test('at near of 1/2 fills a choice beside each earlier one under its '
+        'bound alike', () {
+      // A bound this wide fills two uniform choices far apart, so a third
+      // filled beside one of them is beside exactly one.
+      final Bound bound = .new(1 << 40);
+      final List<int> beside = [0, 0];
+      for (int seed = 0; seed < 1000; seed++) {
+        final ChoiceSource source = .random(
+          .new(seed),
+          limit: 3,
+          near: .new(0.5),
+        );
+        final List<Choice> earlier = [
+          source.choose(bound),
+          source.choose(bound),
+        ];
+        if ((earlier[0].value - earlier[1].value).abs() <= 1) continue;
+        final Choice third = source.choose(bound);
+        for (int i = 0; i < earlier.length; i++) {
+          if ((third.value - earlier[i].value).abs() <= 1) beside[i]++;
+        }
+      }
+      // About 250 of the thousand fill the second uniformly and the third
+      // beside one, each about 125, its spread about 8, so a count past 40
+      // off it is no fill alike.
+      for (final int count in beside) {
+        expect(count, inInclusiveRange(85, 165), reason: '$beside');
+      }
+    });
+
+    test('at near of 1 fills a choice under a bound no earlier choice was '
+        'asked for under, or after a weighted choice alone, as it would '
+        'without near', () {
+      for (int seed = 0; seed < 20; seed++) {
+        ChoiceSequence filled({required Odds near}) {
+          final ChoiceSource source = .random(
+            .new(seed),
+            limit: 4,
+            near: near,
+            edges: .new(0.5),
+          );
+          source
+            ..choose(.new(1000))
+            ..weigh(.new(0.5))
+            ..choose(.new(999))
+            ..choose(.binary);
+          return source.record;
+        }
+
+        expect(
+          filled(near: .new(1)),
+          filled(near: .never),
+          reason: '$seed',
+        );
+      }
+    });
+
     test('at edges of 1/2 fills about half its choices at 0 or at its bound, '
         'and the rest within it', () {
       final Bound bound = .new(1000);
@@ -189,8 +408,13 @@ void main() {
       expect(filled.every(bound.admits), isTrue);
     });
 
-    test('weighs at its own odds whatever its edges', () {
-      final ChoiceSource source = .random(.new(0), limit: 100, edges: .new(1));
+    test('weighs at its own odds whatever its near and its edges', () {
+      final ChoiceSource source = .random(
+        .new(0),
+        limit: 100,
+        near: .new(1),
+        edges: .new(1),
+      );
       for (int i = 0; i < 50; i++) {
         expect(source.weigh(.new(0)), isFalse);
         expect(source.weigh(.new(1)), isTrue);
@@ -426,7 +650,103 @@ void main() {
     });
   });
 
+  group('over every small sequence of asks, at every few odds', () {
+    test('An early run never fills a choice outside its bound, whatever fill '
+        'it takes.', () {
+      // A sweep is kept across the asks, so its later runs fill a choice at
+      // its second named edge as well as its first.
+      for (int seed = 0; seed < 3; seed++) {
+        for (final Odds near in _someOdds) {
+          for (final Odds edges in _someOdds) {
+            for (final Sweep? sweep in [null, .new()]) {
+              for (final ChoiceSequence asks in everySequence(
+                length: _length,
+                bound: _scaled.length,
+              )) {
+                final List<(Bound, Choice)> handed = _handedTo(
+                  .random(
+                    .new(seed),
+                    limit: _length,
+                    sweep: sweep,
+                    near: near,
+                    edges: edges,
+                  ),
+                  asks,
+                );
+                expect(handed, hasLength(asks.choices.length));
+                for (final (Bound bound, Choice choice) in handed) {
+                  expect(
+                    bound.admits(choice),
+                    isTrue,
+                    reason:
+                        'seed $seed, near $near, edges $edges, sweep '
+                        '${sweep != null}, asks $asks: $choice above $bound',
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    test('Naming a choice\'s edges changes no value a given sequence '
+        'draws.', () {
+      for (int size = 0; size <= _length; size++) {
+        final List<ChoiceSequence> sequences = everySequenceOf(
+          size: size,
+          bound: _bound,
+        ).toList();
+        for (final ChoiceSequence sequence in sequences) {
+          for (final ChoiceSequence bounds in everySequence(
+            length: size + 1,
+            bound: _bound,
+          )) {
+            ({ChoiceSequence handed, Status status}) drawn({
+              required bool named,
+            }) {
+              final ChoiceSource source = .fixed(sequence);
+              final List<Choice> handed = [];
+              final Status status = run(source, () {
+                for (final Choice bound in bounds.choices) {
+                  handed.add(
+                    source.choose(
+                      .new(bound.value),
+                      edges: named
+                          ? [for (int e = 0; e <= bound.value; e++) .new(e)]
+                          : const [],
+                    ),
+                  );
+                }
+              });
+              return (handed: .new(handed), status: status);
+            }
+
+            expect(
+              drawn(named: true),
+              drawn(named: false),
+              reason: '$sequence under $bounds',
+            );
+          }
+        }
+      }
+    });
+  });
+
   group('a bug in grit', () {
+    test('an edge named outside its bound is thrown, by either source', () {
+      for (final ChoiceSource source in [
+        .fixed(sequenceOf([0])),
+        .random(.new(0), limit: 1, edges: .new(1)),
+      ]) {
+        expect(
+          () => source.choose(.new(3), edges: [.new(1), .new(4)]),
+          throwsArgumentError,
+        );
+        expect(source.record, sequenceOf([]));
+      }
+    });
+
     test('a negative bound is thrown', () {
       expect(() => Bound(-1), throwsRangeError);
     });
@@ -467,6 +787,7 @@ void main() {
       final ChoiceSource source = .random(
         .new(seed),
         limit: limit,
+        near: draw(_odds, label: 'near'),
         edges: draw(_odds, label: 'edges'),
       );
       final List<_Ask> asks = draw(.list(_ask), label: 'asks');
@@ -474,7 +795,10 @@ void main() {
       final Status status = run(source, () {
         for (final _Ask ask in asks) {
           handed.add(switch (ask) {
-            _Choose(:final Bound bound) => (bound, source.choose(bound)),
+            _Choose(:final Bound bound, :final List<Choice> edges) => (
+              bound,
+              source.choose(bound, edges: edges),
+            ),
             _Weigh(:final Odds odds) => (
               .binary,
               .new(source.weigh(odds) ? 1 : 0),
@@ -488,6 +812,83 @@ void main() {
       expect(source.record.choices, hasLength(handed.length));
       expect(handed.length, lessThanOrEqualTo(limit));
       expect(status, asks.length > limit ? Status.overrun : Status.returned);
+    });
+
+    property('An early run never fills a choice outside its bound, whatever '
+        'fill it takes.', (Draw draw) {
+      // Each odds is drawn from its ends as often as between them, so a run
+      // takes each fill alone as well as a mix.
+      final Gen<Odds> anyOdds = .oneOf([
+        .element([.never, .new(1)]),
+        _odds,
+      ]);
+      final int seed = draw(.integer(min: 0, max: 0xFFFFFFFF), label: 'seed');
+      final Odds near = draw(anyOdds, label: 'near');
+      final Odds edges = draw(anyOdds, label: 'edges');
+      // A sweep kept across a few runs, so a later run fills a choice at a
+      // later named edge.
+      final Sweep? sweep = draw(.boolean(), label: 'swept') ? .new() : null;
+      final int runs = draw(.integer(min: 1, max: 4), label: 'runs');
+      // A few bounds, so a later choice is often asked for under an earlier
+      // one's.
+      final List<Bound> bounds = draw(
+        .list(
+          anyChoice.map((Choice c) => .new(c.value)),
+          minLength: 1,
+          maxLength: 3,
+        ),
+        label: 'bounds',
+      );
+      final List<(Bound, List<Choice>)> asks = draw(
+        .list(
+          .build((Draw draw) {
+            final Bound bound = draw(.element(bounds));
+            return (bound, draw(_edgesWithin(bound)));
+          }),
+          maxLength: 64,
+        ),
+        label: 'asks',
+      );
+      for (int run = 0; run < runs; run++) {
+        final ChoiceSource source = .random(
+          .new(seed + run),
+          limit: 64,
+          sweep: sweep,
+          near: near,
+          edges: edges,
+        );
+        for (final (Bound bound, List<Choice> named) in asks) {
+          final Choice choice = source.choose(bound, edges: named);
+          expect(bound.admits(choice), isTrue, reason: '$choice above $bound');
+        }
+      }
+    });
+
+    property('Naming a choice\'s edges changes no value a given sequence '
+        'draws.', (Draw draw) {
+      final ChoiceSequence sequence = draw(anySequence, label: 'sequence');
+      final List<Bound> bounds = draw(
+        .list(anyChoice.map((Choice c) => .new(c.value))),
+        label: 'bounds',
+      );
+      final List<List<Choice>> edges = [
+        for (final (int i, Bound bound) in bounds.indexed)
+          draw(_edgesWithin(bound), label: 'edges $i'),
+      ];
+      ({ChoiceSequence handed, Status status}) drawn({required bool named}) {
+        final ChoiceSource source = .fixed(sequence);
+        final List<Choice> handed = [];
+        final Status status = run(source, () {
+          for (final (int i, Bound bound) in bounds.indexed) {
+            handed.add(
+              source.choose(bound, edges: named ? edges[i] : const []),
+            );
+          }
+        });
+        return (handed: .new(handed), status: status);
+      }
+
+      expect(drawn(named: true), drawn(named: false));
     });
 
     property('A fixed choice above the bound a generator now asks for ends '

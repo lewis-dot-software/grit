@@ -1,5 +1,7 @@
 import 'package:grit/grit.dart';
+import 'package:grit/src/choice/choice_source.dart';
 import 'package:grit/src/choice/status.dart';
+import 'package:grit/src/gen/gen.dart';
 import 'package:test/test.dart';
 
 import '../support/drawing.dart';
@@ -120,6 +122,32 @@ void main() {
     expect(_drawn(across, largest), smallest >> 1);
     expect(_drawn(across, largest - 1), (smallest >> 1) + 1);
     expect(_drawn(across, largest - 2), -(smallest >> 1) - 1);
+  });
+
+  test('draws its target and both its ends, and nothing else, from a random '
+      'fill at edges of 1', () {
+    for (final (int min, int max) in [
+      (-0x80000000, 0x7FFFFFFF),
+      (-10, 3),
+      (-3, 10),
+      (-4, 4),
+      (-1, 1),
+      (0, 5),
+      (-5, -1),
+      (7, 7),
+      (1 << 63 >> 1, -(1 << 63 >> 1) - 1),
+    ]) {
+      final ChoiceSource source = .random(
+        .new(min ^ max),
+        limit: 300,
+        edges: .new(1),
+      );
+      final RunDraw draw = .new(source);
+      final Set<int> drawn = {
+        for (int i = 0; i < 300; i++) draw(.integer(min: min, max: max)),
+      };
+      expect(drawn, {0.clamp(min, max), min, max}, reason: '$min to $max');
+    }
   });
 
   group('a consumer\'s mistake', () {

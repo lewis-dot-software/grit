@@ -5,6 +5,7 @@ import 'choice.dart';
 import 'choice_sequence.dart';
 import 'odds.dart';
 import 'status.dart';
+import 'sweep.dart';
 
 /// What hands one run its choices, and records each it hands over.
 ///
@@ -17,11 +18,23 @@ sealed class ChoiceSource {
   /// A source that fills each choice at random from [random], up to [limit]
   /// choices a run.
   ///
-  /// At [edges], a choice is filled at 0 or at its bound, each alike, and
-  /// otherwise uniformly within its bound. A weighted choice is filled at its
-  /// own odds whatever [edges] is.
-  factory ChoiceSource.random(Random random, {required int limit, Odds edges}) =
-      _RandomSource._;
+  /// Where [sweep] is given, a choice that names edges is filled at the next
+  /// one [sweep] gives it, whatever [near] and [edges] are.
+  ///
+  /// At [near], any other choice asked for under the bound of an earlier
+  /// choice of the run is filled beside one of those earlier choices, each
+  /// alike: at it or one either side of it, each alike and kept within the
+  /// bound. Otherwise, at [edges], it is filled at 0, at its bound or at an
+  /// edge it names, each alike, and otherwise uniformly within its bound. A weighted
+  /// choice is filled at its own odds whatever [near] and [edges] are, and
+  /// no choice is filled beside it.
+  factory ChoiceSource.random(
+    Random random, {
+    required int limit,
+    Sweep? sweep,
+    Odds near,
+    Odds edges,
+  }) = _RandomSource._;
 
   /// A source that hands over [sequence]'s choices in order, and never fills.
   factory ChoiceSource.fixed(ChoiceSequence sequence) = _FixedSource._;
@@ -32,10 +45,16 @@ sealed class ChoiceSource {
   /// The choices handed over so far, in order.
   ChoiceSequence get record => .new(_record);
 
-  /// A choice from 0 to [bound].
-  Choice choose(Bound bound) {
+  /// A choice from 0 to [bound], naming [edges], each within [bound], as
+  /// choices a random fill's edges reach.
+  Choice choose(Bound bound, {List<Choice> edges = const []}) {
+    for (final Choice edge in edges) {
+      if (!bound.admits(edge)) {
+        throw ArgumentError.value(edge, 'edges', 'Must lie within $bound');
+      }
+    }
     _throwIfStopped();
-    final Choice choice = _fill(bound);
+    final Choice choice = _fill(bound, edges);
     _record.add(choice);
     return choice;
   }
@@ -61,7 +80,7 @@ sealed class ChoiceSource {
   Status status({required bool threw}) =>
       _stopped ?? (threw ? .failed : .returned);
 
-  Choice _fill(Bound bound);
+  Choice _fill(Bound bound, List<Choice> edges);
 
   Choice _fillWeighted(Odds odds);
 
@@ -76,24 +95,57 @@ sealed class ChoiceSource {
 /// A source that fills each choice at random, up to a limit on the choices
 /// one run may make.
 final class _RandomSource extends ChoiceSource {
-  _RandomSource._(this._random, {required int limit, this._edges = .never})
-    : _limit = RangeError.checkNotNegative(limit, 'limit'),
-      super._();
+  _RandomSource._(
+    this._random, {
+    required int limit,
+    this._sweep,
+    this._near = .never,
+    this._edges = .never,
+  }) : _limit = RangeError.checkNotNegative(limit, 'limit'),
+       super._();
 
   final Random _random;
   final int _limit;
+  final Sweep? _sweep;
+  final Odds _near;
   final Odds _edges;
+
+  /// The choices filled so far, by the bound each was asked for under, kept
+  /// only where a choice may be filled beside them.
+  final Map<Bound, List<Choice>> _filledUnder = {};
+
+  /// How many choices the run has made under each bound naming each set of
+  /// edges, kept only where [_sweep] fills them.
+  final Map<NamedChoice, int> _alike = {};
 
   /// The width of the widest bound [Random.nextInt] fills in one call.
   static const int _wordBits = 32;
 
   @override
-  Choice _fill(Bound bound) {
+  Choice _fill(Bound bound, List<Choice> edges) {
     _overrunAtLimit();
-    // A uniform fill draws nothing for the edges, so it fills as it would
-    // with no edges at all.
+    final Choice choice = _filled(bound, edges);
+    if (_near != .never) (_filledUnder[bound] ??= []).add(choice);
+    return choice;
+  }
+
+  /// A choice from 0 to [bound], filled at the swept named edge, beside an
+  /// earlier one, at an edge or uniformly.
+  Choice _filled(Bound bound, List<Choice> edges) {
+    if (_sweep case final Sweep sweep when edges.isNotEmpty) {
+      final NamedChoice named = (bound: bound, edges: .new(edges));
+      final int alike = _alike[named] ?? 0;
+      _alike[named] = alike + 1;
+      if (sweep.next(named, alike: alike) case final Choice edge) return edge;
+    }
+    // Odds of never draw nothing, so a fill without them fills as it would
+    // had they no part in it.
+    if (_filledUnder[bound] case final List<Choice> earlier
+        when _random.nextDouble() < _near.value) {
+      return _beside(earlier[_random.nextInt(earlier.length)], bound);
+    }
     if (_edges != .never && _random.nextDouble() < _edges.value) {
-      return _random.nextBool() ? .new(0) : .new(bound.value);
+      return _edge(_random.nextInt(edges.length + 2), bound, edges);
     }
     if (bound.value < 1 << _wordBits) {
       return .new(_random.nextInt(bound.value + 1));
@@ -108,6 +160,24 @@ final class _RandomSource extends ChoiceSource {
       if (bound.admits(choice)) return choice;
     }
   }
+
+  /// The edge numbered [index] of a choice under [bound] naming [edges].
+  static Choice _edge(int index, Bound bound, List<Choice> edges) =>
+      switch (index) {
+        0 => .new(0),
+        1 => .new(bound.value),
+        _ => edges[index - 2],
+      };
+
+  /// [earlier], or one either side of it within [bound], each alike.
+  ///
+  /// A step past either end of [bound] stays at [earlier], so no sum is
+  /// taken past the largest choice.
+  Choice _beside(Choice earlier, Bound bound) => switch (_random.nextInt(3)) {
+    0 when earlier.value > 0 => .new(earlier.value - 1),
+    2 when earlier.value < bound.value => .new(earlier.value + 1),
+    _ => earlier,
+  };
 
   @override
   Choice _fillWeighted(Odds odds) {
@@ -128,7 +198,7 @@ final class _FixedSource extends ChoiceSource {
   final ChoiceSequence _sequence;
 
   @override
-  Choice _fill(Bound bound) {
+  Choice _fill(Bound bound, List<Choice> edges) {
     if (_record.length >= _sequence.choices.length) _stop(.overrun);
     final Choice choice = _sequence.choices[_record.length];
     if (!bound.admits(choice)) _stop(.rejected);
@@ -136,7 +206,7 @@ final class _FixedSource extends ChoiceSource {
   }
 
   @override
-  Choice _fillWeighted(Odds odds) => _fill(.binary);
+  Choice _fillWeighted(Odds odds) => _fill(.binary, const []);
 }
 
 /// The throw that stops a run, carrying the status it stops it with.

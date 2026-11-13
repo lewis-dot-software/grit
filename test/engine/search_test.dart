@@ -12,6 +12,7 @@ import 'package:test/test.dart';
 
 import '../support/fake_clock.dart';
 import '../support/fixed_random.dart';
+import '../support/inputs.dart';
 import '../support/shrinking.dart';
 import '../support/small.dart';
 
@@ -163,6 +164,37 @@ final class _Body {
 
   @override
   String toString() => name;
+}
+
+/// A body that draws an integer of as many values as each of its bounds in
+/// turn, from as near half of them below 0, rejects the run where its first
+/// value is 1, and fails where a value lies past [failsPast], logging each
+/// run's values as it draws them.
+///
+/// Each value stands for one choice alone, so a run's log is the record it
+/// read, whether it returned, failed, was rejected or overran. A range
+/// across 0 names an edge, so the early runs' sweep fills it.
+final class _Logging {
+  _Logging(this._bounds, {required this.failsPast});
+
+  final List<int> _bounds;
+
+  /// The choice past which a run fails.
+  final int failsPast;
+
+  /// The choices of every run, in order.
+  final List<List<int>> log = [];
+
+  void call(Draw draw) {
+    final List<int> run = [];
+    log.add(run);
+    for (final int bound in _bounds) {
+      final int below = bound ~/ 2;
+      run.add(draw(.integer(min: -below, max: bound - below)));
+      if (run.length == 1) draw.assume(run.first != 1);
+    }
+    if (run.any((int x) => x > failsPast)) throw StateError('past');
+  }
 }
 
 /// Fails where the record is at least [key], choice by choice.
@@ -662,8 +694,8 @@ void main() {
         await _search(seed: seed, runs: 100).run((Draw draw) {
           final int x = draw(.integer(min: 0, max: bound));
           final bool edge = x == 0 || x == bound;
-          // The first tenth of the run count is early.
-          if (run++ < 10) {
+          // The first fifth of the run count is early.
+          if (run++ < 20) {
             early++;
             if (edge) earlyEdges++;
           } else {
@@ -676,7 +708,7 @@ void main() {
       // A uniform fill puts 2 choices in 1001 at an edge.
       expect(earlyEdges / early, greaterThan(0.3));
       expect(laterEdges / later, lessThan(0.01));
-      // A uniform fill puts about a tenth of 900 choices in each tenth, each
+      // A uniform fill puts about a tenth of 800 choices in each tenth, each
       // count's spread about 9, so a count past 30 off it is no uniform fill.
       for (int tenth = 0; tenth < tenths; tenth++) {
         expect(
@@ -684,6 +716,99 @@ void main() {
           inInclusiveRange(later ~/ tenths - 30, later ~/ tenths + 30),
           reason: 'choices in tenth $tenth of $laterByTenth',
         );
+      }
+    });
+  });
+
+  group('the random fill, beside earlier choices', () {
+    test('fills two choices under one bound within one of each other far more '
+        'often on a search\'s early runs than a uniform fill would, and next '
+        'to never on later runs', () async {
+      const int bound = 1 << 40;
+      int early = 0;
+      int earlyBeside = 0;
+      int later = 0;
+      int laterBeside = 0;
+      for (int seed = 0; seed < 10; seed++) {
+        int run = 0;
+        await _search(seed: seed, runs: 100).run((Draw draw) {
+          final int x = draw(.integer(min: 0, max: bound));
+          final int y = draw(.integer(min: 0, max: bound));
+          final bool beside = (x - y).abs() <= 1;
+          if (run++ < 20) {
+            early++;
+            if (beside) earlyBeside++;
+          } else {
+            later++;
+            if (beside) laterBeside++;
+          }
+        });
+      }
+      // A uniform fill puts two choices this wide within one of each other
+      // next to never, and an edge fill at the same end a quarter of the
+      // time it fills both at an edge.
+      expect(earlyBeside / early, greaterThan(0.5));
+      expect(later, greaterThan(0));
+      expect(laterBeside, 0);
+    });
+
+    test('fills every choice that names an edge at it within a search\'s '
+        'early runs from each of seeds 0 to 9, wherever the choice falls in '
+        'its run, under the default run count', () async {
+      // An integer across 0 names the choice of the end its bound does not
+      // stand for, and each is drawn twice, so the second falls under the
+      // bound of an earlier choice.
+      final List<(int, int, int)> ranges = [
+        (-1000000, 2000000, -1000000),
+        (-5, 10, -5),
+        (-10, 3, 3),
+        (-0x80000000, 0x7FFFFFFF, 0x7FFFFFFF),
+      ];
+      for (int seed = 0; seed < 10; seed++) {
+        final List<Set<int>> reached = [
+          for (int i = 0; i < 2 * ranges.length; i++) {},
+        ];
+        int run = 0;
+        await _search(seed: seed, runs: 100).run((Draw draw) {
+          final bool early = run++ < 20;
+          for (final (int i, (int min, int max, _)) in ranges.indexed) {
+            for (int twice = 0; twice < 2; twice++) {
+              final int x = draw(.integer(min: min, max: max));
+              if (early) reached[2 * i + twice].add(x);
+            }
+          }
+        });
+        for (final (int i, (_, _, int named)) in ranges.indexed) {
+          for (int twice = 0; twice < 2; twice++) {
+            expect(
+              reached[2 * i + twice],
+              contains(named),
+              reason: 'seed $seed, range $i, draw $twice',
+            );
+          }
+        }
+      }
+    });
+  });
+
+  group('the random fill, at the edges a choice names', () {
+    test('fills a choice that names an edge at it within a search\'s early '
+        'runs from each of seeds 0 to 9, where the choice is made on some '
+        'runs alone', () async {
+      for (int seed = 0; seed < 10; seed++) {
+        bool made = false;
+        bool named = false;
+        int run = 0;
+        await _search(seed: seed, runs: 100).run((Draw draw) {
+          final bool early = run++ < 20;
+          if (!draw(.boolean())) return;
+          final int x = draw(.integer(min: -1000000, max: 2000000));
+          if (early) {
+            made = true;
+            if (x == -1000000) named = true;
+          }
+        });
+        expect(named, made, reason: '$seed');
       }
     });
   });
@@ -844,6 +969,39 @@ void main() {
     });
   });
 
+  group('over every small logging body, each from a few seeds', () {
+    test('A search from one seed fills the same sequences in the same '
+        'order.', () async {
+      int runs = 0;
+      for (final ChoiceSequence bounds in everySequence(length: 3, bound: 3)) {
+        for (final int failsPast in [0, 2, 4]) {
+          for (final int limit in [2, 24]) {
+            for (int seed = 0; seed < _seeds; seed++) {
+              Future<List<List<int>>> filled() async {
+                final _Logging body = .new([
+                  for (final Choice c in bounds.choices) c.value,
+                ], failsPast: failsPast);
+                await _search(seed: seed, limit: limit).run(body.call);
+                return body.log;
+              }
+
+              final List<List<int>> first = await filled();
+              runs += first.length;
+              expect(
+                await filled(),
+                first,
+                reason:
+                    'bounds $bounds, failing past $failsPast, limit '
+                    '$limit, seed $seed',
+              );
+            }
+          }
+        }
+      }
+      expect(runs, greaterThan(0));
+    });
+  });
+
   group('a bug in grit', () {
     test('a negative setting, or a search that gives up on no invalid run, '
         'is thrown', () {
@@ -860,6 +1018,24 @@ void main() {
   });
 
   group('on grit, over larger bodies', () {
+    property('A search from one seed fills the same sequences in the same '
+        'order.', (Draw draw) async {
+      final List<int> bounds = draw(
+        .list(anyChoice.map((Choice c) => c.value), maxLength: 6),
+        label: 'bounds',
+      );
+      final int failsPast = draw(anyChoice, label: 'failing past').value;
+      final int seed = draw(_anySeed, label: 'seed');
+      final int limit = draw(.integer(min: 0, max: 8), label: 'limit');
+      Future<List<List<int>>> filled() async {
+        final _Logging body = .new(bounds, failsPast: failsPast);
+        await _search(seed: seed, limit: limit).run(body.call);
+        return body.log;
+      }
+
+      expect(await filled(), await filled());
+    });
+
     test('A failed outcome\'s sequence fails again, the same way, when '
         'replayed.', () async {
       int failed = 0;

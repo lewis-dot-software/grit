@@ -133,9 +133,9 @@ The rules every generator obeys:
 - Simplest value: named in its doc comment, the one choice 0 gives.
 - Collections: each element behind a "one more" choice, read as one more whatever it holds inside the minimum, and the collection ending on a choice of 0, one that can only be 0 at its maximum, so deleting a span deletes an element whole.
 - Strings: a list of code points, each one choice of its index in an `Alphabet`, simplest first, so a string's length counts code points and a string shrinks as a list does.
-- Distribution: none of it. A generator sets only its choices' bounds and a "one more" choice's odds.
+- Distribution: none of it. A generator sets only its choices' bounds, the edge values a choice names, and a "one more" choice's odds.
 
-The bias towards a choice's bounds on early runs lives in the choice source's random fill, one home for every generator. A filter retries a bounded number of times, then rejects the run. A set draws again as many times where a draw repeats an element it holds, then ends where it stands, or rejects the run under its minimum.
+The bias of early runs lives in the choice source's random fill, one home for every generator. An early run fills most choices made under the bound of an earlier one beside one of those, at it or one either side of it, so two wide choices fall close enough for a failure that needs them near each other. Of the rest, it fills about half at an edge, which is 0, the bound or a value the choice names, such as an integer's other end, and the others uniformly. Before any of that, an early run fills a choice that names edges at each in turn, the first times the search makes it, so every named edge is filled whatever the seed. A choice is told from another by its bound, its edges and its place among the choices alike in both that its run made before it. A filter retries a bounded number of times, then rejects the run. A set draws again as many times where a draw repeats an element it holds, then ends where it stands, or rejects the run under its minimum.
 
 ## Layers
 
@@ -209,7 +209,7 @@ grit is one package. A Flutter package under `fixture/flutter/` resolves it besi
 
 The shrinking challenge is a public set of shrinking problems, each with the smallest case known (jlink/shrinking-challenge on GitHub). It is a suite under `test/challenge/`, one file a challenge, each driving the engine under the default settings on fixed seeds, the fake clock and, once it stands, the in-memory store, and asserting the smallest sequence's value against the smallest known, so a fall in shrink quality fails the suite.
 
-A challenge is held to each of the seeds from 0 to 9 whose search reaches the smallest known, and its file names each seed it leaves out and why. One whose failure the default search never finds is driven from fixed failing starts instead, so its shrinking is held all the same.
+A challenge's search finds a failure from each of the seeds from 0 to 9, and is held to the smallest known from each seed whose search reaches it. Its file names each seed it leaves out of that and why.
 
 grit departs from the stack's property-test row, which names glados, since it is the library that replaces it. Before `property` runs, a property a layer's issue carries is checked over every sequence up to a small length and bound, by plain loops in the test. Those checks stay once grit stands, beside the same property written on grit over larger inputs.
 

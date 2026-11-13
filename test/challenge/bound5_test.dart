@@ -10,12 +10,11 @@ int _short(int value) => value.toSigned(16);
 int _shortSum(Iterable<int> values) =>
     values.fold(0, (int sum, int value) => _short(sum + value));
 
-/// The seeds this challenge is held to: those from 0 to 9 whose search
+/// The seeds this challenge's shrinking is held to: those whose search
 /// shrinks to the smallest known.
 ///
-/// Seed 5 stops at a first list of two elements, which no pass folds into
-/// one.
-const List<int> _seeds = [0, 1, 2, 3, 4, 6, 7, 8, 9];
+/// Seed 9 stops at a list of two elements, which no pass folds into one.
+const List<int> _seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
 /// Five lists of 16-bit integers, each summing below 256, under the false
 /// property that all five sum below 5 * 256, which wrapping breaks.
@@ -39,6 +38,6 @@ void main() {
       [-1],
       [-0x8000],
     ],
-    seeds: _seeds,
+    shrinks: _seeds,
   );
 }

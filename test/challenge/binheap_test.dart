@@ -68,12 +68,13 @@ Gen<_Heap?> _heap(int least) => .build((Draw draw) {
   return _Heap(head, draw(_heap(head)), draw(_heap(head)));
 });
 
-/// The seeds this challenge is held to: those from 0 to 9 whose search finds
-/// a failure and shrinks it to the smallest known.
+/// The seeds this challenge's shrinking is held to: those whose search
+/// shrinks to the smallest known.
 ///
-/// Seeds 0 and 1 find none, and 3, 8 and 9 stop at a heap whose subtrees
-/// would need swapping, or whose node would need lifting past its parent.
-const List<int> _seeds = [2, 4, 5, 6, 7];
+/// Seeds 1, 2, 4, 7 and 8 stop at the smallest's mirror, whose subtrees
+/// would need swapping, and 3, 6 and 9 at a heap that needs its subtrees
+/// swapped or a node lifted past its parent.
+const List<int> _seeds = [0, 5];
 
 /// A binary heap, under the false property that a wrong sort of its keys is
 /// sorted and holds its keys.
@@ -87,6 +88,6 @@ void main() {
       expect(sorted, [..._keys(heap)]..sort());
     },
     [_Heap(0, null, _Heap(0, _Heap(0, null, null), _Heap(1, null, null)))],
-    seeds: _seeds,
+    shrinks: _seeds,
   );
 }

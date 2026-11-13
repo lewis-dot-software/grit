@@ -5,6 +5,7 @@ import '../choice/choice_sequence.dart';
 import '../choice/choice_source.dart';
 import '../choice/odds.dart';
 import '../choice/status.dart';
+import '../choice/sweep.dart';
 import '../gen/gen.dart';
 import '../shrink/shrink.dart';
 import 'body.dart';
@@ -60,12 +61,17 @@ final class Search {
              : budget.time,
        );
 
-  /// The odds an early run fills a choice at 0 or at its bound.
+  /// The odds an early run fills a choice beside an earlier one under its
+  /// bound, where the run has made one.
+  static final Odds _near = .new(0.75);
+
+  /// The odds an early run fills a choice at 0, at its bound or at an edge
+  /// it names, where it fills it beside none.
   static final Odds _edges = .new(0.5);
 
   /// The share of the run count, one run in this many, made early, from the
   /// first run on.
-  static const int _earlyShare = 10;
+  static const int _earlyShare = 5;
 
   final Clock _clock;
   final Random _random;
@@ -77,17 +83,24 @@ final class Search {
 
   /// The outcome of searching [body].
   Future<Outcome> run(Body body) async {
-    // An early run fills towards each choice's bounds, so a wide range draws
-    // its simplest value and its far end in the first few runs.
+    // An early run fills a choice at each edge it names in turn, the first
+    // times it is made, so every one is filled. Its other choices fill
+    // beside earlier choices and towards each choice's edges, so two wide
+    // choices fall within one of each other, and a wide range draws its
+    // ends, in the first few runs.
     final int early = (_runs + _earlyShare - 1) ~/ _earlyShare;
+    final Sweep sweep = .new();
     int returned = 0;
     int rejected = 0;
     int overran = 0;
     for (int made = 0; returned < _runs; made++) {
+      final bool isEarly = made < early;
       final ChoiceSource source = .random(
         _random,
         limit: _limit,
-        edges: made < early ? _edges : .never,
+        sweep: isEarly ? sweep : null,
+        near: isEarly ? _near : .never,
+        edges: isEarly ? _edges : .never,
       );
       switch (await _ran(body, source)) {
         case Returned():
