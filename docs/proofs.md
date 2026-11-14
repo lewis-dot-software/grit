@@ -22,11 +22,11 @@ The shrinker's step function is tested against a model of it written in Lean, an
 | Statement | Lean | Wrong implementation it rules out |
 |---|---|---|
 | Shrinking always ends, whatever the oracle answers | `AlwaysEnds` | Proposing the same candidate again once told it passed |
-| The current sequence is always the first failure or one the oracle said failed | `HoldsOnlyFailures` | Taking every candidate as the current sequence, whatever it is told |
+| The current sequence is always the record the first failure's run read, or one a candidate's run read when told it failed | `HoldsOnlyFailures` | Taking every candidate as the current sequence, whatever it is told, and taking a failing candidate whole though its run read fewer of its choices |
 
-Both hold over the record with spans: a first failure comes with the spans its run made, and each answer of failing with the spans the candidate's run made. An oracle is any stream of answers, one per step, so an oracle that answers one candidate two ways, by the step it is asked at, or with spans that fit no run, is among them.
+Both hold over the record with spans: a first failure comes with the spans its run made, and each answer of failing with how many of the candidate's choices its run read and the spans it made. An oracle is any stream of answers, one per step, so an oracle that answers one candidate two ways, by the step it is asked at, or with spans that fit no run, is among them.
 
-Shrinking ends because each candidate the step function proposes is shortlex smaller than its current sequence, and shortlex has no endless descent, though a choice is any natural number. Between two accepted candidates, the step function passes on through its pass's candidates, then the later passes its round takes, then one round more, so it runs out of rejections too.
+Shrinking ends because each candidate the step function proposes is shortlex smaller than its current sequence, the record a failing run read is no larger than its candidate, and shortlex has no endless descent, though a choice is any natural number. Between two accepted candidates, the step function passes on through its pass's candidates, then the later passes its round takes, then one round more, so it runs out of rejections too.
 
 ## What is not proved
 

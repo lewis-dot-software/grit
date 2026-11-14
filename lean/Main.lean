@@ -5,7 +5,8 @@ The model's executable: one request per line on standard input, one answer per l
 
 A request is tab-separated: a first failure as its choices joined by commas, then the spans its run made, then each
 answer shrinking it is told, in order. A span is its start, width and depth joined by colons, and spans are joined by
-commas. An answer is `0` for a candidate that did not fail, and `1/` then the spans its run made for one that did.
+commas. An answer is `0` for a candidate that did not fail, and for one that did, `1/`, then how many of its choices its run read,
+`/`, then the spans its run made.
 
 An answer is tab-separated: each candidate told an answer, in order, written `[1,2]` and run together, then `shrunk` or
 `shrinking` for the state the answers leave, then that state's current sequence. The candidates stop where shrinking
@@ -37,11 +38,14 @@ def readSpan (s : String) : Option Span :=
 def readSpans (s : String) : Option (List Span) :=
   if s.isEmpty then some [] else (s.splitOn ",").mapM readSpan
 
-/-- The answer `s` writes, or none where it is neither `0` nor `1/` then spans. -/
+/-- The answer `s` writes, or none where it is neither `0` nor `1/` then a count read, `/` and spans. -/
 def readAnswer (s : String) : Option Answer :=
   match s.splitOn "/" with
   | ["0"] => some .notFailing
-  | ["1", spans] => (readSpans spans).map .failing
+  | ["1", read, spans] =>
+    match numeral read, readSpans spans with
+    | some read, some spans => some (.failing read spans)
+    | _, _ => none
   | _ => none
 
 /-- The candidates `written` so far, then each `state` proposes from there told each of `answers` in turn, then the

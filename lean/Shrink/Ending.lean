@@ -77,11 +77,11 @@ theorem seek_spec {current spans pass position cs accepted s}
 theorem told_below {s s' : Shrinking} {answer : Answer} (hs : Proper s) (h : told s answer = .shrinking s') :
     Proper s' ∧ Below s' s := by
   cases answer with
-  | failing spans =>
+  | failing read spans =>
     obtain ⟨h1, h2, _⟩ := seek_spec h
     refine ⟨h2, ?_⟩
     simp only [Below, InvImage, rank, h1]
-    exact .left _ _ hs
+    exact .left _ _ (smaller_take read hs)
   | notFailing =>
     obtain ⟨h1, h2, h3⟩ := seek_spec h
     refine ⟨h2, ?_⟩
@@ -110,7 +110,7 @@ theorem told_always_ends : AlwaysEnds start told := by
 /-- An obviously wrong step function: told its candidate did not fail, it proposes the same candidate again. -/
 def toldStays (s : Shrinking) (answer : Answer) : Shrink :=
   match answer with
-  | .failing spans => told s (.failing spans)
+  | .failing read spans => told s (.failing read spans)
   | .notFailing => .shrinking s
 
 theorem toldStays_fails : ¬ AlwaysEnds start toldStays := by

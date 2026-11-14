@@ -26,11 +26,3 @@ List<Span> spansOf(ChoiceSequence sequence) {
   run(source, () => draw(_tree));
   return draw.spans;
 }
-
-/// The oracle that answers a candidate as failing where [fails] holds of it,
-/// its run making the spans [spansOf] gives it, and as not failing, null,
-/// where it does not.
-List<Span>? Function(ChoiceSequence) treeFailing(
-  bool Function(ChoiceSequence) fails,
-) =>
-    (ChoiceSequence candidate) => fails(candidate) ? spansOf(candidate) : null;

@@ -262,9 +262,10 @@ final class Search {
     List<Span> spans,
     Duration start,
   ) async {
-    // A candidate told as failing becomes the current sequence, and the step
-    // function proposes only candidates smaller than that, so one told as
-    // failing is never proposed again. Only those told as not failing repeat.
+    // The record a failing candidate's run read becomes the current sequence,
+    // no larger than the candidate, and the step function proposes only
+    // candidates smaller than that, so one told as failing is never proposed
+    // again. Only those told as not failing repeat.
     final Set<ChoiceSequence> notFailing = {};
     Threw smallest = first;
     Shrink shrink = .start(first.record, spans);
@@ -284,11 +285,13 @@ final class Search {
           final _Ran ran = await _replay(body, candidate);
           steps++;
           if (ran.run case final Threw threw when first.failedAlike(threw)) {
-            // A run may leave its candidate's tail unread, so a later
-            // candidate smaller than the current sequence can read more than
-            // the smallest failing run did.
-            if (threw.record.isSmallerThan(smallest.record)) smallest = threw;
-            shrink = shrink.toldFailing(ran.spans);
+            // Its record becomes the current sequence, smaller than every
+            // record told as failing before it.
+            smallest = threw;
+            shrink = shrink.toldFailing(
+              read: threw.record.choices.length,
+              spans: ran.spans,
+            );
           } else {
             notFailing.add(candidate);
             shrink = shrink.toldNotFailing();
@@ -345,7 +348,7 @@ final class Search {
 /// Where a shrinking ended.
 ///
 /// - `smallest`: the run with the smallest record of the first failure and
-///   every candidate that failed alike, the earliest where two tie.
+///   every candidate that failed alike.
 /// - `steps`: how many candidates it ran.
 /// - `end`: what ended it.
 typedef _Shrunk = ({Threw smallest, int steps, ShrinkEnd end});

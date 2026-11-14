@@ -12,8 +12,9 @@ import '../support/spans.dart';
 
 /// The longest sequence and the largest choice the exhaustive checks reach.
 ///
-/// Every answer to every candidate is followed from each start, and the
-/// paths grow past a million at a length of 3.
+/// Every answer to every candidate is followed from each start, a failing
+/// one for each count of its choices read, and the paths grow past a million
+/// at a length of 3.
 const int _length = 2;
 const int _bound = 2;
 
@@ -36,13 +37,17 @@ void _everyPath(
       if (steps.length >= _endless) {
         fail('${steps.first.from} passed $_endless steps');
       }
-      for (final bool failed in [true, false]) {
+      final ChoiceSequence candidate = shrink.candidate;
+      for (final int? read in [
+        for (int read = 0; read <= candidate.choices.length; read++) read,
+        null,
+      ]) {
         steps.add((
           from: shrink.current,
-          candidate: shrink.candidate,
-          failed: failed,
+          candidate: candidate,
+          record: read == null ? null : recordOf(candidate, read),
         ));
-        _everyPath(tell(shrink, failed: failed), onEnd, steps);
+        _everyPath(tell(shrink, read: read), onEnd, steps);
         steps.removeLast();
       }
   }
@@ -54,25 +59,24 @@ void _hold(bool holds, List<ShrinkStep> path) {
   if (!holds) fail('$path');
 }
 
-/// Whether each candidate [path] told as failing became the current
-/// sequence, in the next step or as [end]'s, and was shortlex smaller than
-/// the one it replaced.
+/// Whether the record of each candidate [path] told as failing became the
+/// current sequence, in the next step or as [end]'s, and was shortlex smaller
+/// than the one it replaced.
 bool _acceptsOnlySmaller(List<ShrinkStep> path, Shrunk end) {
   for (int i = 0; i < path.length; i++) {
     final ShrinkStep step = path[i];
-    if (!step.failed) continue;
+    final ChoiceSequence? record = step.record;
+    if (record == null) continue;
     final ChoiceSequence next = i + 1 < path.length
         ? path[i + 1].from
         : end.current;
-    if (next != step.candidate || !step.candidate.isSmallerThan(step.from)) {
-      return false;
-    }
+    if (next != record || !record.isSmallerThan(step.from)) return false;
   }
   return true;
 }
 
 /// Whether every current sequence along [path] from [first], and [end]'s,
-/// is [first] or a candidate told as failing before it.
+/// is [first] or the record of a candidate told as failing before it.
 bool _holdsOnlyFailures(
   ChoiceSequence first,
   List<ShrinkStep> path,
@@ -81,26 +85,27 @@ bool _holdsOnlyFailures(
   final Set<ChoiceSequence> toldFailing = {first};
   for (final ShrinkStep step in path) {
     if (!toldFailing.contains(step.from)) return false;
-    if (step.failed) toldFailing.add(step.candidate);
+    if (step.record case final ChoiceSequence record) toldFailing.add(record);
   }
   return toldFailing.contains(end.current);
 }
 
 /// Whether shrinking [end]'s result again accepts a candidate, each told as
-/// [told] answered it, and as failing where it was never asked of, so a
-/// candidate the first shrinking never proposed is accepted where shrinking
-/// again proposes it.
-bool _acceptsAgain(Shrunk end, Map<ChoiceSequence, bool> told) {
+/// [told] answered it, a failing run having read as many of its choices as
+/// [told] gives, and as failing having read every choice where it was never
+/// asked of, so a candidate the first shrinking never proposed is accepted
+/// where shrinking again proposes it.
+bool _acceptsAgain(Shrunk end, Map<ChoiceSequence, int?> told) {
   bool accepted = false;
   final ChoiceSequence again = end.current;
-  shrunk(
-    .start(again, spansOf(again)),
-    treeFailing((ChoiceSequence candidate) {
-      final bool failed = told[candidate] ?? true;
-      accepted |= failed;
-      return failed;
-    }),
-  );
+  shrunk(.start(again, spansOf(again)), (ChoiceSequence candidate) {
+    final int? read = told.containsKey(candidate)
+        ? told[candidate]
+        : candidate.choices.length;
+    if (read == null) return null;
+    accepted = true;
+    return (read: read, spans: spansOf(recordOf(candidate, read)));
+  });
   return accepted;
 }
 
@@ -108,24 +113,25 @@ bool _acceptsAgain(Shrunk end, Map<ChoiceSequence, bool> told) {
 Iterable<ChoiceSequence> get _firstFailures =>
     everySequence(length: _length, bound: _bound);
 
-/// Whether [body] fails, run on the choices of [sequence] alone.
-bool Function(ChoiceSequence) _failsOn(void Function(ChoiceSource) body) =>
+/// How many choices [body] read where it fails, run on the choices of
+/// [sequence] alone, and null where it does not fail.
+///
+/// [body] draws through no generator, so its runs make no span.
+Failing? Function(ChoiceSequence) _failsOn(void Function(ChoiceSource) body) =>
     (ChoiceSequence sequence) {
       final ChoiceSource source = .fixed(sequence);
-      return run(source, () => body(source)) == .failed;
+      return run(source, () => body(source)) == .failed
+          ? (read: source.length, spans: const [])
+          : null;
     };
 
 /// The smallest sequence shrinking [first] reaches, where a candidate fails
-/// as [body] fails on it.
-///
-/// [body] draws through no generator, so its runs make no span.
+/// as [body] fails on it, the choices its run read becoming the current
+/// sequence.
 ChoiceSequence _smallest(List<int> first, void Function(ChoiceSource) body) {
-  final bool Function(ChoiceSequence) fails = _failsOn(body);
-  expect(fails(sequenceOf(first)), isTrue, reason: '$first must fail');
-  return shrunk(
-    .start(sequenceOf(first), const []),
-    (ChoiceSequence candidate) => fails(candidate) ? const [] : null,
-  ).current;
+  final Failing? Function(ChoiceSequence) fails = _failsOn(body);
+  expect(fails(sequenceOf(first)), isNotNull, reason: '$first must fail');
+  return shrunk(.start(sequenceOf(first), const []), fails).current;
 }
 
 /// Each element of a list drawn behind a "one more" choice, each from 0 to
@@ -319,13 +325,41 @@ void main() {
     final Shrinking start = Shrink.start(first, spansOf(first)) as Shrinking;
     final ChoiceSequence candidate = start.candidate;
     final Shrinking passed = start.toldNotFailing() as Shrinking;
-    final Shrink failed = tell(start, failed: true);
+    final int read = candidate.choices.length;
+    final Shrink failed = tell(start, read: read);
     expect((start.toldNotFailing() as Shrinking).candidate, passed.candidate);
-    expect(tell(start, failed: true).current, failed.current);
+    expect(tell(start, read: read).current, failed.current);
     expect(start.candidate, candidate);
     expect(start.current, sequenceOf([2, 2]));
     expect(failed.current, candidate);
     expect(passed.current, sequenceOf([2, 2]));
+  });
+
+  test('a candidate told as failing having read a prefix of its choices '
+      'leaves that prefix the current sequence, and proposes next only '
+      'candidates smaller than it', () {
+    final ChoiceSequence first = sequenceOf(List.filled(10, 1));
+    final Shrinking start = Shrink.start(first, spansOf(first)) as Shrinking;
+    final ChoiceSequence candidate = start.candidate;
+    expect(candidate.choices.length, greaterThan(1));
+    final Shrinking told = tell(start, read: 1) as Shrinking;
+    expect(told.current, recordOf(candidate, 1));
+    expect(told.candidate.isSmallerThan(told.current), isTrue);
+  });
+
+  test('a candidate told as failing having read none of its choices, or '
+      'more than it holds, throws a RangeError for none but the first', () {
+    final ChoiceSequence first = sequenceOf(List.filled(10, 1));
+    final Shrinking start = Shrink.start(first, spansOf(first)) as Shrinking;
+    final int length = start.candidate.choices.length;
+    expect(start.toldFailing(read: 0, spans: const []).current, sequenceOf([]));
+    for (final int read in [-1, length + 1]) {
+      expect(
+        () => start.toldFailing(read: read, spans: const []),
+        throwsRangeError,
+        reason: '$read',
+      );
+    }
   });
 
   test('a round that has accepted a candidate takes no costly pass, so its '
@@ -338,7 +372,9 @@ void main() {
     final List<ChoiceSequence> proposed = [];
     shrunk(.start(first, spansOf(first)), (ChoiceSequence candidate) {
       proposed.add(candidate);
-      return candidate == accepted ? spansOf(candidate) : null;
+      return candidate == accepted
+          ? (read: candidate.choices.length, spans: spansOf(candidate))
+          : null;
     });
     final int lastRound = proposed.lastIndexOf(sequenceOf([]));
     for (final List<int> costly in [
@@ -360,8 +396,8 @@ void main() {
       expect(ends, greaterThan(0));
     });
 
-    test('Every accepted candidate is shortlex smaller than the sequence it '
-        'replaces.', () {
+    test('Every accepted candidate\'s record is shortlex smaller than the '
+        'sequence it replaces.', () {
       for (final ChoiceSequence first in _firstFailures) {
         _everyPath(
           .start(first, spansOf(first)),
@@ -371,8 +407,8 @@ void main() {
       }
     });
 
-    test('The current sequence is always the first failure or one the oracle '
-        'said failed.', () {
+    test('The current sequence is always the record the first failure\'s run '
+        'read, or one a candidate\'s run read when told it failed.', () {
       for (final ChoiceSequence first in _firstFailures) {
         _everyPath(
           .start(first, spansOf(first)),
@@ -390,15 +426,16 @@ void main() {
           List<ShrinkStep> path,
           Shrunk end,
         ) {
-          // A path that told one candidate both ways answers as no oracle
+          // A path that told one candidate two ways answers as no oracle
           // does. Any other is an oracle's.
-          final Map<ChoiceSequence, bool> answers = {};
+          final Map<ChoiceSequence, int?> answers = {};
           for (final ShrinkStep step in path) {
-            if (answers[step.candidate] case final bool told
-                when told != step.failed) {
+            final int? read = step.record?.choices.length;
+            if (answers.containsKey(step.candidate) &&
+                answers[step.candidate] != read) {
               return;
             }
-            answers[step.candidate] = step.failed;
+            answers[step.candidate] = read;
           }
           oracles++;
           _hold(!_acceptsAgain(end, answers), path);
@@ -416,8 +453,8 @@ void main() {
       answered(first, drawOracle(draw, first));
     });
 
-    property('Every accepted candidate is shortlex smaller than the sequence '
-        'it replaces.', (Draw draw) {
+    property('Every accepted candidate\'s record is shortlex smaller than the '
+        'sequence it replaces.', (Draw draw) {
       final ChoiceSequence first = draw(anySequence, label: 'first failure');
       final (List<ShrinkStep> path, Shrunk end) = answered(
         first,
@@ -426,8 +463,10 @@ void main() {
       expect(_acceptsOnlySmaller(path, end), isTrue);
     });
 
-    property('The current sequence is always the first failure or one the '
-        'oracle said failed.', (Draw draw) {
+    property('The current sequence is always the record the first failure\'s '
+        'run read, or one a candidate\'s run read when told it failed.', (
+      Draw draw,
+    ) {
       final ChoiceSequence first = draw(anySequence, label: 'first failure');
       final (List<ShrinkStep> path, Shrunk end) = answered(
         first,
@@ -442,16 +481,17 @@ void main() {
       final Oracle oracle = drawOracle(draw, first);
       // An oracle answers alike each time it is asked of one candidate, each
       // candidate first asked taking its next answer.
-      final Map<ChoiceSequence, bool> told = {};
-      final Shrunk end = shrunk(
-        .start(first, spansOf(first)),
-        treeFailing(
-          (ChoiceSequence candidate) => told.putIfAbsent(
-            candidate,
-            () => answerOf(oracle, told.length, candidate),
-          ),
-        ),
-      );
+      final Map<ChoiceSequence, int?> told = {};
+      final Shrunk end = shrunk(.start(first, spansOf(first)), (
+        ChoiceSequence candidate,
+      ) {
+        final int? read = told.putIfAbsent(
+          candidate,
+          () => answerOf(oracle, told.length, candidate),
+        );
+        if (read == null) return null;
+        return (read: read, spans: spansOf(recordOf(candidate, read)));
+      });
       expect(_acceptsAgain(end, told), isFalse);
     });
   });

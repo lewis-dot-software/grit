@@ -1,13 +1,18 @@
 import 'package:grit/grit.dart';
 
-/// An oracle drawn for the checks on grit, which answers as `answers` say
-/// in turn, from the first again once they run out, and never fails a
-/// candidate shorter than `shortest`.
+/// An oracle drawn for the checks on grit:
+///
+/// - `answers`: whether each candidate fails, in turn, from the first again
+///   once they run out.
+/// - `unread`: how many choices off its end each failing candidate's run
+///   leaves unread, in turn, from the first again once they run out, and
+///   none where it is empty.
+/// - `shortest`: the length below which no candidate fails.
 ///
 /// An oracle that refuses deletions leaves the passes after them a long
 /// sequence to work on, where one that accepts them shrinks it to a few
 /// choices before they run.
-typedef Oracle = ({List<bool> answers, int shortest});
+typedef Oracle = ({List<bool> answers, List<int> unread, int shortest});
 
 /// Answers each true at odds from 1 in 2 to 1 in 8, so some oracles accept
 /// seldom enough for the passes after zeroing to see choices other than 0.
@@ -20,6 +25,7 @@ final Gen<List<bool>> _anyAnswers = .build((Draw draw) {
 /// every deletion or a candidate shorter than a length drawn.
 Oracle drawOracle(Draw draw, ChoiceSequence first) => (
   answers: draw(_anyAnswers, label: 'answers'),
+  unread: draw(.list(.integer(min: 0, max: 3)), label: 'unread'),
   shortest: draw(
     .build(
       (Draw draw) => draw(.boolean())
@@ -30,8 +36,16 @@ Oracle drawOracle(Draw draw, ChoiceSequence first) => (
   ),
 );
 
-/// The [k]th answer of [oracle], to [candidate].
-bool answerOf(Oracle oracle, int k, ChoiceSequence candidate) =>
-    candidate.choices.length >= oracle.shortest &&
-    oracle.answers.isNotEmpty &&
-    oracle.answers[k % oracle.answers.length];
+/// The [k]th answer of [oracle], to [candidate]: how many of its choices its
+/// run read where it fails, and null where it does not.
+int? answerOf(Oracle oracle, int k, ChoiceSequence candidate) {
+  final int length = candidate.choices.length;
+  if (length < oracle.shortest ||
+      oracle.answers.isEmpty ||
+      !oracle.answers[k % oracle.answers.length]) {
+    return null;
+  }
+  if (oracle.unread.isEmpty) return length;
+  final int unread = oracle.unread[k % oracle.unread.length];
+  return unread < length ? length - unread : 0;
+}

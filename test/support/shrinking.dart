@@ -6,35 +6,58 @@ import 'package:test/test.dart';
 import 'oracle.dart';
 import 'spans.dart';
 
-/// One step of a shrinking: the current sequence, the candidate it proposed,
-/// and whether the candidate was told as failing.
+/// One step of a shrinking:
+///
+/// - `from`: the current sequence.
+/// - `candidate`: the candidate it proposed.
+/// - `record`: the choices the candidate's run read, where it was told as
+///   failing, and null where it was told as not failing.
 typedef ShrinkStep = ({
   ChoiceSequence from,
   ChoiceSequence candidate,
-  bool failed,
+  ChoiceSequence? record,
 });
+
+/// What a candidate's run told as failing made:
+///
+/// - `read`: how many of the candidate's choices it read.
+/// - `spans`: the span of each draw it made.
+typedef Failing = ({int read, List<Span> spans});
 
 /// The most steps a shrinking along an oracle's answers may take before it
 /// is held never to end, far past the longest any drawn oracle's takes.
 const int _endless = 1000000;
 
-/// The state after [shrink]'s candidate's run, which [failed] as the first
-/// failure did or not, making the spans [spansOf] gives it.
-Shrink tell(Shrinking shrink, {required bool failed}) => failed
-    ? shrink.toldFailing(spansOf(shrink.candidate))
-    : shrink.toldNotFailing();
+/// The first [read] choices of [candidate], the record a run on it made
+/// having read them.
+ChoiceSequence recordOf(ChoiceSequence candidate, int read) =>
+    .new(candidate.choices.take(read));
+
+/// The state after [shrink]'s candidate's run, which failed as the first
+/// failure did having read [read] of its choices, or did not fail where
+/// [read] is null, making the spans [spansOf] gives the choices it read.
+Shrink tell(Shrinking shrink, {required int? read}) => switch (read) {
+  final int read => shrink.toldFailing(
+    read: read,
+    spans: spansOf(recordOf(shrink.candidate, read)),
+  ),
+  null => shrink.toldNotFailing(),
+};
 
 /// The state [shrink] ends in, each candidate told as failing where
-/// [failing] gives the spans its run made, and as not failing where it gives
+/// [failing] gives what its run made, and as not failing where it gives
 /// null.
-Shrunk shrunk(Shrink shrink, List<Span>? Function(ChoiceSequence) failing) {
+Shrunk shrunk(Shrink shrink, Failing? Function(ChoiceSequence) failing) {
   while (true) {
     switch (shrink) {
       case Shrunk():
         return shrink;
       case Shrinking():
         shrink = switch (failing(shrink.candidate)) {
-          final List<Span> spans => shrink.toldFailing(spans),
+          (:final int read, :final List<Span> spans) => shrink.toldFailing(
+            read: read,
+            spans: spans,
+          ),
           null => shrink.toldNotFailing(),
         };
     }
@@ -43,7 +66,7 @@ Shrunk shrunk(Shrink shrink, List<Span>? Function(ChoiceSequence) failing) {
 
 /// The path from shrinking [first] to its end, each candidate told as
 /// failing as [oracle] answers it in turn, with the state it ends in, each
-/// run making the spans [spansOf] gives it.
+/// run making the spans [spansOf] gives the choices it read.
 ///
 /// Fails the test where the path passes [_endless] steps.
 (List<ShrinkStep>, Shrunk) answered(ChoiceSequence first, Oracle oracle) {
@@ -58,9 +81,23 @@ Shrunk shrunk(Shrink shrink, List<Span>? Function(ChoiceSequence) failing) {
         :final ChoiceSequence candidate,
       ):
         if (path.length >= _endless) fail('$first passed $_endless steps');
-        final bool failed = answerOf(oracle, path.length, candidate);
-        path.add((from: current, candidate: candidate, failed: failed));
-        shrink = tell(shrink, failed: failed);
+        final int? read = answerOf(oracle, path.length, candidate);
+        path.add((
+          from: current,
+          candidate: candidate,
+          record: read == null ? null : recordOf(candidate, read),
+        ));
+        shrink = tell(shrink, read: read);
     }
   }
 }
+
+/// The oracle that answers a candidate as failing where [fails] holds of it,
+/// its run reading every choice and making the spans [spansOf] gives it, and
+/// as not failing, null, where it does not.
+Failing? Function(ChoiceSequence) treeFailing(
+  bool Function(ChoiceSequence) fails,
+) =>
+    (ChoiceSequence candidate) => fails(candidate)
+    ? (read: candidate.choices.length, spans: spansOf(candidate))
+    : null;

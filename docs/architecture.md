@@ -80,7 +80,7 @@ The engine decides what counts as the same failure: the same error type, thrown 
 
 Why shrinking always ends:
 
-- The shrinker accepts a candidate only where it is smaller than the current sequence and failed as the first did, so every accepted step descends shortlex.
+- The shrinker accepts a candidate only where it is smaller than the current sequence and failed as the first did, and takes the record its run read, no larger than the candidate, so every accepted step descends shortlex.
 - Shortlex has no endless descent, though a choice is any natural number, so the accepted steps are finitely many.
 - Each pass proposes finitely many candidates from one sequence and the spans its run made, and the passes are finitely many.
 - The step function ends on a round of every pass that accepts nothing.
@@ -105,7 +105,7 @@ The last three are costly: each proposes candidates that rarely fail where a che
 
 A pass for one kind of value, floats or strings, is added where shrink quality shows the need. It needs the record to carry each draw's kind beside its span, since a span alone cannot say what kind of value its choices make, and that change is settled with the pass.
 
-The step function's current sequence is always one it was told failed. The outcome reports the smallest record of the runs that failed alike, which can be smaller than the current sequence's own, since a run may leave its candidate's tail unread and a later, smaller candidate read further. The final replay then holds that every sequence the outcome reports as failed still fails.
+The step function's current sequence is always the record a run read that it was told failed: the first failure's, or the choices a candidate's run read, which may leave the candidate's tail unread. The current sequence is so the smallest failing record found, and the outcome reports it. The final replay then holds that every sequence the outcome reports as failed still fails.
 
 ## The clock
 

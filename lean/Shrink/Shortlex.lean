@@ -62,6 +62,16 @@ theorem smaller_cases {a b : Seq} (h : Smaller a b) :
   · next he => exact .inr ⟨he, he, h⟩
   · exact .inl (by simpa using h)
 
+theorem smaller_take {a b : Seq} (n : Nat) (h : Smaller a b) : Smaller (a.take n) b := by
+  by_cases hn : a.length ≤ n
+  · rwa [List.take_of_length_le hn]
+  · have hlen : (a.take n).length < b.length := by
+      rcases smaller_cases h with h | ⟨he, _⟩ <;> simp <;> omega
+    unfold Smaller smaller
+    split
+    · omega
+    · simpa using hlen
+
 theorem smaller_wf : WellFounded Smaller :=
   Subrelation.wf
     (r := InvImage (Prod.Lex (· < ·) LexSame) fun l : Seq => (l.length, l))

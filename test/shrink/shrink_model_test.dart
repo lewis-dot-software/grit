@@ -27,12 +27,17 @@ String _spans(ChoiceSequence sequence) => [
 ].join(',');
 
 /// The model's request to shrink [first], told each answer of [path] in
-/// turn, each run making the spans [spansOf] gives it.
+/// turn, each failing run reading its record's choices and making the spans
+/// [spansOf] gives them.
 String _request(ChoiceSequence first, List<ShrinkStep> path) => [
   first.choices.join(','),
   _spans(first),
   for (final ShrinkStep step in path)
-    step.failed ? '1/${_spans(step.candidate)}' : '0',
+    switch (step.record) {
+      final ChoiceSequence record =>
+        '1/${record.choices.length}/${_spans(record)}',
+      null => '0',
+    },
 ].join('\t');
 
 /// What the model answers where it proposes each of [path]'s candidates and
@@ -105,7 +110,13 @@ void main() {
   }, settings: .new(runs: 2000));
 
   test('the Lean model refuses a request it cannot read, naming it', () async {
-    for (final String request in ['1,x\t', '1\t0:1', '1\t\t2', '1']) {
+    for (final String request in [
+      '1,x\t',
+      '1\t0:1',
+      '1\t\t2',
+      '1\t\t1/0:1:0',
+      '1',
+    ]) {
       expect(await ask(request), 'refused $request', reason: request);
     }
   });

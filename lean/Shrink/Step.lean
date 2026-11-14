@@ -2,19 +2,24 @@ import Shrink.Pass
 
 /-!
 The step function: a state of shrinking proposes a candidate and is told whether its run failed as the first failure
-did, and where it did, the spans the run made.
+did, and where it did, how many of its choices the run read and the spans the run made.
 -/
 
 namespace Grit
 
-/-- What a candidate's run is told as: failing as the first failure did, making `spans`, or not failing. -/
+/-- What a candidate's run is told as: failing as the first failure did, having read `read` of its choices and made
+`spans`, or not failing. -/
 inductive Answer where
-  | failing (spans : List Span)
+  | failing (read : Nat) (spans : List Span)
   | notFailing
+
+/-- The record a run on `candidate` made, having read `read` of its choices: the first `read` of them, or every one
+where `read` passes its length. -/
+def record (candidate : Seq) (read : Nat) : Seq := candidate.take read
 
 /-- A state that proposes `candidate` and waits to be told whether its run failed. -/
 structure Shrinking where
-  /-- The smallest sequence told as failing so far, or the first failure where none has been. -/
+  /-- The record of the latest run told as failing, or the first failure where none has been. -/
   current : Seq
   /-- The spans `current`'s run made. -/
   spans : List Span
@@ -34,7 +39,7 @@ inductive Shrink where
   | shrinking (s : Shrinking)
   | shrunk (current : Seq)
 
-/-- The smallest sequence told as failing so far, or the first failure where none has been. -/
+/-- The record of the latest run told as failing, or the first failure where none has been. -/
 def Shrink.current : Shrink → Seq
   | .shrinking s => s.current
   | .shrunk current => current
@@ -83,11 +88,13 @@ def seek (current : Seq) (spans : List Span) (pass : Pass) (position : Nat) (cs 
 def start (first : Seq) (spans : List Span) : Shrink :=
   seek first spans .deleteSpan 0 (Pass.deleteSpan.candidates first spans) false
 
-/-- The state after `s`'s candidate's run, told as `answer`. -/
+/-- The state after `s`'s candidate's run, told as `answer`, the record a failing run made taking the place of the
+current sequence. -/
 def told (s : Shrinking) (answer : Answer) : Shrink :=
   match answer with
-  | .failing spans =>
-    seek s.candidate spans s.pass s.position ((s.pass.candidates s.candidate spans).drop s.position) true
+  | .failing read spans =>
+    let current := record s.candidate read
+    seek current spans s.pass s.position ((s.pass.candidates current spans).drop s.position) true
   | .notFailing => seek s.current s.spans s.pass (s.position + 1) s.rest s.accepted
 
 end Grit

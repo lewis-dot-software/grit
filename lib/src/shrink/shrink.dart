@@ -3,15 +3,16 @@ import '../choice/span.dart';
 import 'pass.dart';
 
 /// One state of shrinking a failing sequence: a step function over the
-/// current sequence, which is always the first failure or a candidate told as
-/// failing, and the spans its run made.
+/// current sequence, which is always the first failure or the record a
+/// candidate's run read when told as failing, and the spans its run made.
 ///
 /// A round takes every [Pass] in order, each proposing its candidates of the
 /// current sequence, and a [Pass.costly] one only where the round has
 /// accepted nothing yet. A candidate no smaller than the current sequence is
-/// never proposed. Where a candidate is told as failing it becomes the
-/// current sequence, and its pass goes on from the same place among the new
-/// sequence's candidates. Shrinking ends on a round that accepts nothing.
+/// never proposed. Where a candidate is told as failing, the choices its run
+/// read become the current sequence, and its pass goes on from the same place
+/// among the new sequence's candidates. Shrinking ends on a round that
+/// accepts nothing.
 sealed class Shrink {
   Shrink._(this.current);
 
@@ -25,8 +26,8 @@ sealed class Shrink {
     accepted: false,
   );
 
-  /// The smallest sequence told as failing so far, or the first failure where
-  /// none has been.
+  /// The record of the latest run told as failing, the smallest so far, or
+  /// the first failure where none has been.
   final ChoiceSequence current;
 }
 
@@ -53,17 +54,32 @@ final class Shrinking extends Shrink {
   ChoiceSequence get candidate => _at.sequence;
 
   /// The state after [candidate]'s run failed as the first failure did,
-  /// making [spans].
-  Shrink toldFailing(List<Span> spans) => _seek(
-    current: candidate,
-    spans: spans,
-    pass: _pass,
-    at: .first(
-      _pass.candidates(candidate, spans, from: _at.position).iterator,
-      position: _at.position,
-    ),
-    accepted: true,
-  );
+  /// having read the first [read] of its choices and made [spans].
+  ///
+  /// Throws a [RangeError] where [read] is negative or passes the
+  /// candidate's length.
+  Shrink toldFailing({required int read, required List<Span> spans}) {
+    final ChoiceSequence record = .new(
+      candidate.choices.take(
+        RangeError.checkValueInInterval(
+          read,
+          0,
+          candidate.choices.length,
+          'read',
+        ),
+      ),
+    );
+    return _seek(
+      current: record,
+      spans: spans,
+      pass: _pass,
+      at: .first(
+        _pass.candidates(record, spans, from: _at.position).iterator,
+        position: _at.position,
+      ),
+      accepted: true,
+    );
+  }
 
   /// The state after [candidate]'s run did not fail as the first failure
   /// did.
