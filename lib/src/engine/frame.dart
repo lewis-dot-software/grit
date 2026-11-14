@@ -10,7 +10,7 @@ final class Frame {
   static List<Frame> of(StackTrace stackTrace) => [
     for (final RegExpMatch match in _line.allMatches(stackTrace.toString()))
       if (Uri.tryParse(match[1]!) case final Uri uri)
-        .new(uri, int.parse(match[2]!)),
+        .new(uri, .parse(match[2]!)),
   ];
 
   /// A frame's line in the VM's form, such as
