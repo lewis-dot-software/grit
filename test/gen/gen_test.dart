@@ -16,12 +16,6 @@ import '../support/small.dart';
 const int _bound = 3;
 const int _length = 5;
 
-/// A sequence of small choices, which a generator mostly draws from to its
-/// end, or one of choices at any scale, which mostly stops it.
-final Gen<ChoiceSequence> _sequence = .build(
-  (Draw draw) => draw(draw(.boolean()) ? smallSequence : anySequence),
-);
-
 /// What filtering [gen] by [accepts] draws from [sequence], read off drawing
 /// [gen] alone up to three times, each from where the one before it ended.
 Drawing<Object?> _filtered(
@@ -74,7 +68,6 @@ void main() {
     test('Each of `.integer`, `.boolean`, `.list`, `.element`, `.string`, '
         '`.oneOf`, `.set` and `.float` draws its documented simplest value '
         'from all-zero choices.', () {
-      final ChoiceSequence zeros = sequenceOf(.filled(64, 0));
       final List<(String, Gen<Object?>, Object?)> cases = [
         for (int min = -4; min <= 4; min++)
           for (int max = min; max <= 4; max++)
@@ -146,7 +139,7 @@ void main() {
         ),
       ];
       for (final (String name, Gen<Object?> gen, Object? simplest) in cases) {
-        final Drawing<Object?> drawing = drawFrom(gen, zeros);
+        final Drawing<Object?> drawing = drawFrom(gen, sequenceOf(zeros));
         expect(drawing, isA<Drew<Object?>>(), reason: name);
         expect((drawing as Drew<Object?>).value, simplest, reason: name);
       }
@@ -186,13 +179,24 @@ void main() {
       expect(list, [true, false, true]);
     });
 
-    test('ends the run where its body throws', () {
+    test('ends the run failed, with its error, where its body throws', () {
       final Gen<int> gen = .build((Draw draw) => throw StateError('broken'));
-      expect(drawFrom(gen, sequenceOf([])), isA<Stopped<int>>());
-      expect(
-        (drawFrom(gen, sequenceOf([])) as Stopped<int>).status,
-        Status.failed,
-      );
+      final ChoiceSource source = .fixed(sequenceOf([]));
+      expect(run(source, () => RunDraw(source)(gen)), Status.failed);
+      expect(() => drawFrom(gen, sequenceOf([])), throwsStateError);
+    });
+
+    test('ends the run as the source stopped it where its body catches the '
+        'stop and returns', () {
+      final Gen<int> gen = .build((Draw draw) {
+        try {
+          return draw(.integer());
+        } on Object {
+          return 0;
+        }
+      });
+      final Drawing<int> drawing = drawFrom(gen, sequenceOf([]));
+      expect((drawing as Stopped<int>).status, Status.overrun);
     });
   });
 
@@ -396,7 +400,10 @@ void main() {
 
     property('The same sequence always draws the same value.', (Draw draw) {
       final Generator generator = draw(anyGenerator, label: 'generator');
-      final ChoiceSequence sequence = draw(_sequence, label: 'sequence');
+      final ChoiceSequence sequence = draw(
+        smallOrAnySequence,
+        label: 'sequence',
+      );
       expectAlike(
         drawFrom(generator.gen, sequence),
         drawFrom(generator.gen, sequence),
@@ -406,7 +413,10 @@ void main() {
     property('A draw keeps each value\'s text as the draw returned it, '
         'whatever the body does to the value after.', (Draw draw) {
       final Generator generator = draw(anyGenerator, label: 'generator');
-      final ChoiceSequence sequence = draw(_sequence, label: 'sequence');
+      final ChoiceSequence sequence = draw(
+        smallOrAnySequence,
+        label: 'sequence',
+      );
       final ChoiceSource source = .fixed(sequence);
       final RunDraw inner = .new(source);
       final Status status = run(source, () {
@@ -430,7 +440,10 @@ void main() {
         .element(Predicate.values),
         label: 'predicate',
       );
-      final ChoiceSequence sequence = draw(_sequence, label: 'sequence');
+      final ChoiceSequence sequence = draw(
+        smallOrAnySequence,
+        label: 'sequence',
+      );
       final Drawing<Object?> drawing = drawFrom(
         base.gen.filter(predicate.accepts),
         sequence,

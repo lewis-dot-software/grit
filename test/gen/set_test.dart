@@ -8,27 +8,6 @@ import '../support/drawing.dart';
 import '../support/generator.dart';
 import '../support/small.dart';
 
-/// Elements whose every choice is 0 or 1, and whose values are equal by
-/// `==` where they are drawn alike, so a sequence of bits draws a set of
-/// them that sees its repeats.
-final List<Generator> _bitElements = [
-  .new('a boolean', .boolean()),
-  .new('an integer from 0 to 1', .integer(min: 0, max: 1)),
-  .new('an integer from -1 to 0', .integer(min: -1, max: 0)),
-  .new('an element of a and b', .element(['a', 'b'])),
-  .new(
-    'a string of a and b up to 2 long',
-    .string(alphabet: .of('ab'), maxLength: 2),
-  ),
-  .new(
-    'one of a boolean and an element of x and y',
-    .oneOf<Object>([
-      .boolean(),
-      .element(['x', 'y']),
-    ]),
-  ),
-];
-
 /// Each minimum and maximum size checked, a null maximum for none.
 final List<Bounds> _sizes = [
   (min: 0, max: null),
@@ -142,15 +121,15 @@ int _expectEachDeletion(
 
 /// A set checked over larger inputs.
 ///
-/// - `element`: one of [_bitElements].
+/// - `element`: one of [bitElements].
 /// - `sizes`: its minimum and maximum size.
 /// - `sequence`: bits that end in zeros, for it to draw from.
 typedef _BitSet = ({Generator element, Bounds sizes, ChoiceSequence sequence});
 
-/// A set of one of [_bitElements], with bits to draw it from.
+/// A set of one of [bitElements], with bits to draw it from.
 final Gen<_BitSet> _bitSet = .build(
   (Draw draw) => (
-    element: draw(.element(_bitElements), label: 'element'),
+    element: draw(.element(bitElements), label: 'element'),
     sizes: draw(bounds, label: 'sizes'),
     sequence: sequenceOf([...draw(bitRuns, label: 'bits'), ...zeros]),
   ),

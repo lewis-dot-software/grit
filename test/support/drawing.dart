@@ -4,8 +4,6 @@ import 'package:grit/src/choice/status.dart';
 import 'package:grit/src/gen/gen.dart';
 import 'package:test/test.dart';
 
-import 'small.dart';
-
 /// What drawing a generator from a fixed sequence came to, with the choices
 /// it read.
 sealed class Drawing<T> {
@@ -27,9 +25,9 @@ final class Drew<T> extends Drawing<T> {
   String toString() => 'drew $value from $record';
 }
 
-/// A draw that ended with [status] before it returned.
+/// A draw the source stopped, overrun or rejected, before it returned.
 final class Stopped<T> extends Drawing<T> {
-  /// The draw that ended with [status], having read [record].
+  /// The draw the source stopped with [status], having read [record].
   Stopped(this.status, ChoiceSequence record) : super._(record);
 
   /// How the draw ended.
@@ -39,14 +37,34 @@ final class Stopped<T> extends Drawing<T> {
   String toString() => 'stopped ${status.name} at $record';
 }
 
-/// Draws [gen] from [sequence]'s choices.
+/// Draws [gen] from [sequence]'s choices, throwing on whatever [gen] throws
+/// that is not the source's stop, so no reading of the drawing passes a
+/// generator that throws.
+///
+/// A draw the source stopped is [Stopped] whether [gen] threw or returned
+/// after the stop.
 Drawing<T> drawFrom<T>(Gen<T> gen, ChoiceSequence sequence) {
   final ChoiceSource source = .fixed(sequence);
-  late final T value;
-  final Status status = run(source, () => value = RunDraw(source)(gen));
-  return switch (status) {
+  final T value;
+  try {
+    value = RunDraw(source)(gen);
+  } on Object {
+    switch (source.status(threw: true)) {
+      case final Status stopped && (.overrun || .rejected):
+        return Stopped(stopped, source.record);
+      case .failed:
+        rethrow;
+      case .returned:
+        throw StateError('A draw that threw ended as returned');
+    }
+  }
+  return switch (source.status(threw: false)) {
     .returned => Drew(value, source.record),
-    .overrun || .rejected || .failed => Stopped(status, source.record),
+    final Status stopped && (.overrun || .rejected) => Stopped(
+      stopped,
+      source.record,
+    ),
+    .failed => throw StateError('A draw that returned ended as failed'),
   };
 }
 

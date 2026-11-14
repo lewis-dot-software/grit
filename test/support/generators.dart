@@ -126,17 +126,20 @@ Gen<Simple> _simple(int depth) => .build((Draw draw) {
         simplest: options.first.simplest,
       );
     case .set:
-      // A set's simplest value is documented only at a minimum size of 0.
+      // A set's simplest value is documented only at a minimum size of 0
+      // and 1.
       final Simple element = draw(_simple(depth - 1));
+      final int minSize = draw(.integer(min: 0, max: 1));
       final int? maxSize = draw(.boolean())
-          ? draw(.integer(min: 0, max: 4))
+          ? draw(.integer(min: minSize, max: 4))
           : null;
       return (
         generator: .new(
-          'a set of ${element.generator}, up to ${maxSize ?? 'any number'}',
-          .set(element.generator.gen, maxSize: maxSize),
+          'a set of ${element.generator}, from $minSize up to '
+          '${maxSize ?? 'any number'}',
+          .set(element.generator.gen, minSize: minSize, maxSize: maxSize),
         ),
-        simplest: <Object?>{},
+        simplest: <Object?>{if (minSize == 1) element.simplest},
       );
     case .float:
       final (:double min, :double max, :double simplest) = draw(

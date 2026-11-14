@@ -103,7 +103,7 @@ void main() {
         for (final Generator generator in generators) generator.gen,
       ];
       final ChoiceSequence sequence = draw(
-        .oneOf([smallSequence, anySequence]),
+        smallOrAnySequence,
         label: 'sequence',
       );
       expectAlike(drawFrom(.oneOf(gens), sequence), _chosen(gens, sequence));

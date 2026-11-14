@@ -11,23 +11,66 @@ Set<String> _declared(Type type) => {
     if (!declaration.isPrivate) MirrorSystem.getName(declaration.simpleName),
 };
 
-/// Every class `package:grit/grit.dart` exports, past each export's
-/// combinators.
-Iterable<ClassMirror> get _exportedClasses sync* {
+/// Every public declaration `package:grit/grit.dart` exports, with the
+/// library it is declared in, past each export's combinators.
+Iterable<(LibraryMirror, DeclarationMirror)> get _exported sync* {
   final LibraryMirror grit =
       currentMirrorSystem().libraries[Uri.parse('package:grit/grit.dart')]!;
   for (final LibraryDependencyMirror export in grit.libraryDependencies) {
     if (!export.isExport) continue;
-    for (final DeclarationMirror declaration
-        in export.targetLibrary!.declarations.values) {
-      if (declaration is ClassMirror &&
-          !declaration.isPrivate &&
+    final LibraryMirror library = export.targetLibrary!;
+    for (final DeclarationMirror declaration in library.declarations.values) {
+      if (!declaration.isPrivate &&
           _passes(export.combinators, declaration.simpleName)) {
-        yield declaration;
+        yield (library, declaration);
       }
     }
   }
 }
+
+/// Every class `package:grit/grit.dart` exports.
+Iterable<ClassMirror> get _exportedClasses => [
+  for (final (_, DeclarationMirror declaration) in _exported)
+    if (declaration is ClassMirror) declaration,
+];
+
+/// Every value `package:grit/grit.dart` exports without a call, by name: each
+/// top-level variable and getter, an extension type's static members among
+/// them as the VM lowers them, and each static field and getter of every
+/// class.
+Iterable<(String, Object?)> get _exportedValues sync* {
+  for (final (LibraryMirror library, DeclarationMirror declaration)
+      in _exported) {
+    if (_isValue(declaration)) {
+      yield (
+        MirrorSystem.getName(declaration.simpleName),
+        library.getField(declaration.simpleName).reflectee,
+      );
+    } else if (declaration is ClassMirror) {
+      for (final DeclarationMirror member in declaration.declarations.values) {
+        if (member.isPrivate || !_isStaticValue(member)) continue;
+        yield (
+          '${MirrorSystem.getName(declaration.simpleName)}.'
+              '${MirrorSystem.getName(member.simpleName)}',
+          declaration.getField(member.simpleName).reflectee,
+        );
+      }
+    }
+  }
+}
+
+/// Whether [declaration] is a variable or a getter, read without a call.
+bool _isValue(DeclarationMirror declaration) =>
+    declaration is VariableMirror ||
+    (declaration is MethodMirror && declaration.isGetter);
+
+/// Whether [member] is a static variable or getter of its class.
+bool _isStaticValue(DeclarationMirror member) => switch (member) {
+  VariableMirror(:final bool isStatic) => isStatic,
+  MethodMirror(:final bool isGetter, :final bool isStatic) =>
+    isGetter && isStatic,
+  _ => false,
+};
 
 /// Whether [name] passes [combinators]: shown by one where any shows, and
 /// hidden by none.
@@ -68,11 +111,15 @@ void main() {
     });
 
     test('exports no empty choice sequence', () {
-      // It holds a name the class does declare, so an empty reading fails.
-      expect(
-        _declared(ChoiceSequence),
-        allOf(contains('isSmallerThan'), isNot(contains('empty'))),
-      );
+      final List<String> read = [];
+      final List<String> empty = [];
+      for (final (String name, Object? value) in _exportedValues) {
+        read.add(name);
+        if (value is ChoiceSequence && value.choices.isEmpty) empty.add(name);
+      }
+      // Alphabet.digits is exported, so a reading of no value fails.
+      expect(read, contains('Alphabet.digits'));
+      expect(empty, isEmpty);
     });
   });
 }

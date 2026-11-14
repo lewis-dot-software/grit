@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:grit/grit.dart';
 import 'package:grit/src/choice/choice_source.dart';
 import 'package:grit/src/choice/span.dart';
+import 'package:grit/src/choice/status.dart';
 import 'package:grit/src/engine/budget.dart';
 import 'package:grit/src/engine/call_site.dart';
 import 'package:grit/src/engine/clock.dart';
@@ -53,8 +54,41 @@ final Gen<int> _choice = .integer(min: 0, max: 3);
 Random get _fillsThreeThree => FixedRandom(0.9, ints: const [3, 3]);
 
 /// The step bound at which shrinking [_readsSecondUnlessZero] from 3 and 3
-/// has just accepted 0 and 0, of which its run read the 0 alone.
-const int _tailedAt = 4;
+/// has just accepted a candidate holding more choices than its run read,
+/// read off the step function itself.
+final int _tailedAt = () {
+  final ChoiceSequence first = sequenceOf([3, 3]);
+  // A search runs no candidate twice, so a repeat spends no step.
+  final Set<ChoiceSequence> ran = {};
+  for (
+    Shrink shrink = .start(first, _readOf(first).spans);
+    shrink is Shrinking;
+  ) {
+    final ChoiceSequence candidate = shrink.candidate;
+    ran.add(candidate);
+    final (:Status status, :ChoiceSequence record, :List<Span> spans) = _readOf(
+      candidate,
+    );
+    if (status != .failed) {
+      shrink = shrink.toldNotFailing();
+      continue;
+    }
+    if (record.choices.length < candidate.choices.length) return ran.length;
+    shrink = shrink.toldFailing(spans);
+  }
+  throw StateError('Shrinking 3 and 3 accepted no candidate past its read');
+}();
+
+/// How [_readsSecondUnlessZero]'s run on [sequence] ended, with the choices
+/// and the spans its draws made.
+({Status status, ChoiceSequence record, List<Span> spans}) _readOf(
+  ChoiceSequence sequence,
+) {
+  final ChoiceSource source = .fixed(sequence);
+  final RunDraw draw = .new(source);
+  final Status status = run(source, () => _readsSecondUnlessZero()(draw));
+  return (status: status, record: source.record, spans: draw.spans);
+}
 
 /// A body that always fails, reading a second choice where its first is not
 /// 0, and on its [flakesOn]th run reading one more and failing another way.
@@ -228,18 +262,19 @@ final class _Body {
 /// value is 1, and fails where a value lies past [failsPast], logging each
 /// run's values as it draws them.
 ///
-/// Each value stands for one choice alone, so a run's log is the record it
-/// read, whether it returned, failed, was rejected or overran. A range
+/// Each value stands for one choice alone, so a run's log holds a value per
+/// choice of the record it read, whether it returned, failed, was rejected
+/// or overran. A range
 /// across 0 names an edge, so the early runs' sweep fills it.
 final class _Logging {
   _Logging(this._bounds, {required this.failsPast});
 
   final List<int> _bounds;
 
-  /// The choice past which a run fails.
+  /// The value past which a run fails.
   final int failsPast;
 
-  /// The choices of every run, in order.
+  /// The values of every run, in order.
   final List<List<int>> log = [];
 
   void call(Draw draw) {
@@ -839,8 +874,9 @@ void main() {
           });
         }
         // A uniform fill puts two integers this wide within one of each
-        // other next to never, and an edge fill at the same edge a third of
-        // the time it fills both at an edge. A step of one choice beside an
+        // other next to never, and an edge fill at the same edge half the
+        // time it fills both at an edge where the range names no other end,
+        // and a third where it names one. A step of one choice beside an
         // earlier one falls on the other side of 0 across it, so the early
         // runs fill near half within one and few one apart where the step
         // is not taken by value.
@@ -898,19 +934,24 @@ void main() {
         'runs from each of seeds 0 to 9, where the choice is made on some '
         'runs alone', () async {
       for (int seed = 0; seed < 10; seed++) {
-        bool made = false;
+        bool skipped = false;
         bool named = false;
         int run = 0;
         await _search(seed: seed, runs: 100).run((Draw draw) {
           final bool early = run++ < 20;
-          if (!draw(.boolean())) return;
-          final int x = draw(.integer(min: -1000000, max: 2000000));
-          if (early) {
-            made = true;
-            if (x == -1000000) named = true;
+          if (!draw(.boolean())) {
+            if (early) skipped = true;
+            return;
           }
+          final int x = draw(.integer(min: -1000000, max: 2000000));
+          if (early && x == -1000000) named = true;
         });
-        expect(named, made, reason: '$seed');
+        // An early run that skips the choice holds it to some runs alone.
+        expect(
+          (skipped: skipped, named: named),
+          (skipped: true, named: true),
+          reason: '$seed',
+        );
       }
     });
   });

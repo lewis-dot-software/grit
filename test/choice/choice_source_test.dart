@@ -142,10 +142,9 @@ void main() {
     });
 
     test('fills the widest bound across its whole width', () {
-      final Bound widest = .new(0x7FFFFFFFFFFFFFFF);
       final ChoiceSource source = .random(.new(1), limit: 200);
       final List<Choice> choices = [
-        for (int i = 0; i < 200; i++) source.choose(widest),
+        for (int i = 0; i < 200; i++) source.choose(_widest),
       ];
       expect(choices.any((Choice c) => c.value >= 1 << 62), isTrue);
     });
@@ -269,8 +268,8 @@ void main() {
       // the second is filled beside one, where a step past an end stays put.
       final int half = 1 << 62;
       for (final Zigzag zigzag in [
-        Zigzag(below: 1000, above: 1000),
-        Zigzag(below: half, above: Choice.largest.value - half),
+        .new(below: 1000, above: 1000),
+        .new(below: half, above: Choice.largest.value - half),
       ]) {
         final Map<int, Set<int>> besides = {};
         for (int seed = 0; seed < 200; seed++) {
@@ -298,20 +297,57 @@ void main() {
         'after', () {
       final Bound bound = .new(1 << 40);
       final List<Choice> edges = [.new(1), .new(500), .new(999)];
-      final Sweep sweep = .new();
-      final List<Choice> filled = [
-        for (int run = 0; run < 4; run++)
-          ChoiceSource.random(
-            .new(run),
-            limit: 1,
-            sweep: sweep,
-            near: .new(1),
-            edges: .never,
-          ).choose(bound, edges: edges),
-      ];
-      expect(filled.take(3), edges);
-      // A uniform fill this wide lands on a named edge next to never.
-      expect(edges, isNot(contains(filled.last)));
+      // Each run fills a choice that names no edge first, so odds of near
+      // of 1 fill the named choice beside it, and odds of edges of 1 at one
+      // of 0, the bound and the named edges, where the sweep does not.
+      for (final (
+            String odds,
+            Odds near,
+            Odds edgeOdds,
+            bool Function(Choice earlier, Choice named) asOddsSay,
+          )
+          in [
+            (
+              'near of 1',
+              .new(1),
+              .never,
+              (Choice earlier, Choice named) =>
+                  (earlier.value - named.value).abs() <= 1,
+            ),
+            (
+              'edges of 1',
+              .never,
+              .new(1),
+              (Choice _, Choice named) =>
+                  [Choice(0), Choice(bound.value), ...edges].contains(named),
+            ),
+          ]) {
+        final Sweep sweep = .new();
+        final List<(Choice, Choice)> filled = [
+          for (int run = 0; run < 4; run++)
+            () {
+              final ChoiceSource source = .random(
+                .new(run),
+                limit: 2,
+                sweep: sweep,
+                near: near,
+                edges: edgeOdds,
+              );
+              return (source.choose(bound), source.choose(bound, edges: edges));
+            }(),
+        ];
+        expect(
+          [for (final (_, Choice named) in filled.take(3)) named],
+          edges,
+          reason: odds,
+        );
+        final (Choice earlier, Choice named) = filled.last;
+        expect(
+          asOddsSay(earlier, named),
+          isTrue,
+          reason: '$odds: $named after $earlier',
+        );
+      }
     });
 
     test('at a sweep fills each choice alike of a run at the named edges in '
@@ -388,8 +424,8 @@ void main() {
         }
       }
       // About 250 of the thousand fill the second uniformly and the third
-      // beside one, each about 125, its spread about 8, so a count past 40
-      // off it is no fill alike.
+      // beside one, each about 125, its spread about 10.5, so a count past
+      // 40 off it is no fill alike.
       for (final int count in beside) {
         expect(count, inInclusiveRange(85, 165), reason: '$beside');
       }

@@ -173,8 +173,7 @@ void main() {
       );
     });
 
-    test('two equal choices shrink to both 0, which only zeroing a span '
-        'reaches', () {
+    test('two equal choices shrink to both 0', () {
       expect(
         _smallest([5, 5], (ChoiceSource source) {
           if (source.choose(.new(9)) == source.choose(.new(9))) throw 'equal';

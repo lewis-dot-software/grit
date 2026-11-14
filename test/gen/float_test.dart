@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:grit/grit.dart';
 import 'package:grit/src/choice/choice_source.dart';
 import 'package:grit/src/choice/status.dart';
@@ -73,14 +71,11 @@ int _simplicity(double a, double b) {
   return a.abs().compareTo(b.abs());
 }
 
-/// The value [gen] draws from [choices], or null where the choices stop it,
-/// failing the test where it throws.
+/// The value [gen] draws from [choices], or null where the choices stop it.
 double? _drawn(Gen<double> gen, List<int> choices) =>
     switch (drawFrom(gen, sequenceOf(choices))) {
       Drew(:final double value) => value,
-      Stopped(status: .failed) => fail('$choices threw'),
-      Stopped(status: .rejected || .overrun) => null,
-      Stopped(status: .returned) => fail('$choices stopped as returned'),
+      Stopped() => null,
     };
 
 /// Each range the exhaustive checks cover, at each set of flags it holds a
@@ -417,7 +412,7 @@ void main() {
   test('draws -0.0, both infinities, NaN, and the smallest subnormal and '
       'largest finite double of each sign, from a random fill at edges of '
       '1', () {
-    final ChoiceSource source = .random(Random(0), limit: 4000, edges: .new(1));
+    final ChoiceSource source = .random(.new(0), limit: 4000, edges: .new(1));
     final RunDraw draw = .new(source);
     final List<double> drawn = [for (int i = 0; i < 1000; i++) draw(.float())];
     for (final double edge in [
@@ -445,8 +440,8 @@ void main() {
       int run = 0;
       await Search(
         clock: FakeClock(),
-        random: Random(seed),
-        callSite: .of(StackTrace.current),
+        random: .new(seed),
+        callSite: .of(.current),
         runs: 100,
         limit: 24,
         invalid: 100,

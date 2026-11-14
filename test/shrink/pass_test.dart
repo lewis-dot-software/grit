@@ -240,7 +240,7 @@ void main() {
 
   test('lowering and copying reaches a 0 8 choices after the lowered choice '
       'and no farther', () {
-    final List<int> seven = List.filled(7, 5);
+    final List<int> seven = .filled(7, 5);
     expect(
       _candidates(.lowerAndCopy, [1, ...seven, 0, 2]),
       contains(equals([0, ...seven, 2, 2])),

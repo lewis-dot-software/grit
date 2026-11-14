@@ -28,6 +28,13 @@ final Gen<ChoiceSequence> smallSequence =
           .new([for (final List<Choice> choices in runs) ...choices]),
     );
 
+/// A sequence of small choices, which a generator mostly draws from to its
+/// end, or one of choices at any scale, which mostly stops it.
+final Gen<ChoiceSequence> smallOrAnySequence = .oneOf([
+  smallSequence,
+  anySequence,
+]);
+
 /// A zigzag at any scale, up to the widest a choice holds.
 final Gen<Zigzag> anyZigzag = .build((Draw draw) {
   final int below = draw(anyChoice).value;

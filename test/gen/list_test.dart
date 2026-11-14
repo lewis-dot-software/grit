@@ -3,18 +3,16 @@ import 'package:grit/src/choice/status.dart';
 import 'package:test/test.dart';
 
 import '../support/bits.dart';
+import '../support/bounds.dart';
 import '../support/drawing.dart';
 import '../support/generator.dart';
 import '../support/small.dart';
 
 /// Elements whose every choice is 0 or 1, so a sequence of bits draws a list
-/// of them wherever it starts, unless a list among them at its maximum
-/// length reads a 1 where only 0 ends it.
+/// of them wherever it starts, unless a list or a string among them at its
+/// maximum length reads a 1 where only 0 ends it.
 final List<Generator> _bitElements = [
-  .new('a boolean', .boolean()),
-  .new('an integer from 0 to 1', .integer(min: 0, max: 1)),
-  .new('an integer from -1 to 0', .integer(min: -1, max: 0)),
-  .new('an element of a and b', .element(['a', 'b'])),
+  ...bitElements,
   .new('a list of booleans', .list(.boolean())),
   .new(
     'a list of booleans from 1 to 2 long',
@@ -219,16 +217,10 @@ void main() {
     property('Deleting one element\'s span from a list\'s record draws the '
         'same list with that element removed.', (Draw draw) {
       final Generator element = draw(.element(_bitElements), label: 'element');
-      final int minLength = draw(
-        .integer(min: 0, max: 4),
-        label: 'minimum length',
+      final (min: int minLength, max: int? maxLength) = draw(
+        bounds,
+        label: 'lengths',
       );
-      final int? maxLength = draw(.boolean())
-          ? draw(
-              .integer(min: minLength, max: minLength + 8),
-              label: 'maximum length',
-            )
-          : null;
       final Gen<List<Object?>> gen = .list(
         element.gen,
         minLength: minLength,
