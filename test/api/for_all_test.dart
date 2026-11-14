@@ -40,6 +40,23 @@ void main() {
       );
     });
 
+    test('fails the test on grit\'s own error inside a draw, as it was '
+        'thrown, in place of an outcome', () {
+      expect(
+        forAll(
+          (Draw draw) =>
+              draw(Gen.build((Draw draw) => draw(.integer(min: 1, max: 0)))),
+        ),
+        throwsA(
+          isA<ArgumentError>().having(
+            (ArgumentError e) => e.message,
+            'message',
+            'The minimum 1 is above the maximum 0',
+          ),
+        ),
+      );
+    });
+
     test('fails the test on a gave-up outcome', () {
       expect(
         forAll((Draw draw) => draw.assume(false)),

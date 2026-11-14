@@ -55,6 +55,8 @@ flowchart LR
 | Final replay | The smallest failing sequence, the choices its run read and no more | The error and the draws for the report, or anything else, which makes the outcome flaky |
 | Token's replay | The token's sequence, once, with no generation, no shrinking and no store | A throw, the case reported unshrunk, or anything else, which fails the test saying the token no longer reproduces and how its run ended |
 
+An error grit's own code throws inside a draw is a bug in grit, never the property's failure. A draw keeps each error thrown out of it, and where one's first frame outside the Dart SDK is grit's, and no `map` or `filter` callback threw it, the run throws it on as it was thrown, out of whichever phase it is in, with no outcome and the store as it stood, whether or not the body caught it. The test then fails on grit's error, unshrunk. A generator built inside a draw from arguments out of range throws from grit's code too, so it ends the test the same way, its error naming the argument. A callback's error is the property's whatever its frames, since a Dart SDK tear-off handed to `map` has no frame of the consumer's.
+
 A failure the stored replay found takes the path generation's would, from the first replay on, so a stored failure that no longer fails alike is flaky. Once a search ends, the store holds a failed outcome's smallest sequence for its call site, and nothing after any other outcome.
 
 The outcome is a sealed type, one subtype per row:
@@ -209,7 +211,7 @@ The store keeps each call site's smallest failing sequence in a file of its own 
 
 A file is named for a 64-bit FNV-1a hash of its key, and holds its sequence's token and nothing else. The store's file I/O is synchronous, since async file I/O can deadlock inside a `testWidgets`. A file is written in a temporary directory of its own and renamed into place, since `dart test` runs test files at once. A stored sequence whose replay does not fail, whatever its status, gives way to generation's outcome, and a file that decodes to no sequence is deleted with a warning.
 
-The token is a sequence as one line of text: its format, `grit1`, then a colon, then each choice in base 36, lower case with no leading zero, joined by dots. Its characters all stand inside a Dart string literal as they are. Text that decodes is the one token of its sequence, so no two tokens name one. A token of another format, `grit` and other digits, says so where it fails to decode, and `Settings(replay: ...)` throws a `FormatException` at construction for any text that does not decode, saying which.
+The token is a sequence as one line of text: its format, `grit1`, then a colon, then each choice in base 36, lower case with no leading zero, joined by dots. Its characters all stand inside a Dart string literal as they are. Text that decodes is the one token of its sequence, so no two tokens name one. A token of another format, `grit` and other digits, says so where it fails to decode, and `Settings(replay: ...)` throws an `ArgumentError` at construction for any text that does not decode, saying which, as it does for any other setting out of range.
 
 ## Platform and packages
 

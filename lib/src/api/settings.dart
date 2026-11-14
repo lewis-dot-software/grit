@@ -12,9 +12,8 @@ final class Settings {
   /// The settings of a search, each defaulted where it is not given.
   ///
   /// [runs] is at least 1, and [shrinkSteps] and [shrinkTime] never
-  /// negative. A [replay] that is no token this grit reads throws a
-  /// [FormatException] saying whether it is no token or one of another
-  /// format.
+  /// negative. A [replay] that is no token this grit reads throws an
+  /// [ArgumentError] saying whether it is no token or one of another format.
   Settings({
     int runs = 100,
     this.seed,
@@ -68,13 +67,14 @@ final class Settings {
   /// however long its runs take.
   Duration get shrinkTime => budget.time;
 
-  /// The sequence [token] is the token of, thrown as a [FormatException]
+  /// The sequence [token] is the token of, thrown as an [ArgumentError]
   /// where it is none.
   static ChoiceSequence _decoded(String token) => switch (Token.decode(token)) {
     Decoded(:final ChoiceSequence sequence) => sequence,
-    final Undecodable reason => throw FormatException(
-      '`replay` ${undecodableText(reason)}',
+    final Undecodable reason => throw ArgumentError.value(
       token,
+      'replay',
+      undecodableText(reason),
     ),
   };
 }

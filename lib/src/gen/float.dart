@@ -44,8 +44,8 @@ Gen<double> _float({
   ];
   if (parts.isEmpty) {
     throw ArgumentError(
-      'No float lies from $min to $max where infinities are '
-      '${infinite ? 'allowed' : 'not'} and NaN is not',
+      'No float lies from $min to $max where neither an infinity nor NaN is '
+      'allowed',
     );
   }
   final Bound bound = .new(parts.length - 1);

@@ -22,6 +22,7 @@ part 'run_draw.dart';
 part 'set.dart';
 part 'string.dart';
 part 'text_of.dart';
+part 'thrown.dart';
 
 /// How many draws a generator makes towards one value it accepts before it
 /// gives up.
@@ -131,8 +132,10 @@ final class Gen<T> {
   /// The generator of [convert] applied to this one's values.
   ///
   /// Its simplest value is [convert] applied to this one's.
-  Gen<R> map<R>(R Function(T value) convert) =>
-      ._((Draw draw) => convert(draw(this)));
+  Gen<R> map<R>(R Function(T value) convert) => ._((Draw draw) {
+    final T value = draw(this);
+    return draw._theirs(() => convert(value));
+  });
 
   /// The generator of this one's values that [accepts] holds for.
   ///
@@ -142,7 +145,7 @@ final class Gen<T> {
   Gen<T> filter(bool Function(T value) accepts) => ._((Draw draw) {
     for (int i = 0; i < _tries; i++) {
       final T value = draw(this);
-      if (accepts(value)) return value;
+      if (draw._theirs(() => accepts(value))) return value;
     }
     draw._source.reject();
   });

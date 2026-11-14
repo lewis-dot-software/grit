@@ -26,9 +26,12 @@ final class CallSite {
     );
   }
 
+  /// grit's own package.
+  static const String _grit = 'package:grit';
+
   /// The packages a failure is never read from, besides the Dart SDK.
   static const Set<String> _ignored = {
-    'package:grit',
+    _grit,
     'package:checks',
     'package:flutter_test',
     'package:matcher',
@@ -63,6 +66,15 @@ final class CallSite {
           own.firstOrNull,
     );
   }
+
+  /// Whether [stackTrace]'s first frame outside the Dart SDK is grit's, so
+  /// grit's own code threw the error thrown with it.
+  static bool isGrits(StackTrace stackTrace) =>
+      Frame.of(stackTrace)
+          .where((Frame frame) => frame.package != 'dart')
+          .firstOrNull
+          ?.package ==
+      _grit;
 
   static bool _isOwn(Frame frame) =>
       frame.package != 'dart' && !_ignored.contains(frame.package);

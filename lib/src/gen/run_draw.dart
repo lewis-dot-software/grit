@@ -15,4 +15,9 @@ final class RunDraw extends Draw {
   /// The span of each draw made, the property's body's and those inside a
   /// [Gen.build] body alike, in the order the draws began.
   List<Span> get spans => .unmodifiable(_spans);
+
+  /// Each error thrown out of a draw, in the order thrown, but one a [Gen.map]
+  /// or [Gen.filter] callback threw, and one thrown out of a draw inside
+  /// another listed once.
+  List<Thrown> get thrown => .unmodifiable(_thrown);
 }

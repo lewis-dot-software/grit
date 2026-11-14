@@ -246,36 +246,36 @@ void main() {
   });
 
   group('a replay token', () {
-    test('that is no token is thrown at the settings\' construction as a '
-        'format exception saying so', () {
+    test('that is no token is thrown at the settings\' construction as an '
+        'argument error saying so', () {
       for (final String text in ['', 'grit1:01', 'grit1:0 ', '[1, 3]']) {
         expect(
           () => Settings(replay: text),
           throwsA(
-            isA<FormatException>()
-                .having(
-                  (e) => e.message,
-                  'message',
-                  '`replay` is no grit token',
-                )
-                .having((e) => e.source, 'source', text),
+            isA<ArgumentError>()
+                .having((e) => e.name, 'name', 'replay')
+                .having((e) => e.message, 'message', 'is no grit token')
+                .having((e) => e.invalidValue, 'invalidValue', text),
           ),
           reason: text,
         );
       }
     });
 
-    test('of another format is thrown at the settings\' construction as a '
-        'format exception naming its format', () {
+    test('of another format is thrown at the settings\' construction as an '
+        'argument error naming its format', () {
       expect(
         () => Settings(replay: 'grit2:3'),
         throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            '`replay` is a token of format `grit2`, and this grit reads '
-                '`grit1` alone',
-          ),
+          isA<ArgumentError>()
+              .having((e) => e.name, 'name', 'replay')
+              .having(
+                (e) => e.message,
+                'message',
+                'is a token of format `grit2`, and this grit reads `grit1` '
+                    'alone',
+              )
+              .having((e) => e.invalidValue, 'invalidValue', 'grit2:3'),
         ),
       );
     });

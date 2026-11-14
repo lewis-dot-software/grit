@@ -749,6 +749,161 @@ List<_Body Function()> get _byRun => [
     ),
 ];
 
+/// An error grit's own code throws inside a draw.
+enum _Grits {
+  /// grit's own throw, of a range whose minimum lies above its maximum.
+  outOfRange,
+
+  /// A throw of the Dart SDK's, of a negative choice, beneath grit's code.
+  negativeChoice;
+
+  /// Throws this error from grit's own code.
+  Never thrown() {
+    switch (this) {
+      case .outOfRange:
+        Gen.integer(min: 1, max: 0);
+      case .negativeChoice:
+        Choice(-1);
+    }
+    throw StateError('grit threw no error for $name');
+  }
+
+  /// Matches this error, as grit's code threw it.
+  Matcher get matcher => switch (this) {
+    .outOfRange => isA<ArgumentError>().having(
+      (ArgumentError e) => e.message,
+      'message',
+      'The minimum 1 is above the maximum 0',
+    ),
+    .negativeChoice =>
+      isA<RangeError>()
+          .having((RangeError e) => e.name, 'name', 'value')
+          .having((RangeError e) => e.invalidValue, 'invalidValue', -1),
+  };
+}
+
+/// Where a body's draw that grit's own code throws inside sits, and what the
+/// body does with the error.
+enum _Breaks {
+  /// Drawn by the body, which leaves the error alone.
+  drawn,
+
+  /// Drawn as a list's element, which leaves it alone.
+  nested,
+
+  /// Drawn by the body, which catches the error and returns.
+  caught,
+
+  /// Drawn by the body, which catches the error and throws another.
+  caughtThrowingAnother,
+}
+
+/// A body that draws a choice, then a generator grit's own code throws
+/// [grits] inside, as [breaks] says, where the choice is [at], and fails
+/// where the choice is [failsFrom] or more, logging its runs.
+final class _Breaking {
+  _Breaking(
+    this.grits,
+    this.breaks, {
+    required this.at,
+    required this.failsFrom,
+  });
+
+  final _Grits grits;
+  final _Breaks breaks;
+  final int at;
+  final int failsFrom;
+
+  /// How many runs there have been.
+  int runs = 0;
+
+  /// The run in which grit's code first threw, or null where it has not.
+  int? brokeOn;
+
+  /// Whether a run failed the body's own way before grit's code threw.
+  bool failedFirst = false;
+
+  late final Gen<int> _broken = .build((Draw draw) {
+    brokeOn ??= runs;
+    grits.thrown();
+  });
+
+  void call(Draw draw) {
+    runs++;
+    final int choice = draw(_choice);
+    if (choice == at) {
+      switch (breaks) {
+        case .drawn:
+          draw(_broken);
+        case .nested:
+          draw(.list(_broken, minLength: 1));
+        case .caught:
+          try {
+            draw(_broken);
+          } on Object {
+            return;
+          }
+        case .caughtThrowingAnother:
+          try {
+            draw(_broken);
+          } on Object {
+            throw StateError('another');
+          }
+      }
+    }
+    if (choice >= failsFrom) {
+      if (brokeOn == null) failedFirst = true;
+      throw StateError('fails');
+    }
+  }
+
+  @override
+  String toString() =>
+      '${grits.name} ${breaks.name} at $at, failing from $failsFrom';
+}
+
+/// How a property's search may start on a body: generation from a seed, the
+/// stored replay of a sequence, or a token's replay of one.
+typedef _Start = ({
+  String name,
+  Future<Outcome> Function(Body body, MemoryStore store) start,
+});
+
+/// Every small start of a search: generation from a few seeds, and the
+/// stored replay and the token's replay of each one-choice sequence.
+List<_Start> get _smallStarts => [
+  for (int seed = 0; seed < _seeds; seed++)
+    (
+      name: 'generated',
+      start: (Body body, MemoryStore store) =>
+          _search(seed: seed, store: store).run(body),
+    ),
+  for (int value = 0; value <= 3; value++) ...[
+    (
+      name: 'stored',
+      start: (Body body, MemoryStore store) {
+        store.save(_callSite.key, sequenceOf([value]));
+        return _search(store: store).run(body);
+      },
+    ),
+    (
+      name: 'token',
+      start: (Body body, MemoryStore store) =>
+          _search(store: store).replay(body, sequenceOf([value])),
+    ),
+  ],
+];
+
+/// The error [start] throws, or null where it ends in an outcome.
+Future<Object?> _thrownBy(Future<Outcome> Function() start) async {
+  try {
+    await start();
+  } on Object catch (error) {
+    return error;
+  }
+  return null;
+}
+
 void main() {
   group('an outcome', () {
     test('is passed, with its run count, where every run returns', () async {
@@ -1337,6 +1492,126 @@ void main() {
     });
   });
 
+  group('an error grit\'s own code throws inside a draw', () {
+    test('leaves generation as it was thrown, on the run that threw it, the '
+        'store as it stood', () async {
+      final _Breaking body = .new(.outOfRange, .drawn, at: 3, failsFrom: 4);
+      final MemoryStore store = _holding(Unreadable(NotAToken()));
+      await expectLater(
+        _search(random: _fillsThreeThree, store: store).run(body.call),
+        throwsA(_Grits.outOfRange.matcher),
+      );
+      expect((runs: body.runs, brokeOn: body.brokeOn), (runs: 1, brokeOn: 1));
+      expect(_heldIn(store), isA<Unreadable>());
+    });
+
+    test('leaves shrinking unshrunk past the candidate it was thrown on, the '
+        'store as it stood', () async {
+      final _Breaking body = .new(.outOfRange, .drawn, at: 0, failsFrom: 1);
+      final MemoryStore store = .new();
+      await expectLater(
+        _search(random: _fillsThreeThree, store: store).run(body.call),
+        throwsA(_Grits.outOfRange.matcher),
+      );
+      expect(body.failedFirst, isTrue);
+      expect(body.runs, body.brokeOn);
+      expect(_heldIn(store), isA<Unstored>());
+    });
+
+    test('leaves the stored replay it was thrown on, the store holding its '
+        'sequence as it stood', () async {
+      final _Breaking body = .new(.outOfRange, .drawn, at: 2, failsFrom: 1);
+      final MemoryStore store = _holding(Stored(sequenceOf([2])));
+      await expectLater(
+        _search(store: store).run(body.call),
+        throwsA(_Grits.outOfRange.matcher),
+      );
+      expect((runs: body.runs, brokeOn: body.brokeOn), (runs: 1, brokeOn: 1));
+      expect(_heldIn(store), _storedAs(sequenceOf([2])));
+    });
+
+    test(
+      'leaves a token\'s replay as it was thrown, in place of reproduced',
+      () async {
+        final _Breaking body = .new(.outOfRange, .drawn, at: 1, failsFrom: 1);
+        await expectLater(
+          _search().replay(body.call, sequenceOf([1])),
+          throwsA(_Grits.outOfRange.matcher),
+        );
+      },
+    );
+
+    test('leaves the search as it was thrown where the body catches it, '
+        'returning or throwing another error', () async {
+      for (final _Breaks breaks in [.caught, .caughtThrowingAnother]) {
+        final _Breaking body = .new(.outOfRange, breaks, at: 1, failsFrom: 4);
+        await expectLater(
+          _search().replay(body.call, sequenceOf([1])),
+          throwsA(_Grits.outOfRange.matcher),
+          reason: '$body',
+        );
+      }
+    });
+
+    test('leaves the search as it was thrown where it leaves a draw inside '
+        'another', () async {
+      final _Breaking body = .new(.outOfRange, .nested, at: 1, failsFrom: 4);
+      await expectLater(
+        _search().replay(body.call, sequenceOf([1, 1, 0])),
+        throwsA(_Grits.outOfRange.matcher),
+      );
+    });
+
+    test('leaves the search as it was thrown where the Dart SDK throws it '
+        'beneath grit\'s code', () async {
+      final _Breaking body = .new(.negativeChoice, .drawn, at: 1, failsFrom: 4);
+      await expectLater(
+        _search().replay(body.call, sequenceOf([1])),
+        throwsA(_Grits.negativeChoice.matcher),
+      );
+    });
+  });
+
+  group('an error the body\'s own code throws inside a draw', () {
+    test(
+      'is no change: still the property\'s failure, shrunk, whether its '
+      'code, the Dart SDK beneath it or a Dart SDK tear-off throws it',
+      () async {
+        final Map<String, Gen<int>> throwing = {
+          'a build body\'s throw': .build((Draw draw) {
+            final int x = draw(_choice);
+            return x > 0 ? throw ArgumentError('the body\'s') : x;
+          }),
+          'a map\'s throw': _choice.map(
+            (int x) => x > 0 ? throw RangeError('the body\'s') : x,
+          ),
+          'the Dart SDK\'s throw beneath a build body': .build(
+            (Draw draw) => const [0][draw(_choice)],
+          ),
+          'a Dart SDK tear-off\'s throw as a map': _choice.map(
+            const [0].elementAt,
+          ),
+          'a Dart SDK tear-off\'s throw as a filter': _choice.filter(
+            const [true].elementAt,
+          ),
+        };
+        for (final MapEntry(:String key, :Gen<int> value) in throwing.entries) {
+          final Outcome outcome = await _search(random: _fillsThreeThree)
+              .run((Draw draw) => draw(value));
+          expect(
+            outcome,
+            isA<Failed>().having(
+              (Failed failed) => failed.sequence,
+              'sequence',
+              sequenceOf([1]),
+            ),
+            reason: key,
+          );
+        }
+      },
+    );
+  });
+
   group('the random fill', () {
     test('draws a choice\'s 0 and its bound far more often on a search\'s '
         'early runs than a uniform fill would, and fills later runs '
@@ -1579,6 +1854,52 @@ void main() {
         }
       }
       expect(found, {Failed, Flaky});
+    });
+
+    test('An error grit\'s own code throws inside a draw ends the test as '
+        'grit\'s error, never as the property\'s failure.', () async {
+      final Set<String> reached = {};
+      for (final _Grits grits in _Grits.values) {
+        for (final _Breaks breaks in _Breaks.values) {
+          for (int at = 0; at <= 3; at++) {
+            for (int failsFrom = 0; failsFrom <= 4; failsFrom++) {
+              for (final _Start start in _smallStarts) {
+                final _Breaking body = .new(
+                  grits,
+                  breaks,
+                  at: at,
+                  failsFrom: failsFrom,
+                );
+                final MemoryStore store = .new();
+                final Object? thrown = await _thrownBy(
+                  () => start.start(body.call, store),
+                );
+                final String reason = '$body, ${start.name}';
+                final int? brokeOn = body.brokeOn;
+                if (brokeOn == null) {
+                  expect(thrown, isNull, reason: reason);
+                  continue;
+                }
+                reached.add(
+                  '${start.name}${body.failedFirst ? ' after a failure' : ''}',
+                );
+                expect(thrown, grits.matcher, reason: reason);
+                expect(body.runs, brokeOn, reason: reason);
+                if (start.name != 'stored') {
+                  expect(_heldIn(store), isA<Unstored>(), reason: reason);
+                }
+              }
+            }
+          }
+        }
+      }
+      expect(reached, {
+        'generated',
+        'generated after a failure',
+        'stored',
+        'stored after a failure',
+        'token',
+      });
     });
 
     test('A token\'s replay runs the body once and leaves the store as it '

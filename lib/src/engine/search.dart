@@ -39,6 +39,12 @@ import 'warning.dart';
 /// rejected or overrun in a search that did not give up. No warning changes
 /// the verdict.
 ///
+/// An error grit's own code throws inside a draw, one whose stack's first
+/// frame outside the Dart SDK is grit's and that no [Gen.map] or
+/// [Gen.filter] callback threw, leaves every phase as it was
+/// thrown, with no outcome and the store as it stood, whether or not the
+/// body caught it.
+///
 /// A failure is the same as another where its error has the same type and
 /// was thrown from the same frame, which [CallSite.failureOf] reads. A
 /// candidate that fails any other way is told to the shrinker as not
@@ -305,6 +311,14 @@ final class Search {
       if (body(draw) case final Future<void> running) await running;
     } on Object catch (error, stackTrace) {
       thrown = (error, stackTrace);
+    }
+    // An error grit's own code threw inside a draw is a bug in grit, never
+    // the property's failure, so it leaves the search unshrunk, whatever the
+    // body did with it.
+    for (final (:Error error, :StackTrace stackTrace) in draw.thrown) {
+      if (CallSite.isGrits(stackTrace)) {
+        Error.throwWithStackTrace(error, stackTrace);
+      }
     }
     final Status status = source.status(threw: thrown != null);
     final ChoiceSequence record = source.record;

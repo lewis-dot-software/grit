@@ -473,15 +473,24 @@ void main() {
       expect(() => Gen.float(min: 0, max: -0.0), throwsArgumentError);
     });
 
-    test('a range holding no double its flags allow is thrown', () {
-      expect(
-        () => Gen.float(min: .infinity, infinite: false),
-        throwsArgumentError,
-      );
-      expect(
-        () => Gen.float(max: .negativeInfinity, infinite: false),
-        throwsArgumentError,
-      );
+    test('a range holding no double its flags allow is thrown, saying '
+        'neither an infinity nor NaN is allowed', () {
+      for (final (double min, double max) in [
+        (.infinity, .infinity),
+        (.negativeInfinity, .negativeInfinity),
+      ]) {
+        expect(
+          () => Gen.float(min: min, max: max, infinite: false),
+          throwsA(
+            isA<ArgumentError>().having(
+              (e) => e.message,
+              'message',
+              'No float lies from $min to $max where neither an infinity nor '
+                  'NaN is allowed',
+            ),
+          ),
+        );
+      }
     });
   });
 
