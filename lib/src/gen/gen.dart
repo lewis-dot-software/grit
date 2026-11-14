@@ -5,6 +5,7 @@ import '../choice/choice.dart';
 import '../choice/choice_source.dart';
 import '../choice/odds.dart';
 import '../choice/span.dart';
+import '../choice/writes.dart';
 import '../choice/zigzag.dart';
 
 part 'alphabet.dart';

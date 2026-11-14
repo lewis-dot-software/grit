@@ -13,6 +13,10 @@ abstract final class Draw {
   /// Each error a callback of the property's own threw, by identity.
   final Set<Object> _theirsThrown = .identity();
 
+  /// The writes to the draw's records, so a read of them after one was cut
+  /// short throws the error that cut it.
+  final Writes _writes = .new();
+
   /// How many draws are in progress, so a draw inside a [Gen.build] body is
   /// told from one the property's body made, and each span sits at its
   /// depth.
@@ -29,7 +33,7 @@ abstract final class Draw {
       if (error is Error &&
           !_theirsThrown.contains(error) &&
           !identical(_thrown.lastOrNull?.error, error)) {
-        _thrown.add((error: error, stackTrace: stackTrace));
+        _writes(() => _thrown.add((error: error, stackTrace: stackTrace)));
       }
       rethrow;
     }
@@ -42,7 +46,7 @@ abstract final class Draw {
     try {
       return callback();
     } on Object catch (error) {
-      _theirsThrown.add(error);
+      _writes(() => _theirsThrown.add(error));
       rethrow;
     }
   }
@@ -54,19 +58,25 @@ abstract final class Draw {
     // it, and its width is set as it ends, whether it returns or throws.
     final int at = _spans.length;
     final int start = _source.length;
-    _spans.add((start: start, width: 0, depth: _depth));
+    _writes(() => _spans.add((start: start, width: 0, depth: _depth)));
     _depth++;
     final T value;
     try {
       value = gen._body(this);
     } finally {
       _depth--;
-      _spans[at] = (start: start, width: _source.length - start, depth: _depth);
+      final Span span = (
+        start: start,
+        width: _source.length - start,
+        depth: _depth,
+      );
+      _writes(() => _spans[at] = span);
     }
     // The text is taken as the value is returned, since the body may sort,
     // clear or add to it in place before a report prints it.
     if (_depth == 0) {
-      _draws.add((label: label, value: value, text: _textOf(value)));
+      final Drawn drawn = (label: label, value: value, text: _textOf(value));
+      _writes(() => _draws.add(drawn));
     }
     return value;
   }
@@ -77,5 +87,5 @@ abstract final class Draw {
   }
 
   /// Adds [line] to the report of the run, where it fails.
-  void note(String line) => _notes.add(line);
+  void note(String line) => _writes(() => _notes.add(line));
 }

@@ -17,6 +17,7 @@ import 'package:test/test.dart';
 
 import '../support/fake_clock.dart';
 import '../support/fixed_random.dart';
+import '../support/generators.dart';
 import '../support/bodies.dart';
 import '../support/inputs.dart';
 import '../support/memory_store.dart';
@@ -1612,6 +1613,21 @@ void main() {
         _search().replay(body.call, sequenceOf([1])),
         throwsA(_Grits.negativeChoice.matcher),
       );
+    });
+  });
+
+  group('a stack overflow inside a draw', () {
+    test('is no change: leaves the search as it was thrown, unshrunk, the '
+        'store as it stood', () async {
+      final MemoryStore store = .new();
+      await expectLater(
+        _search(
+          random: _fillsThreeThree,
+          store: store,
+        ).run((Draw draw) => draw(overflowing)),
+        throwsA(isA<StackOverflowError>()),
+      );
+      expect(_heldIn(store), isA<Unstored>());
     });
   });
 

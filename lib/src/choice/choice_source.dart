@@ -6,6 +6,7 @@ import 'choice_sequence.dart';
 import 'odds.dart';
 import 'status.dart';
 import 'sweep.dart';
+import 'writes.dart';
 import 'zigzag.dart';
 
 /// What hands one run its choices, and records each it hands over.
@@ -13,6 +14,10 @@ import 'zigzag.dart';
 /// A choice the source cannot hand over stops the run: it throws, and every
 /// choice asked for after throws again, so a body that catches the throw
 /// still ends with the status the source stopped it with.
+///
+/// A write to the source's record that an error such as a stack overflow
+/// cut short leaves it half-written, so from then on the record, its length
+/// and every choice asked for throw that error.
 sealed class ChoiceSource {
   ChoiceSource._();
 
@@ -42,13 +47,20 @@ sealed class ChoiceSource {
   factory ChoiceSource.fixed(ChoiceSequence sequence) = _FixedSource._;
 
   final List<Choice> _record = [];
+  final Writes _writes = .new();
   Status? _stopped;
 
   /// The choices handed over so far, in order.
-  ChoiceSequence get record => .new(_record);
+  ChoiceSequence get record {
+    _writes.throwIfCut();
+    return .new(_record);
+  }
 
   /// How many choices have been handed over so far.
-  int get length => _record.length;
+  int get length {
+    _writes.throwIfCut();
+    return _record.length;
+  }
 
   /// A choice from 0 to [bound], naming [edges], each within [bound], as
   /// choices a random fill's edges reach.
@@ -72,7 +84,7 @@ sealed class ChoiceSource {
   bool weigh(Odds odds) {
     _throwIfStopped();
     final Choice choice = _fillWeighted(odds);
-    _record.add(choice);
+    _writes(() => _record.add(choice));
     return choice.value == 1;
   }
 
@@ -91,7 +103,7 @@ sealed class ChoiceSource {
   Choice _choose(Zigzag zigzag, List<Choice> edges) {
     _throwIfStopped();
     final Choice choice = _fill(zigzag, edges);
-    _record.add(choice);
+    _writes(() => _record.add(choice));
     return choice;
   }
 
@@ -100,6 +112,7 @@ sealed class ChoiceSource {
   Choice _fillWeighted(Odds odds);
 
   void _throwIfStopped() {
+    _writes.throwIfCut();
     if (_stopped case final Status stopped) _stop(stopped);
   }
 
@@ -140,7 +153,9 @@ final class _RandomSource extends ChoiceSource {
   Choice _fill(Zigzag zigzag, List<Choice> edges) {
     _overrunAtLimit();
     final Choice choice = _filled(zigzag, edges);
-    if (_near != .never) (_filledAlong[zigzag] ??= []).add(choice);
+    if (_near != .never) {
+      _writes(() => (_filledAlong[zigzag] ??= []).add(choice));
+    }
     return choice;
   }
 
@@ -151,7 +166,7 @@ final class _RandomSource extends ChoiceSource {
     if (_sweep case final Sweep sweep when edges.isNotEmpty) {
       final NamedChoice named = (bound: bound, edges: .new(edges));
       final int alike = _alike[named] ?? 0;
-      _alike[named] = alike + 1;
+      _writes(() => _alike[named] = alike + 1);
       if (sweep.next(named, alike: alike) case final Choice edge) return edge;
     }
     // Odds of never draw nothing, so a fill without them fills as it would
