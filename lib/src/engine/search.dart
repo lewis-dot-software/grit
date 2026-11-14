@@ -185,7 +185,10 @@ final class Search {
           final _Ran ran = await _replay(body, candidate);
           steps++;
           if (ran.run case final Threw threw when first.failedAlike(threw)) {
-            smallest = threw;
+            // A run may leave its candidate's tail unread, so a later
+            // candidate smaller than the current sequence can read more than
+            // the smallest failing run did.
+            if (threw.record.isSmallerThan(smallest.record)) smallest = threw;
             shrink = shrink.toldFailing(ran.spans);
           } else {
             notFailing.add(candidate);
@@ -234,8 +237,8 @@ final class Search {
 
 /// Where a shrinking ended.
 ///
-/// - `smallest`: the run of the step function's current sequence, the last
-///   candidate that failed alike, or the first failure where none did.
+/// - `smallest`: the run with the smallest record of the first failure and
+///   every candidate that failed alike, the earliest where two tie.
 /// - `steps`: how many candidates it ran.
 /// - `end`: what ended it.
 typedef _Shrunk = ({Threw smallest, int steps, ShrinkEnd end});

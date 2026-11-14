@@ -94,7 +94,7 @@ The last two are costly: each proposes candidates that rarely fail where a cheap
 
 A pass for one kind of value, floats or strings, is added where shrink quality shows the need. It needs the record to carry each draw's kind beside its span, since a span alone cannot say what kind of value its choices make, and that change is settled with the pass.
 
-The step function's current sequence is always one it was told failed. The final replay then holds that every sequence the outcome reports as failed still fails.
+The step function's current sequence is always one it was told failed. The outcome reports the smallest record of the runs that failed alike, which can be smaller than the current sequence's own, since a run may leave its candidate's tail unread and a later, smaller candidate read further. The final replay then holds that every sequence the outcome reports as failed still fails.
 
 ## The clock
 

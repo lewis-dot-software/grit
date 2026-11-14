@@ -105,6 +105,15 @@ final Map<String, _Shape> _shapes = {
     draw.assume(record.every((int x) => x == 3));
     return record;
   },
+  'a branch': (Draw draw) {
+    final List<int> record = [draw(.integer(min: 0, max: 1)), draw(_choice)];
+    if (record[1] > 0 || record[0] == 0) {
+      for (int i = 0; i < 3; i++) {
+        record.add(draw(_choice));
+      }
+    }
+    return record;
+  },
   'an assumption': (Draw draw) {
     final int x = draw(_choice);
     draw.assume(x > 1);
@@ -118,8 +127,9 @@ typedef _Fails = _Way Function(int run, List<int> record);
 /// A body's run on a fixed sequence:
 ///
 /// - `way`: the way it failed, or [_Way.none].
+/// - `record`: the choices it read.
 /// - `spans`: the spans its draws made.
-typedef _Ran = ({_Way way, List<Span> spans});
+typedef _Ran = ({_Way way, ChoiceSequence record, List<Span> spans});
 
 /// A body's first run that threw:
 ///
@@ -147,15 +157,25 @@ final class _Body {
   /// place among the runs, where one has.
   _First? first;
 
+  /// The records of the first run that threw and of every run after it that
+  /// failed the same way, in order.
+  final List<ChoiceSequence> failedAlike = [];
+
   void call(Draw draw) {
     final int run = runs++;
     final List<int> record = _shape(draw);
     final _Way way = _fails(run, record);
     if (way != .none) {
       first ??= (record: sequenceOf(record), way: way, run: run);
+      if (way == first!.way) failedAlike.add(sequenceOf(record));
     }
     _throw(way);
   }
+
+  /// Whether [sequence] is larger than a record of [failedAlike].
+  bool isLargerThanAFailure(ChoiceSequence sequence) => failedAlike.any(
+    (ChoiceSequence record) => record.isSmallerThan(sequence),
+  );
 
   /// The way this body fails on [sequence]'s choices alone, read from its
   /// own rule and never from the search's reading of a stack, and
@@ -165,7 +185,7 @@ final class _Body {
   _Way wayOn(ChoiceSequence sequence) => ranOn(sequence).way;
 
   /// The way this body fails on [sequence]'s choices alone, as [wayOn]
-  /// reads it, with the spans its draws made.
+  /// reads it, with the choices and the spans its draws made.
   _Ran ranOn(ChoiceSequence sequence) {
     final ChoiceSource source = .fixed(sequence);
     final RunDraw draw = .new(source);
@@ -175,17 +195,17 @@ final class _Body {
       .overrun || .rejected => .none,
       .failed => throw StateError('The shape of $name threw on $sequence'),
     };
-    return (way: way, spans: draw.spans);
+    return (way: way, record: source.record, spans: draw.spans);
   }
 
   /// The oracle the search's shrinking of this body is told by: a candidate
   /// fails where it fails as the first failure did, making the spans its
-  /// draws made, and [onWay] is told each candidate's way.
+  /// draws made, and [onRan] is told each candidate's run.
   List<Span>? Function(ChoiceSequence) failingAlike([
-    void Function(_Way way)? onWay,
+    void Function(_Ran ran)? onRan,
   ]) => (ChoiceSequence candidate) {
     final _Ran ran = ranOn(candidate);
-    onWay?.call(ran.way);
+    onRan?.call(ran);
     return ran.way == first!.way ? ran.spans : null;
   };
 
@@ -434,21 +454,25 @@ Future<bool> _expectBounded(
 }
 
 /// Checks that [outcome], the search of [body], is never flaky, and where it
-/// failed, that shrinking accepted only the candidates [body] fails on as it
-/// first failed, by its own rule, and returns how many candidates failed
-/// another way.
+/// failed, that it reports the smallest record of the runs shrinking accepted
+/// where it accepts only the candidates [body] fails on as it first failed,
+/// by its own rule, and returns how many candidates failed another way.
 int _expectAcceptedAlike(_Body body, Outcome outcome) {
   expect(outcome, isNot(isA<Flaky>()), reason: '$body');
   if (outcome is! Failed) return 0;
   final _First first = body.first!;
   int crossed = 0;
-  final Shrunk alike = shrunk(
+  ChoiceSequence smallest = first.record;
+  shrunk(
     body.shrinkStart,
-    body.failingAlike((_Way way) {
-      if (way != .none && way != first.way) crossed++;
+    body.failingAlike((_Ran ran) {
+      if (ran.way == first.way && ran.record.isSmallerThan(smallest)) {
+        smallest = ran.record;
+      }
+      if (ran.way != .none && ran.way != first.way) crossed++;
     }),
   );
-  expect(outcome.sequence, alike.current, reason: '$body');
+  expect(outcome.sequence, smallest, reason: '$body');
   expect(body.wayOn(outcome.sequence), first.way, reason: '$body');
   return crossed;
 }
@@ -645,6 +669,29 @@ void main() {
       expect(failed.end, ShrinkEnd.steps);
       expect(failed.sequence, sequenceOf([0]));
       expect(failed.run.record, sequenceOf([0]));
+    });
+
+    test('is failed on the smallest record its failing runs read, where a '
+        'smaller candidate after it read further', () async {
+      // From a mode of 1 and a count of 5, lowering the count to 0 fails
+      // reading 1 and 0 alone. A mode of 0 then fails on five choices, every
+      // one smaller than the first candidate's tail.
+      final Failed failed =
+          await _search(random: FixedRandom(0.9, ints: const [1, 5, 5, 5, 5]))
+                  .run((Draw draw) {
+                    final int mode = draw(.integer(min: 0, max: 1));
+                    final int count = draw(.integer(min: 0, max: 9));
+                    if (count > 0 || mode == 0) {
+                      for (int i = 0; i < 3; i++) {
+                        draw(.integer(min: 0, max: 9));
+                      }
+                    }
+                    throw StateError('always');
+                  })
+              as Failed;
+      expect(failed.end, ShrinkEnd.shrunk);
+      expect(failed.sequence, sequenceOf([1, 0]));
+      expect(failed.run.record, sequenceOf([1, 0]));
     });
 
     test('is flaky, with the replay of its failed run\'s sequence, where the '
@@ -917,6 +964,21 @@ void main() {
       });
     });
 
+    test('A failed outcome\'s sequence is never larger than any failing record '
+        'shrinking found.', () async {
+      int failed = 0;
+      await _eachSearch((_Body body, _, Outcome outcome) async {
+        if (outcome is! Failed) return;
+        failed++;
+        expect(
+          body.isLargerThanAFailure(outcome.sequence),
+          isFalse,
+          reason: '$body',
+        );
+      });
+      expect(failed, greaterThan(0));
+    });
+
     test('Shrinking never runs more steps than its bound, an outcome whose '
         'bound ran out names that bound, and its sequence is the choices its '
         'final replay read.', () async {
@@ -1118,6 +1180,22 @@ void main() {
         if (outcome is! Failed) return;
         failed++;
         expect(body.first!.record.isSmallerThan(outcome.sequence), isFalse);
+      });
+      expect(failed, greaterThan(0));
+    });
+
+    test('A failed outcome\'s sequence is never larger than any failing record '
+        'shrinking found.', () async {
+      int failed = 0;
+      await forAll((Draw draw) async {
+        final _Body body = draw(_anyBody, label: 'body');
+        final Outcome outcome = await _search(
+          seed: draw(_anySeed, label: 'seed'),
+          limit: _drawnLimit,
+        ).run(body.call);
+        if (outcome is! Failed) return;
+        failed++;
+        expect(body.isLargerThanAFailure(outcome.sequence), isFalse);
       });
       expect(failed, greaterThan(0));
     });
