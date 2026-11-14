@@ -1,4 +1,5 @@
 import 'package:grit/grit.dart';
+import 'package:grit/src/choice/zigzag.dart';
 
 /// The largest values a drawn choice reaches at each of its scales: a bit, a
 /// few values, a byte, a word and the largest a choice holds.
@@ -26,3 +27,10 @@ final Gen<ChoiceSequence> smallSequence =
       (List<List<Choice>> runs) =>
           .new([for (final List<Choice> choices in runs) ...choices]),
     );
+
+/// A zigzag at any scale, up to the widest a choice holds.
+final Gen<Zigzag> anyZigzag = .build((Draw draw) {
+  final int below = draw(anyChoice).value;
+  final int above = draw(.integer(min: 0, max: Choice.largest.value - below));
+  return .new(below: below, above: above);
+});

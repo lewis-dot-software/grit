@@ -6,6 +6,7 @@ import 'package:grit/src/choice/choice_source.dart';
 import 'package:grit/src/choice/odds.dart';
 import 'package:grit/src/choice/status.dart';
 import 'package:grit/src/choice/sweep.dart';
+import 'package:grit/src/choice/zigzag.dart';
 import 'package:test/test.dart';
 
 import '../support/fixed_random.dart';
@@ -261,6 +262,37 @@ void main() {
       }
     });
 
+    test('at near of 1 fills a choice along an earlier one\'s zigzag at it '
+        'or at the distance one either side of it, each in turn, within the '
+        'zigzag', () {
+      // Each first choice is filled at an edge, the centre or either end, so
+      // the second is filled beside one, where a step past an end stays put.
+      final int half = 1 << 62;
+      for (final Zigzag zigzag in [
+        Zigzag(below: 1000, above: 1000),
+        Zigzag(below: half, above: Choice.largest.value - half),
+      ]) {
+        final Map<int, Set<int>> besides = {};
+        for (int seed = 0; seed < 200; seed++) {
+          final ChoiceSource source = .random(
+            .new(seed),
+            limit: 2,
+            near: .new(1),
+            edges: .new(1),
+          );
+          final int first = source.distance(zigzag);
+          (besides[first] ??= {}).add(source.distance(zigzag));
+        }
+        final int below = -zigzag.below;
+        final int above = zigzag.above;
+        expect(besides, {
+          0: {-1, 0, 1},
+          below: {below, below + 1},
+          above: {above - 1, above},
+        }, reason: '$zigzag');
+      }
+    });
+
     test('at a sweep fills a choice that names edges at each in turn, the '
         'first runs that make it, whatever its odds, and as its odds say '
         'after', () {
@@ -363,32 +395,36 @@ void main() {
       }
     });
 
-    test('at near of 1 fills a choice under a bound no earlier choice was '
-        'asked for under, or after a weighted choice alone, as it would '
-        'without near', () {
-      for (int seed = 0; seed < 20; seed++) {
-        ChoiceSequence filled({required Odds near}) {
-          final ChoiceSource source = .random(
-            .new(seed),
-            limit: 4,
-            near: near,
-            edges: .new(0.5),
-          );
-          source
-            ..choose(.new(1000))
-            ..weigh(.new(0.5))
-            ..choose(.new(999))
-            ..choose(.binary);
-          return source.record;
-        }
+    test(
+      'at near of 1 fills a choice under a bound no earlier choice was '
+      'asked for under, along a zigzag no earlier choice was asked for '
+      'along, or after a weighted choice alone, as it would without near',
+      () {
+        for (int seed = 0; seed < 20; seed++) {
+          ChoiceSequence filled({required Odds near}) {
+            final ChoiceSource source = .random(
+              .new(seed),
+              limit: 5,
+              near: near,
+              edges: .new(0.5),
+            );
+            source
+              ..choose(.new(1000))
+              ..weigh(.new(0.5))
+              ..choose(.new(999))
+              ..choose(.binary)
+              ..distance(.new(below: 500, above: 500));
+            return source.record;
+          }
 
-        expect(
-          filled(near: .new(1)),
-          filled(near: .never),
-          reason: '$seed',
-        );
-      }
-    });
+          expect(
+            filled(near: .new(1)),
+            filled(near: .never),
+            reason: '$seed',
+          );
+        }
+      },
+    );
 
     test('at edges of 1/2 fills about half its choices at 0 or at its bound, '
         'and the rest within it', () {
@@ -690,6 +726,35 @@ void main() {
       }
     });
 
+    test('An early run never fills a distance outside its zigzag, whatever '
+        'fill it takes.', () {
+      for (int seed = 0; seed < 3; seed++) {
+        for (final Odds near in _someOdds) {
+          for (final Odds edges in _someOdds) {
+            for (int below = 0; below <= _bound; below++) {
+              for (int above = 0; above <= _bound; above++) {
+                final Zigzag zigzag = .new(below: below, above: above);
+                final ChoiceSource source = .random(
+                  .new(seed),
+                  limit: _length,
+                  sweep: .new(),
+                  near: near,
+                  edges: edges,
+                );
+                for (int ask = 0; ask < _length; ask++) {
+                  expect(
+                    source.distance(zigzag),
+                    inInclusiveRange(-below, above),
+                    reason: 'seed $seed, near $near, edges $edges, $zigzag',
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
     test('Naming a choice\'s edges changes no value a given sequence '
         'draws.', () {
       for (int size = 0; size <= _length; size++) {
@@ -861,6 +926,35 @@ void main() {
           final Choice choice = source.choose(bound, edges: named);
           expect(bound.admits(choice), isTrue, reason: '$choice above $bound');
         }
+      }
+    });
+
+    property('An early run never fills a distance outside its zigzag, '
+        'whatever fill it takes.', (Draw draw) {
+      final int seed = draw(.integer(min: 0, max: 0xFFFFFFFF), label: 'seed');
+      final ChoiceSource source = .random(
+        .new(seed),
+        limit: 64,
+        sweep: draw(.boolean(), label: 'swept') ? .new() : null,
+        near: draw(_odds, label: 'near'),
+        edges: draw(_odds, label: 'edges'),
+      );
+      // A few zigzags, so a later distance is often asked for along an
+      // earlier one's.
+      final List<Zigzag> zigzags = draw(
+        .list(anyZigzag, minLength: 1, maxLength: 3),
+        label: 'zigzags',
+      );
+      final List<Zigzag> asks = draw(
+        .list(.element(zigzags), maxLength: 64),
+        label: 'asks',
+      );
+      for (final Zigzag zigzag in asks) {
+        expect(
+          source.distance(zigzag),
+          inInclusiveRange(-zigzag.below, zigzag.above),
+          reason: '$zigzag',
+        );
       }
     });
 

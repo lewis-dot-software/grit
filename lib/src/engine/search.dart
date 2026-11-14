@@ -62,8 +62,8 @@ final class Search {
              : budget.time,
        );
 
-  /// The odds an early run fills a choice beside an earlier one under its
-  /// bound, where the run has made one.
+  /// The odds an early run fills a choice beside an earlier one along its
+  /// zigzag, where the run has made one.
   static final Odds _near = .new(0.75);
 
   /// The odds an early run fills a choice at 0, at its bound or at an edge
@@ -87,8 +87,8 @@ final class Search {
     // An early run fills a choice at each edge it names in turn, the first
     // times it is made, so every one is filled. Its other choices fill
     // beside earlier choices and towards each choice's edges, so two wide
-    // choices fall within one of each other, and a wide range draws its
-    // ends, in the first few runs.
+    // integers fall within one of each other in value, and a wide range
+    // draws its ends, in the first few runs.
     final int early = (_runs + _earlyShare - 1) ~/ _earlyShare;
     final Sweep sweep = .new();
     int returned = 0;

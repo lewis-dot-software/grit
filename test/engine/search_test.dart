@@ -759,35 +759,51 @@ void main() {
   });
 
   group('the random fill, beside earlier choices', () {
-    test('fills two choices under one bound within one of each other far more '
-        'often on a search\'s early runs than a uniform fill would, and next '
-        'to never on later runs', () async {
-      const int bound = 1 << 40;
-      int early = 0;
-      int earlyBeside = 0;
-      int later = 0;
-      int laterBeside = 0;
-      for (int seed = 0; seed < 10; seed++) {
-        int run = 0;
-        await _search(seed: seed, runs: 100).run((Draw draw) {
-          final int x = draw(.integer(min: 0, max: bound));
-          final int y = draw(.integer(min: 0, max: bound));
-          final bool beside = (x - y).abs() <= 1;
-          if (run++ < 20) {
-            early++;
-            if (beside) earlyBeside++;
-          } else {
-            later++;
-            if (beside) laterBeside++;
-          }
-        });
+    test('fills two integers of one range within one of each other in value, '
+        'and one apart, far more often on a search\'s early runs than a '
+        'uniform fill would, and next to never on later runs, whether the '
+        'range lies on one side of 0 or across it', () async {
+      const int wide = 1 << 40;
+      for (final Gen<int> integer in [
+        .integer(min: 0, max: wide),
+        .integer(min: -wide, max: wide),
+        .integer(),
+      ]) {
+        int early = 0;
+        int earlyBeside = 0;
+        int earlyApart = 0;
+        int later = 0;
+        int laterBeside = 0;
+        for (int seed = 0; seed < 10; seed++) {
+          int run = 0;
+          await _search(seed: seed, runs: 100).run((Draw draw) {
+            final int x = draw(integer);
+            final int y = draw(integer);
+            final bool beside = (x - y).abs() <= 1;
+            if (run++ < 20) {
+              early++;
+              if (beside) earlyBeside++;
+              if ((x - y).abs() == 1) earlyApart++;
+            } else {
+              later++;
+              if (beside) laterBeside++;
+            }
+          });
+        }
+        // A uniform fill puts two integers this wide within one of each
+        // other next to never, and an edge fill at the same edge a third of
+        // the time it fills both at an edge. A step of one choice beside an
+        // earlier one falls on the other side of 0 across it, so the early
+        // runs fill near half within one and few one apart where the step
+        // is not taken by value.
+        final String reason =
+            'within one on $earlyBeside and one apart on $earlyApart of '
+            '$early early';
+        expect(earlyBeside / early, greaterThan(0.65), reason: reason);
+        expect(earlyApart / early, greaterThan(0.25), reason: reason);
+        expect(later, greaterThan(0));
+        expect(laterBeside, 0);
       }
-      // A uniform fill puts two choices this wide within one of each other
-      // next to never, and an edge fill at the same end a quarter of the
-      // time it fills both at an edge.
-      expect(earlyBeside / early, greaterThan(0.5));
-      expect(later, greaterThan(0));
-      expect(laterBeside, 0);
     });
 
     test('fills every choice that names an edge at it within a search\'s '

@@ -6,6 +6,7 @@ import 'choice_sequence.dart';
 import 'odds.dart';
 import 'status.dart';
 import 'sweep.dart';
+import 'zigzag.dart';
 
 /// What hands one run its choices, and records each it hands over.
 ///
@@ -21,13 +22,14 @@ sealed class ChoiceSource {
   /// Where [sweep] is given, a choice that names edges is filled at the next
   /// one [sweep] gives it, whatever [near] and [edges] are.
   ///
-  /// At [near], any other choice asked for under the bound of an earlier
+  /// At [near], any other choice asked for along the zigzag of an earlier
   /// choice of the run is filled beside one of those earlier choices, each
-  /// alike: at it or one either side of it, each alike and kept within the
-  /// bound. Otherwise, at [edges], it is filled at 0, at its bound or at an
-  /// edge it names, each alike, and otherwise uniformly within its bound. A weighted
-  /// choice is filled at its own odds whatever [near] and [edges] are, and
-  /// no choice is filled beside it.
+  /// alike: at it or at the distance one either side of it, each alike and
+  /// kept within the zigzag. A choice asked for under a bound alone is asked
+  /// for along the zigzag that counts it. Otherwise, at [edges], it is filled
+  /// at 0, at its bound or at an edge it names, each alike, and otherwise
+  /// uniformly within its bound. A weighted choice is filled at its own odds
+  /// whatever [near] and [edges] are, and no choice is filled beside it.
   factory ChoiceSource.random(
     Random random, {
     required int limit,
@@ -56,11 +58,14 @@ sealed class ChoiceSource {
         throw ArgumentError.value(edge, 'edges', 'Must lie within $bound');
       }
     }
-    _throwIfStopped();
-    final Choice choice = _fill(bound, edges);
-    _record.add(choice);
-    return choice;
+    return _choose(.counting(bound), edges);
   }
+
+  /// The distance a choice along [zigzag] stands for, the choice naming
+  /// [zigzag]'s other end, where it has one, as an edge a random fill's
+  /// edges reach.
+  int distance(Zigzag zigzag) =>
+      zigzag.distance(_choose(zigzag, [?zigzag.otherEnd]));
 
   /// A choice of 0 or 1 read as false or true, true at [odds] where the
   /// source fills it.
@@ -83,7 +88,14 @@ sealed class ChoiceSource {
   Status status({required bool threw}) =>
       _stopped ?? (threw ? .failed : .returned);
 
-  Choice _fill(Bound bound, List<Choice> edges);
+  Choice _choose(Zigzag zigzag, List<Choice> edges) {
+    _throwIfStopped();
+    final Choice choice = _fill(zigzag, edges);
+    _record.add(choice);
+    return choice;
+  }
+
+  Choice _fill(Zigzag zigzag, List<Choice> edges);
 
   Choice _fillWeighted(Odds odds);
 
@@ -113,9 +125,9 @@ final class _RandomSource extends ChoiceSource {
   final Odds _near;
   final Odds _edges;
 
-  /// The choices filled so far, by the bound each was asked for under, kept
-  /// only where a choice may be filled beside them.
-  final Map<Bound, List<Choice>> _filledUnder = {};
+  /// The choices filled so far, by the zigzag each was asked for along,
+  /// kept only where a choice may be filled beside them.
+  final Map<Zigzag, List<Choice>> _filledAlong = {};
 
   /// How many choices the run has made under each bound naming each set of
   /// edges, kept only where [_sweep] fills them.
@@ -125,16 +137,17 @@ final class _RandomSource extends ChoiceSource {
   static const int _wordBits = 32;
 
   @override
-  Choice _fill(Bound bound, List<Choice> edges) {
+  Choice _fill(Zigzag zigzag, List<Choice> edges) {
     _overrunAtLimit();
-    final Choice choice = _filled(bound, edges);
-    if (_near != .never) (_filledUnder[bound] ??= []).add(choice);
+    final Choice choice = _filled(zigzag, edges);
+    if (_near != .never) (_filledAlong[zigzag] ??= []).add(choice);
     return choice;
   }
 
-  /// A choice from 0 to [bound], filled at the swept named edge, beside an
+  /// A choice along [zigzag], filled at the swept named edge, beside an
   /// earlier one, at an edge or uniformly.
-  Choice _filled(Bound bound, List<Choice> edges) {
+  Choice _filled(Zigzag zigzag, List<Choice> edges) {
+    final Bound bound = zigzag.bound;
     if (_sweep case final Sweep sweep when edges.isNotEmpty) {
       final NamedChoice named = (bound: bound, edges: .new(edges));
       final int alike = _alike[named] ?? 0;
@@ -143,9 +156,9 @@ final class _RandomSource extends ChoiceSource {
     }
     // Odds of never draw nothing, so a fill without them fills as it would
     // had they no part in it.
-    if (_filledUnder[bound] case final List<Choice> earlier
+    if (_filledAlong[zigzag] case final List<Choice> earlier
         when _random.nextDouble() < _near.value) {
-      return _beside(earlier[_random.nextInt(earlier.length)], bound);
+      return _beside(earlier[_random.nextInt(earlier.length)], zigzag);
     }
     if (_edges != .never && _random.nextDouble() < _edges.value) {
       return _edge(_random.nextInt(edges.length + 2), bound, edges);
@@ -172,15 +185,19 @@ final class _RandomSource extends ChoiceSource {
         _ => edges[index - 2],
       };
 
-  /// [earlier], or one either side of it within [bound], each alike.
+  /// [earlier], or the choice of the distance one either side of its own
+  /// along [zigzag], each alike.
   ///
-  /// A step past either end of [bound] stays at [earlier], so no sum is
-  /// taken past the largest choice.
-  Choice _beside(Choice earlier, Bound bound) => switch (_random.nextInt(3)) {
-    0 when earlier.value > 0 => .new(earlier.value - 1),
-    2 when earlier.value < bound.value => .new(earlier.value + 1),
-    _ => earlier,
-  };
+  /// A step past either end of [zigzag] stays at [earlier], so no sum is
+  /// taken past the largest distance.
+  Choice _beside(Choice earlier, Zigzag zigzag) {
+    final int distance = zigzag.distance(earlier);
+    return switch (_random.nextInt(3)) {
+      0 when distance > -zigzag.below => zigzag.at(distance - 1),
+      2 when distance < zigzag.above => zigzag.at(distance + 1),
+      _ => earlier,
+    };
+  }
 
   @override
   Choice _fillWeighted(Odds odds) {
@@ -201,15 +218,15 @@ final class _FixedSource extends ChoiceSource {
   final ChoiceSequence _sequence;
 
   @override
-  Choice _fill(Bound bound, List<Choice> edges) {
+  Choice _fill(Zigzag zigzag, List<Choice> edges) {
     if (_record.length >= _sequence.choices.length) _stop(.overrun);
     final Choice choice = _sequence.choices[_record.length];
-    if (!bound.admits(choice)) _stop(.rejected);
+    if (!zigzag.bound.admits(choice)) _stop(.rejected);
     return choice;
   }
 
   @override
-  Choice _fillWeighted(Odds odds) => _fill(.binary, const []);
+  Choice _fillWeighted(Odds odds) => _fill(.counting(.binary), const []);
 }
 
 /// The throw that stops a run, carrying the status it stops it with.
