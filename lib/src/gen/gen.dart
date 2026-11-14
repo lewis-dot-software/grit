@@ -21,6 +21,7 @@ part 'one_of.dart';
 part 'run_draw.dart';
 part 'set.dart';
 part 'string.dart';
+part 'text_of.dart';
 
 /// How many draws a generator makes towards one value it accepts before it
 /// gives up.

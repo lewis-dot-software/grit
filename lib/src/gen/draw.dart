@@ -32,7 +32,9 @@ abstract final class Draw {
     }
     // The text is taken as the value is returned, since the body may sort,
     // clear or add to it in place before a report prints it.
-    if (_depth == 0) _draws.add((label: label, value: value, text: '$value'));
+    if (_depth == 0) {
+      _draws.add((label: label, value: value, text: _textOf(value)));
+    }
     return value;
   }
 

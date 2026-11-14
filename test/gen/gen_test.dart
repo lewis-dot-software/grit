@@ -409,14 +409,15 @@ void main() {
       final ChoiceSequence sequence = draw(_sequence, label: 'sequence');
       final ChoiceSource source = .fixed(sequence);
       final RunDraw inner = .new(source);
-      late final String returned;
       final Status status = run(source, () {
         final Object? value = inner(generator.gen);
-        returned = '$value';
         if (value case final List<Object?> list) list.clear();
       });
+      final ChoiceSource untouched = .fixed(sequence);
+      final RunDraw left = .new(untouched);
+      run(untouched, () => left(generator.gen));
       if (status == .returned) {
-        expect(inner.draws.single.text, returned);
+        expect(inner.draws.single.text, left.draws.single.text);
       }
     });
 

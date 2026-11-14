@@ -214,6 +214,24 @@ void main() {
       );
     });
 
+    test('of a failed outcome prints a drawn string quoted, so its '
+        'whitespace shows', () async {
+      final (Object, StackTrace)? thrown = await _thrown(
+        _run().check((Draw draw) {
+          final String text = draw(.string(alphabet: .of('a ')), label: 'text');
+          if (text.contains(' ')) throw StateError('a space');
+        }),
+      );
+      expect(
+        thrown?.$1,
+        isA<TestFailure>().having(
+          (TestFailure failure) => failure.message,
+          'message',
+          contains("It drew:\n  text: ' '\n\n"),
+        ),
+      );
+    });
+
     test(
       'of a flaky outcome throws its report with the failure\'s stack',
       () async {
