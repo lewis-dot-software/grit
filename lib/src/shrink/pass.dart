@@ -127,13 +127,17 @@ enum Pass {
   /// [sequence] was told as failing and [next] is the record that
   /// candidate's run read.
   ///
-  /// [moveValue] goes on from the first candidate of the told candidate's
-  /// pair among [next]'s, so a value moved part way is moved again whole,
-  /// or from the first of the pairs after it where [next] is too short to
-  /// hold it. Every other pass goes on from [position].
+  /// [deleteSpan] goes on from [position], or where [next] proposes no
+  /// candidate there, from the first candidate of the told candidate's span
+  /// among [next]'s, so a list that lost its first element with the length
+  /// before it lowered, the last place the pass deletes from, loses its next
+  /// the same way. [moveValue] goes on from the first candidate of the told
+  /// candidate's pair among [next]'s, so a value moved part way is moved
+  /// again whole. Each goes on from the first of the spans or pairs after
+  /// the told one where [next] is too short to hold it. Every other pass goes
+  /// on from [position].
   int resumeAt(ChoiceSequence sequence, int position, ChoiceSequence next) =>
       switch (this) {
-        deleteSpan ||
         liftSpan ||
         zeroSpan ||
         lowerChoice ||
@@ -143,12 +147,80 @@ enum Pass {
         deleteAndLower ||
         lowerAndCopy ||
         deleteAndRaise => position,
-        moveValue => _movesBefore(
-          next.choices,
-          _toldPair(sequence.choices, position),
+        deleteSpan when _deleteSpans(next.choices).skip(position).isNotEmpty =>
+          position,
+        deleteSpan => _resumeInGroups(
+          sequence,
+          position,
+          next,
+          groups: _deletions,
+          candidates: _deleteSpan,
+          precedes: _deletedBefore,
+        ),
+        moveValue => _resumeInGroups(
+          sequence,
+          position,
+          next,
+          groups: _pairs,
+          candidates: _moveValue,
+          precedes: _precedes,
         ),
       };
 }
+
+/// The place among the candidates a pass proposes from [next] of the first
+/// candidate of the group that holds the one at [position] among those it
+/// proposes from [sequence], or of the first group after it where [next]
+/// lacks that group.
+///
+/// The pass proposes, from a sequence of a length, the [candidates] of each
+/// of the [groups] of that length in turn, and [precedes] tells whether one
+/// group comes before another among them. Where no group holds [position],
+/// it is every candidate the pass proposes from [next].
+int _resumeInGroups<G>(
+  ChoiceSequence sequence,
+  int position,
+  ChoiceSequence next, {
+  required Iterable<G> Function(int length) groups,
+  required Iterable<_Build> Function(List<Choice> choices, G group) candidates,
+  required bool Function(G group, G other) precedes,
+}) {
+  G? told;
+  for (final G group in groups(sequence.choices.length)) {
+    position -= candidates(sequence.choices, group).length;
+    if (position < 0) {
+      told = group;
+      break;
+    }
+  }
+  int before = 0;
+  for (final G group in groups(next.choices.length)) {
+    if (told != null && !precedes(group, told)) break;
+    before += candidates(next.choices, group).length;
+  }
+  return before;
+}
+
+/// A span [Pass.deleteSpan] deletes:
+///
+/// - `width`: how many choices it holds.
+/// - `start`: the place of its first.
+typedef _Deletion = ({int width, int start});
+
+/// Each span [Pass.deleteSpan] deletes within [length] choices, the widest
+/// first and each width from the end back.
+Iterable<_Deletion> _deletions(int length) sync* {
+  for (final int width in _widths) {
+    for (final int start in _startsBack(length, width)) {
+      yield (width: width, start: start);
+    }
+  }
+}
+
+/// Whether [deletion] comes before [other] among [_deletions].
+bool _deletedBefore(_Deletion deletion, _Deletion other) =>
+    deletion.width > other.width ||
+    (deletion.width == other.width && deletion.start > other.start);
 
 /// Two choices [Pass.moveValue] moves value between:
 ///
@@ -171,28 +243,6 @@ bool _precedes(_Pair pair, _Pair other) =>
     pair.apart > other.apart ||
     (pair.apart == other.apart && pair.first < other.first);
 
-/// The pair whose candidates of [Pass.moveValue] from [choices] hold the one
-/// at [position], or null where none does.
-_Pair? _toldPair(List<Choice> choices, int position) {
-  for (final _Pair pair in _pairs(choices.length)) {
-    position -= _moveValue(choices, pair).length;
-    if (position < 0) return pair;
-  }
-  return null;
-}
-
-/// How many candidates [Pass.moveValue] proposes from [choices] before the
-/// first of [told]'s pair or of the pairs after it, or how many it proposes
-/// in all where [told] is null.
-int _movesBefore(List<Choice> choices, _Pair? told) {
-  int before = 0;
-  for (final _Pair pair in _pairs(choices.length)) {
-    if (told != null && !_precedes(pair, told)) break;
-    before += _moveValue(choices, pair).length;
-  }
-  return before;
-}
-
 /// A candidate not yet built, so passing over it costs nothing of its
 /// length.
 typedef _Build = ChoiceSequence Function();
@@ -208,19 +258,22 @@ Iterable<int> _startsBack(int length, int width) sync* {
   }
 }
 
-Iterable<_Build> _deleteSpans(List<Choice> choices) sync* {
-  for (final int width in _widths) {
-    for (final int start in _startsBack(choices.length, width)) {
-      yield () =>
-          .new([...choices.take(start), ...choices.skip(start + width)]);
-      if (start > 0 && choices[start - 1].value > 0) {
-        yield () => .new([
-          ...choices.take(start - 1),
-          .new(choices[start - 1].value - 1),
-          ...choices.skip(start + width),
-        ]);
-      }
-    }
+/// The candidates of [Pass.deleteSpan] from [choices].
+Iterable<_Build> _deleteSpans(List<Choice> choices) =>
+    _deletions(choices.length)
+        .expand((_Deletion deletion) => _deleteSpan(choices, deletion));
+
+/// The candidates of [Pass.deleteSpan] that delete [deletion]'s span of
+/// [choices].
+Iterable<_Build> _deleteSpan(List<Choice> choices, _Deletion deletion) sync* {
+  final (:int width, :int start) = deletion;
+  yield () => .new([...choices.take(start), ...choices.skip(start + width)]);
+  if (start > 0 && choices[start - 1].value > 0) {
+    yield () => .new([
+      ...choices.take(start - 1),
+      .new(choices[start - 1].value - 1),
+      ...choices.skip(start + width),
+    ]);
   }
 }
 

@@ -378,6 +378,27 @@ void main() {
     expect(proposed[proposed.indexOf(partWay) + 1], sequenceOf([0, 6]));
   });
 
+  test('a candidate deleting the first element of a list and lowering its '
+      'length, told as failing, is followed by the same deletion from the '
+      'shorter list', () {
+    // A length, then as many elements as it counts, fails in any form.
+    final ChoiceSequence first = sequenceOf([3, 5, 5, 5]);
+    final ChoiceSequence shorter = sequenceOf([2, 5, 5]);
+    final List<ChoiceSequence> proposed = [];
+    shrunk(.start(first, spansOf(first)), (ChoiceSequence candidate) {
+      proposed.add(candidate);
+      final List<Choice> choices = candidate.choices;
+      return choices.isNotEmpty && choices.first.value == choices.length - 1
+          ? (read: choices.length, spans: spansOf(candidate))
+          : null;
+    });
+    final int after = proposed.indexOf(shorter) + 1;
+    expect(proposed.sublist(after, after + 2), [
+      sequenceOf([2, 5]),
+      sequenceOf([1, 5]),
+    ]);
+  });
+
   test('a round that has accepted a candidate takes no costly pass, so its '
       'candidates wait for a round that accepts nothing', () {
     // Only lowering and copying proposes [0, 3, 3], and only deleting and

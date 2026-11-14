@@ -110,14 +110,28 @@ def siblings (depth : Nat) (spans : List Span) : List Span :=
     else if s.depth = depth then s :: siblings depth rest
     else siblings depth rest
 
+/-- Each span `deleteSpan` deletes within `length` choices, as its width and its start, the widest first and each width
+from the end back. -/
+def deletions (length : Nat) : List (Nat × Nat) :=
+  widths.flatMap fun width => (startsBack length width).map fun start => (width, start)
+
+/-- Whether `deletion` comes before `other` among `deletions`. -/
+def deletedBefore (deletion other : Nat × Nat) : Bool :=
+  deletion.1 > other.1 || (deletion.1 == other.1 && deletion.2 > other.2)
+
+/-- The span of `cs` that `deletion` names deleted, followed by the same with the choice before the span lowered by 1,
+where that choice is above 0. -/
+def deleteSpan (cs : Seq) (deletion : Nat × Nat) : List Seq :=
+  let width := deletion.1
+  let start := deletion.2
+  (cs.take start ++ cs.drop (start + width)) ::
+    if start > 0 ∧ choiceAt cs (start - 1) > 0 then
+      [cs.take (start - 1) ++ [choiceAt cs (start - 1) - 1] ++ cs.drop (start + width)]
+    else []
+
 /-- Each span of 8, 4, 3, 2 or 1 choices deleted, the widest first and each width from the end back, each deletion
 followed by the same with the choice before the span lowered by 1, where that choice is above 0. -/
-def deleteSpans (cs : Seq) : List Seq :=
-  widths.flatMap fun width => (startsBack cs.length width).flatMap fun start =>
-    (cs.take start ++ cs.drop (start + width)) ::
-      if start > 0 ∧ choiceAt cs (start - 1) > 0 then
-        [cs.take (start - 1) ++ [choiceAt cs (start - 1) - 1] ++ cs.drop (start + width)]
-      else []
+def deleteSpans (cs : Seq) : List Seq := (deletions cs.length).flatMap (deleteSpan cs)
 
 /-- Each draw's span of `spans` replaced by the span of each draw beneath it, the draws taken in the order they
 began. -/
@@ -239,36 +253,48 @@ def Pass.candidates (p : Pass) (cs : Seq) (spans : List Span) : List Seq :=
   | .lowerAndCopy => lowerAndCopies cs
   | .deleteAndRaise => deleteAndRaises cs
 
-/-- The pair of `ps` whose candidates of `moveValue` from `cs` hold the one at `position` among them all, or none where
-none does. -/
-def toldPair (cs : Seq) : List (Nat × Nat) → Nat → Option (Nat × Nat)
+/-- The group of `gs` whose candidates, `group` of each, hold the one at `position` among them all, or none where none
+does. -/
+def toldGroup (group : Nat × Nat → List Seq) : List (Nat × Nat) → Nat → Option (Nat × Nat)
   | [], _ => none
-  | pair :: rest, position =>
-    if position < (moveValue cs pair).length then some pair
-    else toldPair cs rest (position - (moveValue cs pair).length)
+  | g :: rest, position =>
+    if position < (group g).length then some g
+    else toldGroup group rest (position - (group g).length)
 
-/-- How many candidates `moveValues` proposes from `cs` before the first of `told`'s pair or of the pairs after it, or how
-many it proposes in all where `told` is none. -/
-def movesBefore (cs : Seq) (told : Option (Nat × Nat)) : Nat :=
-  (((pairs cs.length).takeWhile fun pair =>
+/-- How many candidates, `group` of each of `gs`, come before the first of `told` or of the groups after it by `precedes`,
+or how many there are in all where `told` is none. -/
+def groupsBefore (gs : List (Nat × Nat)) (group : Nat × Nat → List Seq) (precedes : Nat × Nat → Nat × Nat → Bool)
+    (told : Option (Nat × Nat)) : Nat :=
+  ((gs.takeWhile fun g =>
     match told with
-    | some t => precedes pair t
-    | none => true).map fun pair => (moveValue cs pair).length).sum
+    | some t => precedes g t
+    | none => true).map fun g => (group g).length).sum
+
+/-- The place among the candidates a pass proposes from `next` of the first candidate of the group that holds the one at
+`position` among those it proposes from `cs`, or of the first group after it where `next` lacks that group, the pass
+proposing from a sequence the candidates `group` gives each of `groups` of its length in turn, in the order `precedes`
+tells. -/
+def resumeInGroups (groups : Nat → List (Nat × Nat)) (group : Seq → Nat × Nat → List Seq)
+    (precedes : Nat × Nat → Nat × Nat → Bool) (cs : Seq) (position : Nat) (next : Seq) : Nat :=
+  groupsBefore (groups next.length) (group next) precedes (toldGroup (group cs) (groups cs.length) position)
 
 /-- The place among the candidates `p` proposes from `next` to go on from, where its candidate at `position` among those
-it proposes from `cs` was told as failing and `next` is the record that candidate's run read: for `moveValue`, the first
-candidate of the told candidate's pair among `next`'s, or of the pairs after it where `next` is too short to hold it, and
-for every other pass, `position`. -/
+it proposes from `cs` was told as failing and `next` is the record that candidate's run read: for `deleteSpan`,
+`position`, or where `next` proposes no candidate there, the first candidate of the told candidate's span among `next`'s,
+for `moveValue`, the first candidate of the told candidate's pair among `next`'s, each from the spans or pairs after the
+told one where `next` is too short to hold it, and for every other pass, `position`. -/
 def Pass.resumeAt (p : Pass) (cs : Seq) (position : Nat) (next : Seq) : Nat :=
   match p with
-  | .deleteSpan => position
+  | .deleteSpan =>
+    if position < (deleteSpans next).length then position
+    else resumeInGroups deletions Grit.deleteSpan deletedBefore cs position next
   | .liftSpan => position
   | .zeroSpan => position
   | .lowerChoice => position
   | .lowerTogether => position
   | .reorder => position
   | .swapSpan => position
-  | .moveValue => movesBefore next (toldPair cs (pairs cs.length) position)
+  | .moveValue => resumeInGroups pairs Grit.moveValue precedes cs position next
   | .deleteAndLower => position
   | .lowerAndCopy => position
   | .deleteAndRaise => position

@@ -245,10 +245,62 @@ void main() {
     expect(_candidates(.moveValue, record, from: resume).first, [0, 5, 0]);
   });
 
-  test('every pass but moving value goes on, after a candidate told as '
-      'failing, from the same place among the record\'s candidates', () {
+  test('deleting a span goes on, after a candidate told as failing, from the '
+      'same place among the record\'s candidates, where the record proposes '
+      'one there', () {
+    // [4, 2, 0] proposes nine candidates, the fourth deleting its first two
+    // choices.
+    final int resume = Pass.deleteSpan.resumeAt(
+      sequenceOf([6, 0, 0]),
+      3,
+      sequenceOf([4, 2, 0]),
+    );
+    expect(resume, 3);
+    expect(_candidates(.deleteSpan, [4, 2, 0], from: resume).first, [0]);
+  });
+
+  test('deleting a span goes on, where the record proposes no candidate at '
+      'the told one\'s place, from the first candidate of its span among the '
+      'record\'s, so a list loses another element with its length '
+      'lowered', () {
+    // [2, 5, 5] deletes the first of three elements and lowers the length
+    // before it, the last candidate but one of the deletions of one choice.
+    final List<int> told = _candidates(.deleteSpan, [3, 5, 5, 5])[14];
+    expect(told, [2, 5, 5]);
+    final int resume = Pass.deleteSpan.resumeAt(
+      sequenceOf([3, 5, 5, 5]),
+      14,
+      sequenceOf(told),
+    );
+    expect(_candidates(.deleteSpan, told, from: resume), [
+      [2, 5],
+      [1, 5],
+      [5, 5],
+    ]);
+  });
+
+  test('deleting a span goes on from the first span after the told '
+      'candidate\'s, where the record proposes no candidate at its place and '
+      'is too short to hold its span', () {
+    // [1, 2, 3, 6] deletes two choices from the fourth. [1, 2, 3] lacks that
+    // span, and holds one span before it, all three, and two after it at
+    // that width.
+    final List<int> told = _candidates(.deleteSpan, [1, 2, 3, 4, 5, 6])[14];
+    expect(told, [1, 2, 3, 6]);
+    final List<int> record = [1, 2, 3];
+    final int resume = Pass.deleteSpan.resumeAt(
+      sequenceOf([1, 2, 3, 4, 5, 6]),
+      14,
+      sequenceOf(record),
+    );
+    expect(_candidates(.deleteSpan, record, from: resume).first, [1]);
+  });
+
+  test('every pass but deleting a span and moving value goes on, after a '
+      'candidate told as failing, from the same place among the record\'s '
+      'candidates', () {
     for (final Pass pass in Pass.values.where(
-      (Pass pass) => pass != .moveValue,
+      (Pass pass) => pass != .deleteSpan && pass != .moveValue,
     )) {
       expect(
         pass.resumeAt(sequenceOf([6, 0, 0]), 3, sequenceOf([4, 2, 0])),

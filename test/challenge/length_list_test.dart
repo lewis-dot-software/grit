@@ -5,6 +5,12 @@ import 'package:test/test.dart';
 
 import '../support/challenge.dart';
 
+/// The seeds past [everySeed] this challenge is held to as well: every seed
+/// up to 100.
+final List<int> _moreSeeds = [
+  for (int seed = everySeed.length; seed < 100; seed++) seed,
+];
+
 /// A list whose length is drawn first, from 1 to 100, then its elements, each
 /// from 0 to 1000, under the false property that every element is below 900.
 void main() {
@@ -24,5 +30,6 @@ void main() {
     [
       [900],
     ],
+    moreSeeds: _moreSeeds,
   );
 }

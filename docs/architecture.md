@@ -89,7 +89,7 @@ The budget then bounds how long shrinking takes, never whether it ends. It count
 
 A pass is a function from the current sequence, and the spans its run made, to its candidates, and the step function chooses among them:
 
-- Deleting a span, alone and with the choice before it lowered by one, since that choice may be the span's length.
+- Deleting a span, alone and with the choice before it lowered by one, since that choice may be the span's length, a span whose deletion leaves the pass no candidate at its place tried again, so a length drawn before its elements falls by more than one a round.
 - Lifting a draw's span into the place of a draw it sits in, so a part of a value takes the place of the part around it.
 - Zeroing a span.
 - Lowering a choice by binary search, over the pairs of choices an integer's zigzag puts at one distance, so a value lowers on either side of the one it shrinks towards.
