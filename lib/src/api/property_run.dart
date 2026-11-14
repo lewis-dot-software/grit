@@ -8,7 +8,9 @@ import '../engine/outcome.dart';
 import '../engine/run.dart';
 import '../engine/body.dart';
 import '../engine/search.dart';
+import '../engine/warning.dart';
 import '../report/report.dart';
+import '../report/warning_text.dart';
 import 'settings.dart';
 import 'settings_source.dart';
 import 'stopwatch_clock.dart';
@@ -65,15 +67,16 @@ final class PropertyRun {
   ).run(body);
 
   /// Searches [body], and throws a [TestFailure] carrying the outcome's
-  /// report on every outcome but [Passed].
+  /// report on every outcome but [Passed], whose warnings it prints, one line
+  /// each, under the test that stands.
   ///
   /// A failure that a run threw is thrown with that run's stack trace, so
   /// the test's failure points at the line of the body that threw.
   Future<void> check(Body body) async {
     final Outcome found = await outcome(body);
     switch (found) {
-      case Passed():
-        return;
+      case Passed(:final List<Warning> warnings):
+        warnings.map(warningText).forEach(print);
       case Failed(:final Threw run) || Flaky(failed: final Threw run):
         Error.throwWithStackTrace(_failure(found), run.stackTrace);
       case GaveUp():

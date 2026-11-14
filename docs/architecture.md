@@ -60,7 +60,7 @@ The outcome is a sealed type, one subtype per row:
 | Flaky | The failing sequence, and the replay that did not fail as it did |
 | Gave up | How many runs were rejected and overran |
 
-Every outcome carries the search's warnings, a slow property among them. `runProperty` returns the outcome, and `property` and `forAll` are its bindings to `package:test`, failing the test on every outcome but passed. The report is a pure function of the outcome, the seed the search filled from and the settings it ran under, which it names so the search can be repeated.
+Every outcome carries the search's warnings, which never change its verdict: a slow property, and mostly invalid runs, where those rejected and overrun outnumber those that returned in a search that did not give up. A pass prints each under its test, and a failure's report carries them. `runProperty` returns the outcome, and `property` and `forAll` are its bindings to `package:test`, failing the test on every outcome but passed. The report is a pure function of the outcome, the seed the search filled from and the settings it ran under, which it names so the search can be repeated.
 
 ## Shrinking
 
@@ -105,7 +105,7 @@ Wall time is read in two places alone:
 
 Neither changes a verdict.
 
-Each run is timed. A property whose runs are slow enough that its run count costs more than the engine's threshold gets a warning on its outcome, naming its time per run so its owner can lower the count. `api` prints it.
+Generation is timed, from its first run to its last. A property whose run count, at generation's mean time per run, costs more than the engine's threshold of 5 s, with no setting, gets a warning on its outcome naming its time per run, so its owner can lower the count.
 
 ## The API
 
@@ -166,7 +166,7 @@ flowchart TD
 | Layer | Holds | Imports |
 |---|---|---|
 | `api` | The entries, the settings and their defaults, the binding to `package:test`, and the composition root | `report`, `engine`, `store`, `gen`, `choice` |
-| `report` | The outcome as the failure message | `engine`, `gen` |
+| `report` | The outcome as the failure message, and each warning as the line a pass prints | `engine`, `gen` |
 | `engine` | The search: generation, the replays, the shrink driver under the budget, the warnings, the outcome, and every read of a stack | `store`, `shrink`, `gen`, `choice` |
 | `store` | Failing sequences under `.dart_tool/grit/` | `choice` |
 | `shrink` | The step function and its passes | `choice` |

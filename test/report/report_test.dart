@@ -135,6 +135,111 @@ void main() {
     });
   });
 
+  group('the warnings', () {
+    test('of a slow property name its time per run and what its run count '
+        'costs', () {
+      expect(
+        report(
+          Passed(
+            runs: 100,
+            warnings: [
+              SlowProperty(perRun: const .new(milliseconds: 120), runs: 100),
+            ],
+          ),
+          seed: 7,
+          settings: _settings,
+        ),
+        'The property passed 100 runs.\n'
+        '\n'
+        'Warning: the property is slow. Its runs took 120 ms each on average, '
+        'so a search of 100 runs takes about 12.0 s. A lower `runs` setting '
+        'makes it faster.\n'
+        '\n'
+        'Seed 7. Repeat this search with `settings: Settings(seed: 7)`.',
+      );
+    });
+
+    test('of mostly invalid runs count each kind', () {
+      expect(
+        report(
+          Passed(
+            runs: 10,
+            warnings: [MostlyInvalid(returned: 10, rejected: 12, overran: 3)],
+          ),
+          seed: 7,
+          settings: _settings,
+        ),
+        'The property passed 10 runs.\n'
+        '\n'
+        'Warning: most of the property\'s runs were invalid, 12 rejected and '
+        '3 overrun against 10 returned. A run is rejected by an assume that '
+        'is false, a filter that finds no value or a set that finds too few '
+        'distinct elements, and overruns where it makes more choices than one '
+        'run may.\n'
+        '\n'
+        'Seed 7. Repeat this search with `settings: Settings(seed: 7)`.',
+      );
+    });
+
+    test('follow a failed outcome\'s case, one per paragraph, before its '
+        'seed', () {
+      final Threw run = _threw();
+      expect(
+        report(
+          Failed(
+            run.record,
+            run,
+            steps: 12,
+            time: const .new(milliseconds: 34),
+            end: .shrunk,
+            warnings: [
+              SlowProperty(perRun: const .new(seconds: 1), runs: 100),
+              MostlyInvalid(returned: 0, rejected: 1, overran: 0),
+            ],
+          ),
+          seed: 7,
+          settings: _settings,
+        ),
+        endsWith(
+          'It threw:\n'
+          '  Bad state: too big\n'
+          '\n'
+          'Warning: the property is slow. Its runs took 1.0 s each on '
+          'average, so a search of 100 runs takes about 100.0 s. A lower '
+          '`runs` setting makes it faster.\n'
+          '\n'
+          'Warning: most of the property\'s runs were invalid, 1 rejected and '
+          '0 overrun against 0 returned. A run is rejected by an assume that '
+          'is false, a filter that finds no value or a set that finds too few '
+          'distinct elements, and overruns where it makes more choices than '
+          'one run may.\n'
+          '\n'
+          'Seed 7. Repeat this search with `settings: Settings(seed: 7)`.',
+        ),
+      );
+    });
+
+    test('name a time under a millisecond in microseconds', () {
+      expect(
+        report(
+          GaveUp(
+            rejected: 1,
+            overran: 0,
+            warnings: [
+              SlowProperty(perRun: const .new(microseconds: 300), runs: 20000),
+            ],
+          ),
+          seed: 7,
+          settings: _settings,
+        ),
+        contains(
+          'Its runs took 300 µs each on average, so a search of 20000 '
+          'runs takes about 6.0 s.',
+        ),
+      );
+    });
+  });
+
   group('a failed outcome', () {
     test('whose step budget ran out says its case is the smallest found', () {
       expect(
@@ -162,6 +267,20 @@ void main() {
           'The property failed. Shrinking ran out of time after 10.0 s, in '
           '1 step, so its failing case is the smallest found within the '
           'budget:\n',
+        ),
+      );
+    });
+
+    test('that shrank in under a millisecond names its time in microseconds', () {
+      expect(
+        report(
+          _failed(_threw(), time: const .new(microseconds: 345)),
+          seed: 7,
+          settings: _settings,
+        ),
+        startsWith(
+          'The property failed. Its smallest failing case, shrunk in 12 steps '
+          'over 345 µs:\n',
         ),
       );
     });

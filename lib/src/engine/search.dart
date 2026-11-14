@@ -16,6 +16,7 @@ import 'clock.dart';
 import 'outcome.dart';
 import 'run.dart';
 import 'shrink_end.dart';
+import 'warning.dart';
 
 /// Everything grit does for one property: its runs, its shrinking and its
 /// replays, ending in the property's outcome.
@@ -25,13 +26,18 @@ import 'shrink_end.dart';
 /// shrunk under the budget, and replayed again, and either replay that does
 /// not fail as the first failure did makes the outcome flaky.
 ///
+/// Generation is timed, and every outcome warns where the run count costs
+/// more than 5 s at its mean time per run, and where its runs were mostly
+/// rejected or overrun in a search that did not give up. No warning changes
+/// the verdict.
+///
 /// A failure is the same as another where its error has the same type and
 /// was thrown from the same frame, which [CallSite.failureOf] reads. A
 /// candidate that fails any other way is told to the shrinker as not
 /// failing.
 final class Search {
-  /// A search filling from [random] and timing shrinking by [clock], called
-  /// from [callSite].
+  /// A search filling from [random] and timing generation and shrinking by
+  /// [clock], called from [callSite].
   ///
   /// [runs] is how many runs must return for the property to pass, [limit]
   /// the most choices one run may make, and [invalid] how many runs rejected
@@ -63,6 +69,10 @@ final class Search {
   /// first run on.
   static const int _earlyShare = 5;
 
+  /// The time past which the run count, at generation's mean time per run,
+  /// warns the property slow.
+  static const Duration _slowAfter = .new(seconds: 5);
+
   final Clock _clock;
   final Random _random;
   final CallSite _callSite;
@@ -71,7 +81,8 @@ final class Search {
   final int _invalid;
   final Budget _budget;
 
-  /// The outcome of searching [body].
+  /// The outcome of searching [body], with the warnings its generation
+  /// earned.
   Future<Outcome> run(Body body) async {
     // An early run fills a choice at each edge it names in turn, the first
     // times it is made, so every one is filled. Its other choices fill
@@ -80,9 +91,12 @@ final class Search {
     // draws its ends, in the first few runs.
     final int early = (_runs + _earlyShare - 1) ~/ _earlyShare;
     final Sweep sweep = .new();
+    final Duration start = _clock.elapsed;
     int returned = 0;
     int rejected = 0;
     int overran = 0;
+    Threw? failed;
+    generation:
     for (int made = 0; returned < _runs; made++) {
       final bool isEarly = made < early;
       final ChoiceSource source = .random(
@@ -101,28 +115,55 @@ final class Search {
         case Overran():
           overran++;
         case final Threw first:
-          return _confirm(body, first);
+          failed = first;
+          break generation;
       }
-      if (rejected + overran >= _invalid) {
-        return GaveUp(rejected: rejected, overran: overran);
-      }
+      if (rejected + overran >= _invalid) break;
     }
-    return Passed(runs: returned);
+    final Duration time = _clock.elapsed - start;
+    final int made = returned + rejected + overran + (failed == null ? 0 : 1);
+    final bool gaveUp = failed == null && returned < _runs;
+    final List<Warning> warnings = [
+      // The mean time per run times the run count, compared in whole
+      // microseconds, so no rounding of the mean moves the threshold.
+      if (time.inMicroseconds * _runs > _slowAfter.inMicroseconds * made)
+        SlowProperty(perRun: time ~/ made, runs: _runs),
+      if (!gaveUp && rejected + overran > returned)
+        MostlyInvalid(returned: returned, rejected: rejected, overran: overran),
+    ];
+    if (failed != null) return _confirm(body, failed, warnings);
+    if (gaveUp) {
+      return GaveUp(rejected: rejected, overran: overran, warnings: warnings);
+    }
+    return Passed(runs: returned, warnings: warnings);
   }
 
-  /// The first replay of [first], then shrinking where it fails alike.
-  Future<Outcome> _confirm(Body body, Threw first) async {
+  /// The first replay of [first], then shrinking where it fails alike, the
+  /// outcome warning of [warnings].
+  Future<Outcome> _confirm(
+    Body body,
+    Threw first,
+    List<Warning> warnings,
+  ) async {
     final _Ran replay = await _replay(body, first.record);
-    if (!first.failedAlike(replay.run)) return Flaky(first, replay.run);
-    return _shrink(body, first, replay.spans);
+    if (!first.failedAlike(replay.run)) {
+      return Flaky(first, replay.run, warnings: warnings);
+    }
+    return _shrink(body, first, replay.spans, warnings);
   }
 
   /// Shrinking from [first], whose run made [spans], under the budget, then
-  /// the final replay of the smallest failing sequence.
+  /// the final replay of the smallest failing sequence, the outcome warning
+  /// of [warnings].
   ///
   /// The smallest failing sequence is the choices its run read, which may be
   /// fewer than the candidate it ran on holds.
-  Future<Outcome> _shrink(Body body, Threw first, List<Span> spans) async {
+  Future<Outcome> _shrink(
+    Body body,
+    Threw first,
+    List<Span> spans,
+    List<Warning> warnings,
+  ) async {
     final Duration start = _clock.elapsed;
     final _Shrunk shrunk = await _shrunk(body, first, spans, start);
     final Duration time = _clock.elapsed - start;
@@ -135,11 +176,12 @@ final class Search {
         steps: shrunk.steps,
         time: time,
         end: shrunk.end,
+        warnings: warnings,
       ),
       Threw() ||
       Returned() ||
       Rejected() ||
-      Overran() => Flaky(shrunk.smallest, replay),
+      Overran() => Flaky(shrunk.smallest, replay, warnings: warnings),
     };
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:grit/src/api/property_run.dart';
 import 'package:grit/src/api/settings.dart';
 import 'package:grit/src/engine/body.dart';
@@ -24,6 +26,26 @@ PropertyRun _run([Settings? settings, Clock? clock]) => .new(
   clock: clock ?? FakeClock(),
   seed: 0,
 );
+
+/// What [check] throws, or null where it returns, with each line it
+/// printed.
+Future<((Object, StackTrace)?, List<String>)> _printed(
+  Future<void> Function() check,
+) async {
+  final List<String> printed = [];
+  final (Object, StackTrace)? thrown = await runZoned(
+    () => _thrown(check()),
+    zoneSpecification: .new(print: (_, _, _, String line) => printed.add(line)),
+  );
+  return (thrown, printed);
+}
+
+/// A body whose first [rejecting] runs are rejected, and whose every run
+/// past them returns.
+Body _rejectingFirst(int rejecting) {
+  int runs = 0;
+  return (Draw draw) => draw.assume(runs++ >= rejecting);
+}
 
 /// What [check] throws, or null where it returns.
 Future<(Object, StackTrace)?> _thrown(Future<void> check) async {
@@ -179,8 +201,47 @@ void main() {
   });
 
   group('a check', () {
-    test('of a passed outcome returns', () async {
-      expect(await _thrown(_run().check((Draw draw) {})), isNull);
+    test('of a passed outcome returns, printing nothing', () async {
+      final ((Object, StackTrace)? thrown, List<String> printed) =
+          await _printed(() => _run().check((Draw draw) {}));
+      expect(thrown, isNull);
+      expect(printed, isEmpty);
+    });
+
+    test('of a passed outcome prints each of its warnings under its test, '
+        'and returns', () async {
+      final PropertyRun run = _run(
+        .new(runs: 2),
+        FakeClock([const .new(minutes: 1)]),
+      );
+      final ((Object, StackTrace)? thrown, List<String> printed) =
+          await _printed(() => run.check(_rejectingFirst(3)));
+      expect(thrown, isNull);
+      expect(printed, [
+        'Warning: the property is slow. Its runs took 12.0 s each on average, '
+            'so a search of 2 runs takes about 24.0 s. A lower `runs` setting '
+            'makes it faster.',
+        startsWith(
+          'Warning: most of the property\'s runs were invalid, 3 rejected and '
+          '0 overrun against 2 returned.',
+        ),
+      ]);
+    });
+
+    test('of a failed outcome carries its warnings in its report, printing '
+        'none', () async {
+      final PropertyRun run = _run(null, FakeClock([const .new(minutes: 1)]));
+      final ((Object, StackTrace)? thrown, List<String> printed) =
+          await _printed(() => run.check(failsOnTrue));
+      expect(printed, isEmpty);
+      expect(
+        thrown?.$1,
+        isA<TestFailure>().having(
+          (TestFailure failure) => failure.message,
+          'message',
+          contains('\n\nWarning: the property is slow. '),
+        ),
+      );
     });
 
     test(

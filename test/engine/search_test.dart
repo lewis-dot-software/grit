@@ -576,6 +576,102 @@ _ByRun _expectFlakyUnlessReplayed(
   return replayed ? .flakyOnFinalReplay : .flakyOnFirstReplay;
 }
 
+/// How one run of a [_Scheduled] body ends.
+enum _Ending { returns, rejects, overruns, throws }
+
+/// A body whose runs end in turn as [endings] says, each run past their end
+/// returning, and which overruns by drawing a choice, so a search of limit 0
+/// overruns it.
+final class _Scheduled {
+  _Scheduled(this.endings);
+
+  final List<_Ending> endings;
+  int _calls = 0;
+
+  void call(Draw draw) {
+    final _Ending ending = _calls < endings.length ? endings[_calls] : .returns;
+    _calls++;
+    switch (ending) {
+      case .returns:
+        return;
+      case .rejects:
+        draw.assume(false);
+      case .overruns:
+        draw(_choice);
+      case .throws:
+        throw StateError('scheduled');
+    }
+  }
+
+  /// How the runs of the search that ended on [outcome] ended while it
+  /// generated: up to the first throw where the search found a failure,
+  /// since each replay comes after, and every run otherwise.
+  List<_Ending> generated(Outcome outcome) {
+    final List<_Ending> ran = [
+      for (int run = 0; run < _calls; run++)
+        run < endings.length ? endings[run] : .returns,
+    ];
+    return switch (outcome) {
+      Failed() || Flaky() => ran.sublist(0, ran.indexOf(.throws) + 1),
+      Passed() || GaveUp() => ran,
+    };
+  }
+
+  @override
+  String toString() => 'ending as $endings';
+}
+
+/// The search of a fresh [_Scheduled] body of [endings], over [runs] runs
+/// that gives up at [invalid], timed by [clock], with the body it searched.
+Future<(_Scheduled, Outcome)> _scheduled(
+  List<_Ending> endings, {
+  required int runs,
+  required int invalid,
+  Clock? clock,
+}) async {
+  final _Scheduled body = .new(endings);
+  final Outcome outcome = await _search(
+    runs: runs,
+    limit: 0,
+    invalid: invalid,
+    clock: clock,
+  ).run(body.call);
+  return (body, outcome);
+}
+
+/// Calls [check] on every small schedule of run endings, with every small
+/// run count and invalid limit.
+Future<void> _eachSchedule(
+  Future<void> Function(List<_Ending> endings, int runs, int invalid) check,
+) async {
+  for (final ChoiceSequence schedule in everySequence(length: 4, bound: 3)) {
+    final List<_Ending> endings = [
+      for (final Choice choice in schedule.choices) .values[choice.value],
+    ];
+    for (int runs = 1; runs <= 3; runs++) {
+      for (int invalid = 1; invalid <= 3; invalid++) {
+        await check(endings, runs, invalid);
+      }
+    }
+  }
+}
+
+/// The clocks the verdict checks tick by, each moving by every small
+/// sequence of ticks minutes long, so a search of any outcome warns slow on
+/// some.
+final List<List<Duration>> _slowClocks = [
+  for (final ChoiceSequence ticks in everySequence(length: 2, bound: 2))
+    [for (final Choice c in ticks.choices) .new(minutes: c.value)],
+];
+
+/// The slow-property warning of [outcome], or null where it has none.
+SlowProperty? _slowOf(Outcome outcome) =>
+    outcome.warnings.whereType<SlowProperty>().firstOrNull;
+
+/// The mostly-invalid warning of [outcome], or null where it has none.
+MostlyInvalid? _invalidOf(Outcome outcome) =>
+    outcome.warnings.whereType<MostlyInvalid>().firstOrNull;
+
 void main() {
   group('an outcome', () {
     test('is passed, with its run count, where every run returns', () async {
@@ -778,6 +874,176 @@ void main() {
         );
       },
     );
+  });
+
+  group('the warnings', () {
+    test('are none where generation is fast and its runs return', () async {
+      final Outcome outcome = await _search().run((Draw draw) {
+        draw(_choice);
+      });
+      expect(outcome.warnings, isEmpty);
+    });
+
+    test('warn slow, naming the time per run, where the run count passes 5 s '
+        'at it', () async {
+      // Generation reads the clock at its start and its end, so it takes one
+      // tick over its 10 runs.
+      final Outcome outcome = await _search(
+        runs: 10,
+        clock: FakeClock([const .new(seconds: 6)]),
+      ).run((Draw draw) {});
+      expect(outcome, isA<Passed>());
+      expect(outcome.warnings, [
+        isA<SlowProperty>()
+            .having(
+              (w) => w.perRun,
+              'perRun',
+              const Duration(milliseconds: 600),
+            )
+            .having((w) => w.runs, 'runs', 10),
+      ]);
+    });
+
+    test('warn of mostly invalid runs, counting each kind, in a search that '
+        'passed', () async {
+      final (_, Outcome outcome) = await _scheduled(
+        [.rejects, .overruns, .rejects],
+        runs: 2,
+        invalid: 10,
+      );
+      expect(outcome, isA<Passed>());
+      expect(outcome.warnings, [
+        isA<MostlyInvalid>()
+            .having((w) => w.returned, 'returned', 2)
+            .having((w) => w.rejected, 'rejected', 2)
+            .having((w) => w.overran, 'overran', 1),
+      ]);
+    });
+
+    test('are carried on a failed and a flaky outcome, and a given-up one '
+        'warns slow alone', () async {
+      final FakeClock slow = FakeClock([const .new(minutes: 1)]);
+      int calls = 0;
+      final Outcome failed = await _search(limit: 0, clock: slow).run((
+        Draw draw,
+      ) {
+        if (calls++ == 0) draw.assume(false);
+        throw StateError('always');
+      });
+      final (_, Outcome flaky) = await _scheduled(
+        [.rejects, .throws],
+        runs: 1,
+        invalid: 10,
+        clock: FakeClock([const .new(minutes: 1)]),
+      );
+      final (_, Outcome gaveUp) = await _scheduled(
+        [.rejects],
+        runs: 1,
+        invalid: 1,
+        clock: FakeClock([const .new(minutes: 1)]),
+      );
+      for (final Outcome outcome in [failed, flaky]) {
+        expect(outcome.warnings, [
+          isA<SlowProperty>(),
+          isA<MostlyInvalid>()
+              .having((w) => w.returned, 'returned', 0)
+              .having((w) => w.rejected, 'rejected', 1),
+        ]);
+      }
+      expect(failed, isA<Failed>());
+      expect(flaky, isA<Flaky>());
+      expect(gaveUp, isA<GaveUp>());
+      expect(gaveUp.warnings, [isA<SlowProperty>()]);
+    });
+  });
+
+  group('over every small schedule of run endings', () {
+    test('A property is warned slow exactly where its runs\' mean time times '
+        'the run count passes 5 s.', () async {
+      int slow = 0;
+      int fast = 0;
+      await _eachSchedule((List<_Ending> endings, int runs, int invalid) async {
+        final (_Scheduled body, Outcome outcome) = await _scheduled(
+          endings,
+          runs: runs,
+          invalid: invalid,
+        );
+        final int made = body.generated(outcome).length;
+        // Generation reads the clock at its start and its end, so it takes
+        // one tick, and the threshold falls between two ticks a microsecond
+        // apart.
+        final int edge = 5000000 * made ~/ runs;
+        for (final int micros in [edge - 1, edge, edge + 1]) {
+          final (_, Outcome timed) = await _scheduled(
+            endings,
+            runs: runs,
+            invalid: invalid,
+            clock: FakeClock([.new(microseconds: micros)]),
+          );
+          final String reason =
+              '$body, $runs runs, giving up at $invalid, $micros µs';
+          if (micros * runs > 5000000 * made) {
+            slow++;
+            expect(
+              _slowOf(timed),
+              isA<SlowProperty>()
+                  .having(
+                    (w) => w.perRun,
+                    'perRun',
+                    Duration(microseconds: micros ~/ made),
+                  )
+                  .having((w) => w.runs, 'runs', runs),
+              reason: reason,
+            );
+          } else {
+            fast++;
+            expect(_slowOf(timed), isNull, reason: reason);
+          }
+        }
+      });
+      expect(slow, greaterThan(0));
+      expect(fast, greaterThan(0));
+    });
+
+    test('A search is warned of its invalid runs exactly where they outnumber '
+        'those that returned and it did not give up.', () async {
+      int warned = 0;
+      int outnumberedButGaveUp = 0;
+      int unwarned = 0;
+      await _eachSchedule((List<_Ending> endings, int runs, int invalid) async {
+        final (_Scheduled body, Outcome outcome) = await _scheduled(
+          endings,
+          runs: runs,
+          invalid: invalid,
+        );
+        final List<_Ending> generated = body.generated(outcome);
+        int count(_Ending ending) =>
+            generated.where((_Ending ran) => ran == ending).length;
+        final int returned = count(.returns);
+        final int rejected = count(.rejects);
+        final int overran = count(.overruns);
+        final bool outnumbered = rejected + overran > returned;
+        final String reason = '$body, $runs runs, giving up at $invalid';
+        if (outnumbered && outcome is! GaveUp) {
+          warned++;
+          expect(
+            _invalidOf(outcome),
+            isA<MostlyInvalid>()
+                .having((w) => w.returned, 'returned', returned)
+                .having((w) => w.rejected, 'rejected', rejected)
+                .having((w) => w.overran, 'overran', overran),
+            reason: reason,
+          );
+        } else {
+          if (outnumbered) outnumberedButGaveUp++;
+          unwarned++;
+          expect(_invalidOf(outcome), isNull, reason: reason);
+        }
+      });
+      expect(warned, greaterThan(0));
+      expect(outnumberedButGaveUp, greaterThan(0));
+      expect(unwarned, greaterThan(outnumberedButGaveUp));
+    });
   });
 
   group('a run', () {
@@ -1084,6 +1350,32 @@ void main() {
       },
     );
 
+    test('A warning never changes a verdict: one seed passes or fails alike '
+        'whatever the clock reads.', () async {
+      final Map<(String, int), Outcome> frozen = {};
+      await _eachSearch((_Body body, int seed, Outcome outcome) async {
+        frozen[('$body', seed)] = outcome;
+      });
+      // The verdicts a slow warning rode on, so the check reaches each.
+      final Set<Type> warned = {};
+      for (final List<Duration> ticks in _slowClocks) {
+        await _eachSearch(clock: () => FakeClock(ticks), (
+          _Body body,
+          int seed,
+          Outcome outcome,
+        ) async {
+          if (_slowOf(outcome) != null) warned.add(outcome.runtimeType);
+          _expectSameVerdict(
+            outcome,
+            frozen[('$body', seed)]!,
+            reason: '$body from $seed, ticking $ticks',
+          );
+        });
+      }
+      expect(frozen.values.map(_slowOf), everyElement(isNull));
+      expect(warned, containsAll([Passed, Failed, GaveUp]));
+    });
+
     test('A body that fails once and not on replay ends flaky, never '
         'failed.', () async {
       // Each body fails as its run's place in every small sequence of ways
@@ -1326,6 +1618,37 @@ void main() {
         expect(verdicts, containsAll([Passed, Failed, GaveUp]));
       },
     );
+
+    test('A warning never changes a verdict: one seed passes or fails alike '
+        'whatever the clock reads.', () async {
+      final Set<Type> warned = {};
+      await forAll((Draw draw) async {
+        final _Body body = draw(_anyBody, label: 'body');
+        final int seed = draw(_anySeed, label: 'seed');
+        final List<Duration> ticks = draw(
+          .list(
+            .integer(
+              min: 0,
+              max: 3,
+            ).map((int minutes) => .new(minutes: minutes)),
+          ),
+          label: 'ticks',
+        );
+        final Outcome frozen = await _search(
+          seed: seed,
+          limit: _drawnLimit,
+        ).run(body.call);
+        final Outcome ticking = await _search(
+          seed: seed,
+          clock: FakeClock(ticks),
+          limit: _drawnLimit,
+        ).run(body.afresh.call);
+        if (_slowOf(ticking) != null) warned.add(ticking.runtimeType);
+        expect(_slowOf(frozen), isNull);
+        _expectSameVerdict(ticking, frozen);
+      });
+      expect(warned, containsAll([Passed, Failed, GaveUp]));
+    });
 
     test('A body that fails once and not on replay ends flaky, never '
         'failed.', () async {
