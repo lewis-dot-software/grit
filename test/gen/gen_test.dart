@@ -58,6 +58,9 @@ final Map<String, Gen<Object?>> _generators = {
   'one of a few generators': .oneOf([.boolean(), .integer(min: 0, max: 2)]),
   'a set': .set(.integer(min: 0, max: 2)),
   'a bounded set': .set(.boolean(), minSize: 1, maxSize: 2),
+  // NaN equals nothing, so a float drawing it would never draw alike.
+  'a float': .float(nan: false),
+  'a bounded float': .float(min: -1.5, max: 2.5),
   'a mapped generator': .integer(min: 0, max: 3).map((int i) => i * 10),
   'a filtered generator': .integer(min: 0, max: 3).filter((int i) => i.isEven),
   'a built generator': .build((Draw draw) {
@@ -69,8 +72,8 @@ final Map<String, Gen<Object?>> _generators = {
 void main() {
   group('every generator', () {
     test('Each of `.integer`, `.boolean`, `.list`, `.element`, `.string`, '
-        '`.oneOf` and `.set` draws its documented simplest value from '
-        'all-zero choices.', () {
+        '`.oneOf`, `.set` and `.float` draws its documented simplest value '
+        'from all-zero choices.', () {
       final ChoiceSequence zeros = sequenceOf(.filled(64, 0));
       final List<(String, Gen<Object?>, Object?)> cases = [
         for (int min = -4; min <= 4; min++)
@@ -131,6 +134,15 @@ void main() {
           'a set with a maximum size of 0',
           .set(.boolean(), maxSize: 0),
           <bool>{},
+        ),
+        ('a float', .float(), 0.0),
+        ('a float above 0', .float(min: 0.5, max: 3.25), 1.0),
+        ('a float of fractions alone', .float(min: 0.25, max: 0.75), 0.25),
+        ('a float below 0', .float(min: -3.25, max: -0.5), -1.0),
+        (
+          'a float of infinities alone',
+          .float(min: .infinity),
+          double.infinity,
         ),
       ];
       for (final (String name, Gen<Object?> gen, Object? simplest) in cases) {
@@ -371,8 +383,8 @@ void main() {
 
   group('on grit, over larger inputs', () {
     property('Each of `.integer`, `.boolean`, `.list`, `.element`, '
-        '`.string`, `.oneOf` and `.set` draws its documented simplest value '
-        'from all-zero choices.', (Draw draw) {
+        '`.string`, `.oneOf`, `.set` and `.float` draws its documented '
+        'simplest value from all-zero choices.', (Draw draw) {
       final Simple simple = draw(simpleGenerator, label: 'generator');
       final Drawing<Object?> drawing = drawFrom(
         simple.generator.gen,

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../choice/bound.dart';
 import '../choice/choice.dart';
 import '../choice/choice_source.dart';
@@ -10,6 +12,8 @@ part 'collection.dart';
 part 'draw.dart';
 part 'drawn.dart';
 part 'element.dart';
+part 'float.dart';
+part 'float_part.dart';
 part 'integer.dart';
 part 'list.dart';
 part 'one_of.dart';
@@ -46,6 +50,27 @@ final class Gen<T> {
   /// most [Choice.largest] above [min].
   static Gen<int> integer({int min = -0x80000000, int max = 0x7FFFFFFF}) =>
       _integer(min: min, max: max);
+
+  /// A double from [min] to [max], each inclusive, NaN among them where
+  /// [nan] holds, and an infinity at a bound only where [infinite] holds.
+  ///
+  /// Bounds order -0.0 below 0.0, so a range from 0.0 holds no -0.0. [nan]
+  /// holds by default where [min] is negative infinity and [max] positive
+  /// infinity. Each NaN drawn is
+  /// [double.nan].
+  ///
+  /// Of two doubles in range, the simpler is the positive before the
+  /// negative, then a whole number before a fraction, then the smaller
+  /// magnitude before the larger, with the infinities and NaN after every
+  /// finite double. Its simplest value is the simplest in range, 0.0 by
+  /// default. Neither bound is NaN, [min] is never above [max], and the
+  /// range holds a double the flags allow.
+  static Gen<double> float({
+    double min = .negativeInfinity,
+    double max = .infinity,
+    bool? nan,
+    bool infinite = true,
+  }) => _float(min: min, max: max, nan: nan, infinite: infinite);
 
   /// A boolean, whose simplest value is false.
   static Gen<bool> boolean() => _boolean;

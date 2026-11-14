@@ -5,7 +5,7 @@ import 'generator.dart';
 import 'predicate.dart';
 
 /// A generator of `.integer`, `.boolean`, `.element`, `.list`, `.string`,
-/// `.oneOf` or `.set`, with the simplest value its docs give it.
+/// `.oneOf`, `.set` or `.float`, with the simplest value its docs give it.
 typedef Simple = ({Generator generator, Object? simplest});
 
 /// The largest magnitude a range's ends reach at each of its scales, the
@@ -22,14 +22,32 @@ final Gen<(int, int)> integerRange = .build((Draw draw) {
   return a <= b ? (a, b) : (b, a);
 });
 
+/// A float's range, with the simplest double in it.
+///
+/// - `min`: the minimum.
+/// - `max`: the maximum.
+/// - `simplest`: the simplest double from `min` to `max`.
+typedef _Float = ({double min, double max, double simplest});
+
+/// Ranges of a float, none drawing NaN, since NaN equals nothing a value is
+/// checked against.
+final List<_Float> _floats = [
+  (min: .negativeInfinity, max: .infinity, simplest: 0),
+  (min: 0.5, max: 3.25, simplest: 1),
+  (min: 0.25, max: 0.75, simplest: 0.25),
+  (min: -3.25, max: -0.5, simplest: -1),
+  (min: -0.0, max: -0.0, simplest: -0.0),
+  (min: .infinity, max: .infinity, simplest: .infinity),
+];
+
 /// The kinds of generator [simpleGenerator] draws.
-enum _Simple { integer, boolean, element, list, string, oneOf, set }
+enum _Simple { integer, boolean, element, list, string, oneOf, set, float }
 
 /// The kinds of [_Simple] built on other generators.
 const Set<_Simple> _nested = {.list, .oneOf, .set};
 
 /// A generator of `.integer`, `.boolean`, `.element`, `.list`, `.string`,
-/// `.oneOf` or `.set`, one built on others itself built on others at most
+/// `.oneOf`, `.set` or `.float`, one built on others itself built on others at most
 /// twice over.
 final Gen<Simple> simpleGenerator = _simple(2);
 
@@ -119,6 +137,17 @@ Gen<Simple> _simple(int depth) => .build((Draw draw) {
           .set(element.generator.gen, maxSize: maxSize),
         ),
         simplest: <Object?>{},
+      );
+    case .float:
+      final (:double min, :double max, :double simplest) = draw(
+        .element(_floats),
+      );
+      return (
+        generator: .new(
+          'a float from $min to $max',
+          .float(min: min, max: max, nan: false),
+        ),
+        simplest: simplest,
       );
   }
 });

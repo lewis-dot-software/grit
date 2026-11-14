@@ -197,11 +197,12 @@ The store's file I/O is synchronous, since async file I/O can deadlock inside a 
 
 ## Platform and packages
 
-The web would change three things:
+The web would change four things:
 
 - `dart:io`, which the layer rules keep to `api` and `store`.
 - A stack's form, read in `engine` alone.
 - A bound's width under dart2js, held in `choice`.
+- A double's 64 bits read as an integer, which a float's encoding in `gen` ranks by.
 
 So the web is a later cut of those parts and not a rewrite.
 
