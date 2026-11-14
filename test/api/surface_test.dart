@@ -32,7 +32,7 @@ Iterable<ClassMirror> get _exportedClasses sync* {
 /// Whether [name] passes [combinators]: shown by one where any shows, and
 /// hidden by none.
 ///
-/// The VM's mirrors give a `show` of several names as one combinator a name,
+/// The VM's mirrors give a `show` of several names as one combinator per name,
 /// so the names shown are the union of every `show`'s.
 bool _passes(List<CombinatorMirror> combinators, Symbol name) {
   final List<CombinatorMirror> shows = [

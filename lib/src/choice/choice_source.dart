@@ -17,7 +17,7 @@ sealed class ChoiceSource {
   ChoiceSource._();
 
   /// A source that fills each choice at random from [random], up to [limit]
-  /// choices a run.
+  /// choices per run.
   ///
   /// Where [sweep] is given, a choice that names edges is filled at the next
   /// one [sweep] gives it, whatever [near] and [edges] are.

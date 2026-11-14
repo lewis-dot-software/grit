@@ -51,7 +51,7 @@ flowchart LR
 
 A stored failure replays before generation starts. Where it fails, that failure stands as the first failure and the search goes straight to shrinking. A token passed to a property's `replay` setting replays that sequence alone, with no generation and no shrinking.
 
-The outcome is a sealed type, one subtype a row:
+The outcome is a sealed type, one subtype per row:
 
 | Outcome | Carries |
 |---|---|
@@ -105,7 +105,7 @@ Wall time is read in two places alone:
 
 Neither changes a verdict.
 
-Each run is timed. A property whose runs are slow enough that its run count costs more than the engine's threshold gets a warning on its outcome, naming its time a run so its owner can lower the count. `api` prints it.
+Each run is timed. A property whose runs are slow enough that its run count costs more than the engine's threshold gets a warning on its outcome, naming its time per run so its owner can lower the count. `api` prints it.
 
 ## The API
 
@@ -214,7 +214,7 @@ grit is one package. A Flutter package under `fixture/flutter/` resolves it besi
 
 ## Testing grit
 
-The shrinking challenge is a public set of shrinking problems, each with the smallest case known (jlink/shrinking-challenge on GitHub). It is a suite under `test/challenge/`, one file a challenge, each driving the engine under the default settings on fixed seeds, the fake clock and, once it stands, the in-memory store, and asserting the smallest sequence's value against the smallest known, so a fall in shrink quality fails the suite.
+The shrinking challenge is a public set of shrinking problems, each with the smallest case known (jlink/shrinking-challenge on GitHub). It is a suite under `test/challenge/`, one file per challenge, each driving the engine under the default settings on fixed seeds, the fake clock and, once it stands, the in-memory store, and asserting the smallest sequence's value against the smallest known, so a fall in shrink quality fails the suite.
 
 A challenge's search finds a failure from each of the seeds from 0 to 9, and is held to the smallest known from each.
 

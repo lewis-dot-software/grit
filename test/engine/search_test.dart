@@ -161,7 +161,7 @@ final class _Body {
   /// own rule and never from the search's reading of a stack, and
   /// [_Way.none] where its draws stop short.
   ///
-  /// Only a body that fails as its record alone says has one way a sequence.
+  /// Only a body that fails as its record alone says has one way per sequence.
   _Way wayOn(ChoiceSequence sequence) => ranOn(sequence).way;
 
   /// The way this body fails on [sequence]'s choices alone, as [wayOn]
@@ -378,11 +378,11 @@ Future<void> _eachSearch(
 }
 
 /// Checks the searches of [body] from [seed] under a bound of [bound] steps,
-/// and under as many milliseconds by a clock that moves one a read, against
+/// and under as many milliseconds by a clock that moves one per read, against
 /// [whole], its search with no bound, each reporting the choices its final
 /// replay read, and returns whether the step bound ran out.
 ///
-/// Each search runs a fresh copy of [body], at most [limit] choices a run.
+/// Each search runs a fresh copy of [body], at most [limit] choices per run.
 Future<bool> _expectBounded(
   _Body body, {
   required int seed,

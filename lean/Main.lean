@@ -1,7 +1,7 @@
 import Shrink.Step
 
 /-!
-The model's executable: one request a line on standard input, one answer a line on standard output.
+The model's executable: one request per line on standard input, one answer per line on standard output.
 
 A request is tab-separated: a first failure as its choices joined by commas, then the spans its run made, then each
 answer shrinking it is told, in order. A span is its start, width and depth joined by colons, and spans are joined by

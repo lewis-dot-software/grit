@@ -5,7 +5,7 @@ import 'package:grit/src/engine/clock.dart';
 ///
 /// A clock of no ticks never moves.
 final class FakeClock implements Clock {
-  /// The clock that moves by [ticks] in turn, one a read.
+  /// The clock that moves by [ticks] in turn, one per read.
   FakeClock([this._ticks = const []]);
 
   final List<Duration> _ticks;

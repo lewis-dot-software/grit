@@ -56,7 +56,7 @@ String _shrinking(
         'within the budget:',
 };
 
-/// What [run] drew, noted and threw, a part to a paragraph.
+/// What [run] drew, noted and threw, one part per paragraph.
 String _case(Threw run) => [
   if (run.draws.isEmpty)
     'It drew nothing.'
