@@ -4,9 +4,7 @@ enum Status {
   /// end or a random fill's limit.
   overrun,
 
-  /// The run ended as invalid: an assumption that was false, a filter that
-  /// gave up, a set short of its minimum size once its retries were spent,
-  /// or a fixed choice above the bound its generator asks for.
+  /// The run ended as invalid, so it neither passed nor failed.
   rejected,
 
   /// The body returned.

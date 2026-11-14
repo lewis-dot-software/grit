@@ -58,8 +58,7 @@ final class Gen<T> {
   ///
   /// Bounds order -0.0 below 0.0, so a range from 0.0 holds no -0.0. [nan]
   /// holds by default where [min] is negative infinity and [max] positive
-  /// infinity. Each NaN drawn is
-  /// [double.nan].
+  /// infinity. Each NaN drawn is [double.nan].
   ///
   /// Of two doubles in range, the simpler is the positive before the
   /// negative, then a whole number before a fraction, then the smaller

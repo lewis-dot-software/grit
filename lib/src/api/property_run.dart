@@ -61,7 +61,7 @@ final class PropertyRun {
     runs: _settings.runs,
     limit: _limit,
     invalid: _settings.runs * _invalidPerRun,
-    budget: (steps: _settings.shrinkSteps, time: _settings.shrinkTime),
+    budget: _settings.budget,
   ).run(body);
 
   /// Searches [body], and throws a [TestFailure] carrying the outcome's

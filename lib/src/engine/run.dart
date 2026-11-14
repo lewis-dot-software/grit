@@ -22,9 +22,7 @@ final class Returned extends Run {
   Returned(super.record, super.draws, super.notes) : super._();
 }
 
-/// A run ended as invalid: an assumption that was false, a filter that gave
-/// up, a set short of its minimum size once its retries were spent, or a
-/// fixed choice above the bound its generator asked for.
+/// A run ended as invalid, which neither passed nor failed.
 final class Rejected extends Run {
   /// The run rejected, having made [record].
   Rejected(super.record, super.draws, super.notes) : super._();

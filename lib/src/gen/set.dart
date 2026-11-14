@@ -3,9 +3,9 @@ part of 'gen.dart';
 /// A set of [element]'s distinct values, from [minSize] to [maxSize] in size.
 ///
 /// Each element sits behind a "one more" choice, and a draw that repeats an
-/// element the set holds is drawn again, up to [_tries] draws in all. Once those are
-/// spent the set ends where it stands, or rejects the run where it holds
-/// fewer than [minSize].
+/// element the set holds is drawn again, up to [_tries] draws in all. Once
+/// those are spent the set ends where it stands, or rejects the run where it
+/// holds fewer than [minSize].
 Gen<Set<E>> _set<E>(
   Gen<E> element, {
   required int minSize,

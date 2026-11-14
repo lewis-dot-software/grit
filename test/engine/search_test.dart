@@ -21,7 +21,7 @@ import '../support/small.dart';
 final CallSite _callSite = .of(.current);
 
 /// A budget no search here spends.
-const Budget _unbounded = (steps: 1 << 30, time: .new(days: 1));
+final Budget _unbounded = .new(steps: 1 << 30, time: .new(days: 1));
 
 /// The seeds the property checks search from.
 const int _seeds = 3;
@@ -35,7 +35,7 @@ Search _search({
   int runs = 20,
   int limit = 24,
   int invalid = 100,
-  Budget budget = _unbounded,
+  Budget? budget,
 }) => .new(
   clock: clock ?? FakeClock(),
   random: random ?? .new(seed),
@@ -43,7 +43,7 @@ Search _search({
   runs: runs,
   limit: limit,
   invalid: invalid,
-  budget: budget,
+  budget: budget ?? _unbounded,
 );
 
 /// A choice from 0 to 3, whose value is the choice.
@@ -381,7 +381,7 @@ const int _drawnLimit = 64;
 /// Each deterministic body's search from each seed, with the body after it.
 Future<void> _eachSearch(
   Future<void> Function(_Body body, int seed, Outcome outcome) check, {
-  Budget budget = _unbounded,
+  Budget? budget,
   Clock Function()? clock,
 }) async {
   for (final _Body Function() make in _deterministic) {
@@ -415,7 +415,7 @@ Future<bool> _expectBounded(
   final Failed byStep = await _search(
     seed: seed,
     limit: limit,
-    budget: (steps: bound, time: _unbounded.time),
+    budget: .new(steps: bound, time: _unbounded.time),
   ).run(stepped.call) as Failed;
   expect(byStep.steps, stepped.steps, reason: reason);
   expect(byStep.sequence, byStep.run.record, reason: reason);
@@ -438,7 +438,7 @@ Future<bool> _expectBounded(
     seed: seed,
     clock: FakeClock([const .new(milliseconds: 1)]),
     limit: limit,
-    budget: (steps: _unbounded.steps, time: time),
+    budget: .new(steps: _unbounded.steps, time: time),
   ).run(timed.call) as Failed;
   expect(byTime.steps, timed.steps, reason: '$reason, $time');
   expect(byTime.sequence, byTime.run.record, reason: '$reason, $time');
@@ -664,7 +664,7 @@ void main() {
         'the candidate it ran on held more', () async {
       final Failed failed = await _search(
         random: _fillsThreeThree,
-        budget: (steps: _tailedAt, time: _unbounded.time),
+        budget: .new(steps: _tailedAt, time: _unbounded.time),
       ).run(_readsSecondUnlessZero()) as Failed;
       expect(failed.end, ShrinkEnd.steps);
       expect(failed.sequence, sequenceOf([0]));
@@ -698,7 +698,7 @@ void main() {
         'final replay does not fail as the first run did', () async {
       final Flaky flaky = await _search(
         random: _fillsThreeThree,
-        budget: (steps: _tailedAt, time: _unbounded.time),
+        budget: .new(steps: _tailedAt, time: _unbounded.time),
       ).run(_readsSecondUnlessZero(flakesOn: _tailedAt + 3)) as Flaky;
       expect(flaky.failed.record, sequenceOf([0]));
       expect(flaky.replay, isA<Overran>());
@@ -709,7 +709,7 @@ void main() {
       'names the step bound where it ran out, at the first failure',
       () async {
         final Outcome outcome =
-            await _search(budget: (steps: 0, time: _unbounded.time))
+            await _search(budget: .new(steps: 0, time: _unbounded.time))
                 .run((Draw draw) {
                   if (draw(.integer(min: 0, max: 100)) >= 10) {
                     throw StateError('large');
@@ -728,12 +728,13 @@ void main() {
       'names the time bound where it ran out, at the first failure',
       () async {
         final Outcome outcome =
-            await _search(budget: (steps: _unbounded.steps, time: .zero))
-                .run((Draw draw) {
-                  if (draw(.integer(min: 0, max: 100)) >= 10) {
-                    throw StateError('large');
-                  }
-                });
+            await _search(
+              budget: .new(steps: _unbounded.steps, time: .zero),
+            ).run((Draw draw) {
+              if (draw(.integer(min: 0, max: 100)) >= 10) {
+                throw StateError('large');
+              }
+            });
         expect(
           outcome,
           isA<Failed>()
@@ -1015,7 +1016,7 @@ void main() {
             [for (final c in ticks.choices) .new(milliseconds: c.value)],
         ];
         final Map<(String, int), Outcome> frozen = {};
-        const Budget budget = (steps: 1 << 30, time: .new(milliseconds: 2));
+        final Budget budget = .new(steps: 1 << 30, time: .new(milliseconds: 2));
         await _eachSearch(budget: budget, (
           _Body body,
           int seed,
@@ -1125,11 +1126,19 @@ void main() {
         () => _search(runs: -1),
         () => _search(limit: -1),
         () => _search(invalid: 0),
-        () => _search(budget: (steps: -1, time: .zero)),
-        () => _search(budget: (steps: 0, time: const .new(microseconds: -1))),
       ]) {
         expect(make, throwsRangeError);
       }
+    });
+
+    test('a budget of negative steps or time is thrown', () {
+      for (final Budget Function() make in [
+        () => .new(steps: -1, time: .zero),
+        () => .new(steps: 0, time: const .new(microseconds: -1)),
+      ]) {
+        expect(make, throwsRangeError);
+      }
+      expect(Budget(steps: 0, time: .zero).time, Duration.zero);
     });
   });
 
@@ -1253,7 +1262,7 @@ void main() {
             ),
             label: 'ticks',
           );
-          final Budget budget = (
+          final Budget budget = .new(
             steps: _unbounded.steps,
             time: .new(
               milliseconds: draw(.integer(min: 0, max: 8), label: 'time'),

@@ -2,7 +2,7 @@ import Shrink.Pass
 
 /-!
 The step function: a state of shrinking proposes a candidate and is told whether its run failed as the first failure
-did, and where it did, the spans the run made, as the Dart's `Shrink` steps.
+did, and where it did, the spans the run made.
 -/
 
 namespace Grit

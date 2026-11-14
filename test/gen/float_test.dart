@@ -450,7 +450,7 @@ void main() {
         runs: 100,
         limit: 24,
         invalid: 100,
-        budget: (steps: 0, time: .zero),
+        budget: .new(steps: 0, time: .zero),
       ).run((Draw draw) {
         final double x = draw(.float());
         if (run++ < 20) early.add(x);

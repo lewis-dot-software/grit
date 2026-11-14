@@ -8,6 +8,6 @@ import Shrink.Ending
 import Shrink.Failing
 
 /-!
-A model of grit's shrinker, the step function the Dart is tested against, and its properties proved of it, each beside
-an obviously wrong step function shown to fail it.
+A model of grit's shrinker, its step function and passes, and its properties proved of it, each beside an obviously
+wrong step function shown to fail it.
 -/

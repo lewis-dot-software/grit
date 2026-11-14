@@ -47,8 +47,8 @@ enum _Simple { integer, boolean, element, list, string, oneOf, set, float }
 const Set<_Simple> _nested = {.list, .oneOf, .set};
 
 /// A generator of `.integer`, `.boolean`, `.element`, `.list`, `.string`,
-/// `.oneOf`, `.set` or `.float`, one built on others itself built on others at most
-/// twice over.
+/// `.oneOf`, `.set` or `.float`, one built on others itself built on others
+/// at most twice over.
 final Gen<Simple> simpleGenerator = _simple(2);
 
 Gen<Simple> _simple(int depth) => .build((Draw draw) {

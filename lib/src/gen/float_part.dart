@@ -13,7 +13,7 @@ sealed class _FloatPart {
   bool get isNamed;
 
   /// The double [choice] stands for.
-  double at(int choice);
+  double at(Choice choice);
 }
 
 /// One double alone: an infinity or NaN.
@@ -22,11 +22,8 @@ final class _Only extends _FloatPart {
 
   final double _value;
 
-  /// The bound of a choice that can only be 0.
-  static final Bound _zero = .new(0);
-
   @override
-  Bound get bound => _zero;
+  Bound get bound => .zero;
 
   @override
   List<Choice> get edges => const [];
@@ -35,11 +32,11 @@ final class _Only extends _FloatPart {
   bool get isNamed => true;
 
   @override
-  double at(int choice) => _value;
+  double at(Choice choice) => _value;
 }
 
-/// The finite doubles of one sign whose magnitudes lie in a range: the whole numbers among them first, then the fractions, each
-/// by magnitude.
+/// The finite doubles of one sign whose magnitudes lie in a range: the whole
+/// numbers among them first, then the fractions, each by magnitude.
 ///
 /// Doubles of one sign order by magnitude as their bits do, so the whole
 /// numbers and the fractions of a range each count on from the first of
@@ -54,7 +51,7 @@ final class _Magnitudes extends _FloatPart {
     edges = [
       if (isNamed) .new(0),
       for (final double magnitude in _namedMagnitudes)
-        if (low <= magnitude && magnitude <= high) .new(_choiceOf(magnitude)),
+        if (low <= magnitude && magnitude <= high) _choiceOf(magnitude),
     ];
   }
 
@@ -104,17 +101,20 @@ final class _Magnitudes extends _FloatPart {
   bool get isNamed => _negative && _firstWhole == 0;
 
   @override
-  double at(int choice) {
-    final double magnitude = choice < _wholes
-        ? _wholeAt(_firstWhole + choice)
-        : _fractionAt(_firstFraction + choice - _wholes);
+  double at(Choice choice) {
+    final int rank = choice.value;
+    final double magnitude = rank < _wholes
+        ? _wholeAt(_firstWhole + rank)
+        : _fractionAt(_firstFraction + rank - _wholes);
     return _negative ? -magnitude : magnitude;
   }
 
   /// The choice of [magnitude], which lies in the range.
-  int _choiceOf(double magnitude) => _isWhole(magnitude)
-      ? _wholesBelow(magnitude) - _firstWhole
-      : _wholes + _fractionsBelow(magnitude) - _firstFraction;
+  Choice _choiceOf(double magnitude) => .new(
+    _isWhole(magnitude)
+        ? _wholesBelow(magnitude) - _firstWhole
+        : _wholes + _fractionsBelow(magnitude) - _firstFraction,
+  );
 
   /// 2 to the 53, past which every double is a whole number and some whole
   /// numbers are no double.

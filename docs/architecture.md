@@ -71,7 +71,7 @@ The engine decides what counts as the same failure: the same error type, thrown 
 Why shrinking always ends:
 
 - The shrinker accepts a candidate only where it is smaller than the current sequence and failed as the first did, so every accepted step descends shortlex.
-- Shortlex over sequences no longer than the first failure, each choice within its bound, is finite, so the accepted steps are finitely many.
+- Shortlex has no endless descent, though a choice is any natural number, so the accepted steps are finitely many.
 - Each pass proposes finitely many candidates from one sequence, and the passes are finitely many.
 - The step function ends on a round of every pass that accepts nothing.
 
@@ -85,7 +85,7 @@ A pass is a function from the current sequence to its candidates, and the step f
 - Lowering a choice by binary search, over the pairs of choices an integer's zigzag puts at one distance, so a value lowers on either side of the one it shrinks towards.
 - Lowering two choices by the same amount, so two values tied to each other fall together.
 - Sorting a span, and swapping two.
-- Swapping two sibling draws' spans, two with the same draw around both, so two parts of a value change places whatever their widths.
+- Swapping two sibling draws' spans, two with the same draw around both or two the property's body made, so two parts of a value change places whatever their widths.
 - Moving value from one choice to another.
 - Deleting a span just before two choices, both lowered by one, since those may be indices that count the elements before them.
 - Lowering a choice, with a later 0 set to the choice after it, so an empty branch takes the branch the next draw took.
@@ -122,7 +122,7 @@ property('sorting twice is sorting once', (draw) {
 
 | Entry | Is |
 |---|---|
-| `property` | A test declared with no timeout, taking `test`'s other options |
+| `property` | A test declared with no timeout, taking `test`'s `testOn`, `skip`, `tags`, `onPlatform` and `retry` |
 | `forAll` | A search inside a test that stands, such as a `testWidgets`, bounded by that test's own timeout |
 | `runProperty` | A search returning its outcome, with no test failed |
 | `Draw.call` | A value drawn from a generator, with an optional label the report prints |
@@ -210,11 +210,11 @@ The web would change four things:
 
 So the web is a later cut of those parts and not a rewrite.
 
-grit is one package. A Flutter package under `fixture/flutter/` resolves it beside `flutter_test` and runs it inside a `testWidgets`, since `flutter_test` pins the `test_api` that grit's `test` must match. A Lean package under `lean/` models the step function and proves the proof's statements, which `CLAUDE.md`'s intent holds, and a grit property ties the model to the Dart code ([proofs.md](proofs.md)).
+grit is one package. A Flutter package under `fixture/flutter/` resolves it beside `flutter_test` and runs it inside a `testWidgets`, since `flutter_test` pins the `test_api` that grit's `test` must match. A Lean package under `lean/` models the step function and proves the statements [proofs.md](proofs.md) names, and a grit property ties the model to the Dart code.
 
 ## Testing grit
 
-The shrinking challenge is a public set of shrinking problems, each with the smallest case known (jlink/shrinking-challenge on GitHub). It is a suite under `test/challenge/`, one file per challenge, each driving the engine under the default settings on fixed seeds, the fake clock and, once it stands, the in-memory store, and asserting the smallest sequence's value against the smallest known, so a fall in shrink quality fails the suite.
+The shrinking challenge is a public set of shrinking problems, each with the smallest case known (jlink/shrinking-challenge on GitHub). It is a suite under `test/challenge/`, one file per challenge and, for each property it holds, a group of one test per seed, each driving the engine under the default settings on fixed seeds, the fake clock and, once it stands, the in-memory store, and asserting the smallest sequence's value against the smallest known, so a fall in shrink quality fails the suite.
 
 A challenge's search finds a failure from each of the seeds from 0 to 9, and is held to the smallest known from each.
 

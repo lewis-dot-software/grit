@@ -56,6 +56,6 @@ Gen<double> _float({
   return ._((Draw draw) {
     final _FloatPart part =
         parts[draw._source.choose(bound, edges: edges).value];
-    return part.at(draw._source.choose(part.bound, edges: part.edges).value);
+    return part.at(draw._source.choose(part.bound, edges: part.edges));
   });
 }

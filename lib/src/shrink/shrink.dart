@@ -83,8 +83,9 @@ final class Shrunk extends Shrink {
 }
 
 /// The first state from [at] on that proposes a candidate smaller than
-/// [current], whose run made [spans], moving through the passes and into a new round as each runs
-/// out, or [Shrunk] where a round ends with nothing [accepted].
+/// [current], whose run made [spans], moving through the passes and into a
+/// new round as each runs out, or [Shrunk] where a round ends with nothing
+/// [accepted].
 Shrink _seek({
   required ChoiceSequence current,
   required List<Span> spans,

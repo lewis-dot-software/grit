@@ -36,7 +36,7 @@ final class Search {
   /// [runs] is how many runs must return for the property to pass, [limit]
   /// the most choices one run may make, and [invalid] how many runs rejected
   /// or overrun give the search up. [invalid] is at least 1, and every other
-  /// count, and the budget's time, is never negative.
+  /// count never negative.
   Search({
     required this._clock,
     required this._random,
@@ -44,23 +44,12 @@ final class Search {
     required int runs,
     required int limit,
     required int invalid,
-    required Budget budget,
+    required this._budget,
   }) : _runs = RangeError.checkNotNegative(runs, 'runs'),
        _limit = RangeError.checkNotNegative(limit, 'limit'),
        _invalid = invalid >= 1
            ? invalid
-           : throw RangeError.range(invalid, 1, null, 'invalid'),
-       _budget = (
-         steps: RangeError.checkNotNegative(budget.steps, 'budget.steps'),
-         time: budget.time.isNegative
-             ? throw RangeError.range(
-                 budget.time.inMicroseconds,
-                 0,
-                 null,
-                 'budget.time',
-               )
-             : budget.time,
-       );
+           : throw RangeError.range(invalid, 1, null, 'invalid');
 
   /// The odds an early run fills a choice beside an earlier one along its
   /// zigzag, where the run has made one.

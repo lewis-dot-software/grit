@@ -105,10 +105,25 @@ void main() {
     test('of a run count below 1, or a negative step or time bound, are thrown '
         'as a bug', () {
       expect(() => Settings(runs: 0), throwsRangeError);
-      expect(() => Settings(shrinkSteps: -1), throwsRangeError);
+      expect(
+        () => Settings(shrinkSteps: -1),
+        throwsA(
+          isA<RangeError>().having(
+            (RangeError error) => error.name,
+            'name',
+            'shrinkSteps',
+          ),
+        ),
+      );
       expect(
         () => Settings(shrinkTime: const .new(microseconds: -1)),
-        throwsRangeError,
+        throwsA(
+          isA<RangeError>().having(
+            (RangeError error) => error.name,
+            'name',
+            'shrinkTime',
+          ),
+        ),
       );
       expect(Settings(shrinkTime: .zero).shrinkTime, Duration.zero);
     });

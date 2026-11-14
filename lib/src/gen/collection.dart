@@ -4,10 +4,6 @@ part of 'gen.dart';
 /// five more on average where no maximum cuts it short.
 final Odds _oneMore = .new(5 / 6);
 
-/// The bound of the choice a collection at its maximum size ends on, which
-/// can only be 0.
-final Bound _ended = .new(0);
-
 /// Whether a collection [size] elements in, from [min] to [max] in size, takes
 /// one more element, read from its "one more" choice.
 ///
@@ -22,7 +18,7 @@ bool _more(Draw draw, int size, {required int min, required int? max}) {
     return true;
   }
   if (size == max) {
-    draw._source.choose(_ended);
+    draw._source.choose(.zero);
     return false;
   }
   return draw._source.weigh(_oneMore);

@@ -2,7 +2,7 @@ import Shrink.Sequence
 
 /-!
 The passes: each a function from the current sequence, and the spans its run made, to its candidates, in a fixed
-order, as the Dart's `Pass` proposes them.
+order, and the order a round takes them in.
 -/
 
 namespace Grit
