@@ -69,7 +69,7 @@ Future<Map<String, _Result>> _results(String path) async {
       }:
         final List<(String, String)> reported = errors[id] ?? [];
         results[names[id]!] = (
-          result: _Verdict.values.byName(result),
+          result: .values.byName(result),
           skipped: skipped,
           errors: [for (final (String error, _) in reported) error],
           stackTraces: [for (final (_, String trace) in reported) trace],

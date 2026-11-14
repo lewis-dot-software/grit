@@ -193,7 +193,7 @@ void main() {
 
   test('orders each preset\'s characters as its docs give, simplest '
       'first', () {
-    String all(Alphabet alphabet, int size) => String.fromCharCodes([
+    String all(Alphabet alphabet, int size) => .fromCharCodes([
       for (int index = 0; index < size; index++) _at(alphabet, index),
     ]);
     const String lower = 'abcdefghijklmnopqrstuvwxyz';

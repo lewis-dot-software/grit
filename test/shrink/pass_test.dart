@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:grit/grit.dart';
 import 'package:grit/src/choice/choice_source.dart';
 import 'package:grit/src/choice/span.dart';
@@ -243,7 +241,7 @@ void main() {
   });
 
   test('a pass over spans proposes nothing from a run that made none', () {
-    for (final Pass pass in [Pass.liftSpan, Pass.swapSpan]) {
+    for (final Pass pass in [.liftSpan, .swapSpan]) {
       expect(_candidates(pass, _nineDown), isEmpty, reason: pass.name);
     }
   });
@@ -253,7 +251,7 @@ void main() {
     'two elements swapped.',
     (Draw draw) {
       final ChoiceSource source = .random(
-        Random(draw(.integer(min: 0), label: 'seed')),
+        .new(draw(.integer(min: 0), label: 'seed')),
         limit: 1000,
       );
       final RunDraw run = .new(source);

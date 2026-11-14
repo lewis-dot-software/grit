@@ -1,7 +1,6 @@
 import 'package:grit/grit.dart';
 import 'package:grit/src/choice/bound.dart';
 import 'package:grit/src/choice/choice_source.dart';
-import 'package:grit/src/choice/status.dart';
 import 'package:grit/src/shrink/shrink.dart';
 import 'package:test/test.dart';
 
@@ -113,7 +112,7 @@ Iterable<ChoiceSequence> get _firstFailures =>
 bool Function(ChoiceSequence) _failsOn(void Function(ChoiceSource) body) =>
     (ChoiceSequence sequence) {
       final ChoiceSource source = .fixed(sequence);
-      return run(source, () => body(source)) == Status.failed;
+      return run(source, () => body(source)) == .failed;
     };
 
 /// The smallest sequence shrinking [first] reaches, where a candidate fails

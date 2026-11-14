@@ -14,10 +14,10 @@ import 'package:test/test.dart';
   };
   final Settings defaults = .new();
   return (
-    int.parse(named['seed']!),
+    .parse(named['seed']!),
     .new(
-      runs: int.parse(named['runs'] ?? '${defaults.runs}'),
-      shrinkSteps: int.parse(named['shrinkSteps'] ?? '${defaults.shrinkSteps}'),
+      runs: .parse(named['runs'] ?? '${defaults.runs}'),
+      shrinkSteps: .parse(named['shrinkSteps'] ?? '${defaults.shrinkSteps}'),
       shrinkTime: switch (named['shrinkTime']) {
         null => defaults.shrinkTime,
         final String time => _readDuration(time),
@@ -31,7 +31,7 @@ import 'package:test/test.dart';
 Duration _readDuration(String source) {
   final RegExpMatch match = RegExp(r'^Duration\((\w+): (-?\d+)\)$')
       .firstMatch(source)!;
-  final int count = int.parse(match[2]!);
+  final int count = .parse(match[2]!);
   return switch (match[1]) {
     'days' => .new(days: count),
     'hours' => .new(hours: count),

@@ -14,7 +14,7 @@ import '../support/bodies.dart';
 import '../support/fake_clock.dart';
 
 /// The call site of every search in this file.
-final CallSite _callSite = .of(StackTrace.current);
+final CallSite _callSite = .of(.current);
 
 /// The search of [settings], the defaults where none are given, from seed 0,
 /// timed by [clock], a clock that never moves where none is given.

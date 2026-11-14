@@ -28,7 +28,7 @@ void challenge(
         () async {
           final Outcome outcome = await PropertyRun(
             .new(),
-            callSite: .of(StackTrace.current),
+            callSite: .of(.current),
             clock: FakeClock(),
             seed: seed,
           ).outcome(body);

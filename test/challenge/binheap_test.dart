@@ -45,12 +45,12 @@ List<int> _keys(_Heap? heap) {
 _Heap? _merged(_Heap? first, _Heap? second) => switch ((first, second)) {
   (null, _) => second,
   (_, null) => first,
-  (final _Heap a, final _Heap b) when a.head <= b.head => _Heap(
+  (final _Heap a, final _Heap b) when a.head <= b.head => .new(
     a.head,
     _merged(a.right, b),
     a.left,
   ),
-  (final _Heap a, final _Heap b) => _Heap(b.head, _merged(b.right, a), b.left),
+  (final _Heap a, final _Heap b) => .new(b.head, _merged(b.right, a), b.left),
 };
 
 /// The keys of [heap] as a wrong sort reads them: the head, then the keys of
@@ -65,7 +65,7 @@ List<int> _wronglySorted(_Heap? heap) => switch (heap) {
 Gen<_Heap?> _heap(int least) => .build((Draw draw) {
   if (draw(.integer(min: 0, max: 3)) < 3) return null;
   final int head = draw(.integer(min: least));
-  return _Heap(head, draw(_heap(head)), draw(_heap(head)));
+  return .new(head, draw(_heap(head)), draw(_heap(head)));
 });
 
 /// The seeds this challenge's shrinking is held to: those whose search
@@ -87,7 +87,7 @@ void main() {
       expect(sorted, [...sorted]..sort());
       expect(sorted, [..._keys(heap)]..sort());
     },
-    [_Heap(0, null, _Heap(0, _Heap(0, null, null), _Heap(1, null, null)))],
+    [_Heap(0, null, .new(0, .new(0, null, null), .new(1, null, null)))],
     shrinks: _seeds,
   );
 }

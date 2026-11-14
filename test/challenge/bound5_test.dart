@@ -19,8 +19,9 @@ const List<int> _seeds = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 /// Five lists of 16-bit integers, each summing below 256, under the false
 /// property that all five sum below 5 * 256, which wrapping breaks.
 void main() {
-  final Gen<List<int>> bounded = Gen.list(.integer(min: -0x8000, max: 0x7FFF))
-      .filter((List<int> list) => _shortSum(list) < 256);
+  final Gen<List<int>> bounded = .list(
+    .integer(min: -0x8000, max: 0x7FFF),
+  ).filter((List<int> list) => _shortSum(list) < 256);
 
   challenge(
     'bound5',

@@ -18,7 +18,7 @@ import '../support/shrinking.dart';
 import '../support/small.dart';
 
 /// The call site of every search in this file.
-final CallSite _callSite = .of(StackTrace.current);
+final CallSite _callSite = .of(.current);
 
 /// A budget no search here spends.
 const Budget _unbounded = (steps: 1 << 30, time: .new(days: 1));
@@ -38,7 +38,7 @@ Search _search({
   Budget budget = _unbounded,
 }) => .new(
   clock: clock ?? FakeClock(),
-  random: random ?? Random(seed),
+  random: random ?? .new(seed),
   callSite: _callSite,
   runs: runs,
   limit: limit,

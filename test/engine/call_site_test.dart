@@ -145,17 +145,14 @@ void main() {
     });
 
     test('is the line an error was thrown from, read from a real throw', () {
-      final CallSite here = .of(StackTrace.current);
-      final int line = Frame.of(StackTrace.current).first.line + 2;
+      final CallSite here = .of(.current);
+      final int line = Frame.of(.current).first.line + 2;
       try {
         throw const FormatException('thrown');
       } on FormatException catch (error, stackTrace) {
         expect(
           here.failureOf(error, stackTrace),
-          _failure(
-            FormatException,
-            .new(Frame.of(StackTrace.current).first.uri, line),
-          ),
+          _failure(FormatException, .new(Frame.of(.current).first.uri, line)),
         );
       }
     });

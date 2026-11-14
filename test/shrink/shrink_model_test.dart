@@ -69,7 +69,7 @@ void main() {
     if (build.exitCode != 0) {
       fail('lake build failed in lean/:\n${build.stdout}${build.stderr}');
     }
-    final Process started = await Process.start(
+    final Process started = await .start(
       'lean/.lake/build/bin/shrink-model',
       [],
     );

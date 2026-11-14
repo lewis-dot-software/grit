@@ -83,7 +83,7 @@ Letters lettersOf(String characters) {
     name: 'the characters of "$characters"',
     alphabet: .of(characters),
     size: codePoints.length,
-    simplest: String.fromCharCode(codePoints.first),
+    simplest: .fromCharCode(codePoints.first),
     holds: codePoints.contains,
   );
 }
