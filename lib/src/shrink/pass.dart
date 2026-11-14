@@ -114,11 +114,83 @@ enum Pass {
     lowerTogether => _lowerTogether(sequence.choices),
     reorder => _reorder(sequence.choices),
     swapSpan => _swapSpans(sequence.choices, spans),
-    moveValue => _moveValue(sequence.choices),
+    moveValue => _pairs(
+      sequence.choices.length,
+    ).expand((_Pair pair) => _moveValue(sequence.choices, pair)),
     deleteAndLower => _deleteAndLower(sequence.choices),
     lowerAndCopy => _lowerAndCopy(sequence.choices),
     deleteAndRaise => _deleteAndRaise(sequence.choices),
   }.skip(from).map((_Build build) => build());
+
+  /// The place among the candidates this pass proposes from [next] to go on
+  /// from, where its candidate at [position] among those it proposes from
+  /// [sequence] was told as failing and [next] is the record that
+  /// candidate's run read.
+  ///
+  /// [moveValue] goes on from the first candidate of the told candidate's
+  /// pair among [next]'s, so a value moved part way is moved again whole,
+  /// or from the first of the pairs after it where [next] is too short to
+  /// hold it. Every other pass goes on from [position].
+  int resumeAt(ChoiceSequence sequence, int position, ChoiceSequence next) =>
+      switch (this) {
+        deleteSpan ||
+        liftSpan ||
+        zeroSpan ||
+        lowerChoice ||
+        lowerTogether ||
+        reorder ||
+        swapSpan ||
+        deleteAndLower ||
+        lowerAndCopy ||
+        deleteAndRaise => position,
+        moveValue => _movesBefore(
+          next.choices,
+          _toldPair(sequence.choices, position),
+        ),
+      };
+}
+
+/// Two choices [Pass.moveValue] moves value between:
+///
+/// - `apart`: how many places after the first the second is.
+/// - `first`: the place of the first.
+typedef _Pair = ({int apart, int first});
+
+/// Each pair of choices within [length], the farthest apart first and each
+/// from the first on.
+Iterable<_Pair> _pairs(int length) sync* {
+  for (final int apart in _widths) {
+    for (int first = 0; first + apart < length; first++) {
+      yield (apart: apart, first: first);
+    }
+  }
+}
+
+/// Whether [pair] comes before [other] among [_pairs].
+bool _precedes(_Pair pair, _Pair other) =>
+    pair.apart > other.apart ||
+    (pair.apart == other.apart && pair.first < other.first);
+
+/// The pair whose candidates of [Pass.moveValue] from [choices] hold the one
+/// at [position], or null where none does.
+_Pair? _toldPair(List<Choice> choices, int position) {
+  for (final _Pair pair in _pairs(choices.length)) {
+    position -= _moveValue(choices, pair).length;
+    if (position < 0) return pair;
+  }
+  return null;
+}
+
+/// How many candidates [Pass.moveValue] proposes from [choices] before the
+/// first of [told]'s pair or of the pairs after it, or how many it proposes
+/// in all where [told] is null.
+int _movesBefore(List<Choice> choices, _Pair? told) {
+  int before = 0;
+  for (final _Pair pair in _pairs(choices.length)) {
+    if (told != null && !_precedes(pair, told)) break;
+    before += _moveValue(choices, pair).length;
+  }
+  return before;
 }
 
 /// A candidate not yet built, so passing over it costs nothing of its
@@ -242,20 +314,18 @@ Iterable<_Build> _swapSpans(List<Choice> choices, List<Span> spans) sync* {
   }
 }
 
-Iterable<_Build> _moveValue(List<Choice> choices) sync* {
-  for (final int apart in _widths) {
-    for (int i = 0; i + apart < choices.length; i++) {
-      final int j = i + apart;
-      final int from = choices[i].value;
-      final int to = choices[j].value;
-      for (final int lowered in _probes(from)) {
-        final int moved = from - lowered;
-        for (final int raised in [moved, if (moved > 1) moved - 1]) {
-          if (raised > Choice.largest.value - to) continue;
-          yield () =>
-              _replaced(choices, {i: .new(lowered), j: .new(to + raised)});
-        }
-      }
+/// The candidates of [Pass.moveValue] that move value between [pair]'s
+/// choices of [choices].
+Iterable<_Build> _moveValue(List<Choice> choices, _Pair pair) sync* {
+  final int i = pair.first;
+  final int j = pair.first + pair.apart;
+  final int from = choices[i].value;
+  final int to = choices[j].value;
+  for (final int lowered in _probes(from)) {
+    final int moved = from - lowered;
+    for (final int raised in [moved, if (moved > 1) moved - 1]) {
+      if (raised > Choice.largest.value - to) continue;
+      yield () => _replaced(choices, {i: .new(lowered), j: .new(to + raised)});
     }
   }
 }

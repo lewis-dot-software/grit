@@ -169,18 +169,29 @@ def swapSpans (cs : Seq) (spans : List Span) : List Seq :=
         slice cs first ++ cs.drop (second.start + second.width)) ++
       swapSpans cs rest
 
-/-- Value moved from each choice to the one 8, 4, 3, 2 or 1 places after it, the earlier lowered to each of its
-`probes` and the later raised by as much, then by 1 less where more than 1 moved, each where that stays within
-`largest`. -/
-def moveValues (cs : Seq) : List Seq :=
-  widths.flatMap fun apart => (pairsFrom cs.length apart).flatMap fun i =>
-    let j := i + apart
-    let source := choiceAt cs i
-    let target := choiceAt cs j
-    (probes source).flatMap fun lowered =>
-      let moved := source - lowered
-      ((moved :: if moved > 1 then [moved - 1] else []).filter (· ≤ largest - target)).map fun raised =>
-        (cs.set i lowered).set j (target + raised)
+/-- Each pair of choices within `length`, as how far apart they are and the place of the first, the farthest apart
+first and each from the first on. -/
+def pairs (length : Nat) : List (Nat × Nat) :=
+  widths.flatMap fun apart => (pairsFrom length apart).map fun i => (apart, i)
+
+/-- Whether `pair` comes before `other` among `pairs`. -/
+def precedes (pair other : Nat × Nat) : Bool :=
+  pair.1 > other.1 || (pair.1 == other.1 && pair.2 < other.2)
+
+/-- Value moved from the first of `pair`'s choices of `cs` to the second, the first lowered to each of its `probes` and
+the second raised by as much, then by 1 less where more than 1 moved, each where that stays within `largest`. -/
+def moveValue (cs : Seq) (pair : Nat × Nat) : List Seq :=
+  let i := pair.2
+  let j := pair.2 + pair.1
+  let source := choiceAt cs i
+  let target := choiceAt cs j
+  (probes source).flatMap fun lowered =>
+    let moved := source - lowered
+    ((moved :: if moved > 1 then [moved - 1] else []).filter (· ≤ largest - target)).map fun raised =>
+      (cs.set i lowered).set j (target + raised)
+
+/-- Value moved between each of `pairs`, in order. -/
+def moveValues (cs : Seq) : List Seq := (pairs cs.length).flatMap (moveValue cs)
 
 /-- Each two choices 8, 4, 3, 2 or 1 apart, the farthest apart first and each from the first on, both lowered by 1,
 where both are above 0, each with each span of 8, 4, 3, 2 or 1 choices just before the first of them deleted, the
@@ -227,5 +238,39 @@ def Pass.candidates (p : Pass) (cs : Seq) (spans : List Span) : List Seq :=
   | .deleteAndLower => deleteAndLowers cs
   | .lowerAndCopy => lowerAndCopies cs
   | .deleteAndRaise => deleteAndRaises cs
+
+/-- The pair of `ps` whose candidates of `moveValue` from `cs` hold the one at `position` among them all, or none where
+none does. -/
+def toldPair (cs : Seq) : List (Nat × Nat) → Nat → Option (Nat × Nat)
+  | [], _ => none
+  | pair :: rest, position =>
+    if position < (moveValue cs pair).length then some pair
+    else toldPair cs rest (position - (moveValue cs pair).length)
+
+/-- How many candidates `moveValues` proposes from `cs` before the first of `told`'s pair or of the pairs after it, or how
+many it proposes in all where `told` is none. -/
+def movesBefore (cs : Seq) (told : Option (Nat × Nat)) : Nat :=
+  (((pairs cs.length).takeWhile fun pair =>
+    match told with
+    | some t => precedes pair t
+    | none => true).map fun pair => (moveValue cs pair).length).sum
+
+/-- The place among the candidates `p` proposes from `next` to go on from, where its candidate at `position` among those
+it proposes from `cs` was told as failing and `next` is the record that candidate's run read: for `moveValue`, the first
+candidate of the told candidate's pair among `next`'s, or of the pairs after it where `next` is too short to hold it, and
+for every other pass, `position`. -/
+def Pass.resumeAt (p : Pass) (cs : Seq) (position : Nat) (next : Seq) : Nat :=
+  match p with
+  | .deleteSpan => position
+  | .liftSpan => position
+  | .zeroSpan => position
+  | .lowerChoice => position
+  | .lowerTogether => position
+  | .reorder => position
+  | .swapSpan => position
+  | .moveValue => movesBefore next (toldPair cs (pairs cs.length) position)
+  | .deleteAndLower => position
+  | .lowerAndCopy => position
+  | .deleteAndRaise => position
 
 end Grit

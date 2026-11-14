@@ -89,12 +89,13 @@ def start (first : Seq) (spans : List Span) : Shrink :=
   seek first spans .deleteSpan 0 (Pass.deleteSpan.candidates first spans) false
 
 /-- The state after `s`'s candidate's run, told as `answer`, the record a failing run made taking the place of the
-current sequence. -/
+current sequence and its pass going on from where `Pass.resumeAt` names. -/
 def told (s : Shrinking) (answer : Answer) : Shrink :=
   match answer with
   | .failing read spans =>
     let current := record s.candidate read
-    seek current spans s.pass s.position ((s.pass.candidates current spans).drop s.position) true
+    let position := s.pass.resumeAt s.current s.position current
+    seek current spans s.pass position ((s.pass.candidates current spans).drop position) true
   | .notFailing => seek s.current s.spans s.pass (s.position + 1) s.rest s.accepted
 
 end Grit

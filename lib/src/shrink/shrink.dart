@@ -10,9 +10,9 @@ import 'pass.dart';
 /// current sequence, and a [Pass.costly] one only where the round has
 /// accepted nothing yet. A candidate no smaller than the current sequence is
 /// never proposed. Where a candidate is told as failing, the choices its run
-/// read become the current sequence, and its pass goes on from the same place
-/// among the new sequence's candidates. Shrinking ends on a round that
-/// accepts nothing.
+/// read become the current sequence, and its pass goes on from the place
+/// [Pass.resumeAt] names among the new sequence's candidates. Shrinking ends
+/// on a round that accepts nothing.
 sealed class Shrink {
   Shrink._(this.current);
 
@@ -69,13 +69,14 @@ final class Shrinking extends Shrink {
         ),
       ),
     );
+    final int resume = _pass.resumeAt(current, _at.position, record);
     return _seek(
       current: record,
       spans: spans,
       pass: _pass,
       at: .first(
-        _pass.candidates(record, spans, from: _at.position).iterator,
-        position: _at.position,
+        _pass.candidates(record, spans, from: resume).iterator,
+        position: resume,
       ),
       accepted: true,
     );

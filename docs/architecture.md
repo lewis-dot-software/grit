@@ -96,7 +96,7 @@ A pass is a function from the current sequence, and the spans its run made, to i
 - Lowering two choices by the same amount, so two values tied to each other fall together.
 - Sorting a span, and swapping two.
 - Swapping two sibling draws' spans, two with the same draw around both or two the property's body made, so two parts of a value change places whatever their widths.
-- Moving value from one choice to another.
+- Moving value from one choice to another, a pair whose value moved part way tried again from moving the whole of it.
 - Deleting a span just before two choices, both lowered by one, since those may be indices that count the elements before them.
 - Lowering a choice, with a later 0 set to the choice after it, so an empty branch takes the branch the next draw took.
 - Deleting a span with the choice after it raised by the span's sum, so a list's element folds into the positive integer after it.

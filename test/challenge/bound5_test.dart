@@ -11,7 +11,7 @@ int _shortSum(Iterable<int> values) =>
     values.fold(0, (int sum, int value) => _short(sum + value));
 
 /// The seeds past [everySeed] this challenge is held to as well.
-const List<int> _moreSeeds = [19, 20, 28, 95, 97];
+const List<int> _moreSeeds = [19, 20, 28, 56, 59, 95, 97];
 
 /// Five lists of 16-bit integers, each summing below 256, under the false
 /// property that all five sum below 5 * 256, which wrapping breaks.

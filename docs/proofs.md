@@ -32,7 +32,7 @@ Shrinking ends because each candidate the step function proposes is shortlex sma
 
 Beyond what no core's proof covers:
 
-- Which candidates each pass proposes. The proofs hold of any candidates, and the model test alone holds the model's passes to the Dart's.
+- Which candidates each pass proposes, and where it goes on from after one is told as failing. The proofs hold of any candidates and any place, and the model test alone holds the model's passes to the Dart's.
 - The spans a run records. The proofs hold of any spans, and the tests on `Draw` and the swap pass alone hold a run's to its draws.
 - Shrink quality: how small the end is. The shrinking challenge bench holds that.
 - The executable's `replay`, which the model test asks, against `after`, the run the statements speak of. Both step `start` and `told` alike, by reading alone.

@@ -198,6 +198,66 @@ void main() {
     ]);
   });
 
+  test('moving value goes on, after a candidate told as failing, from the '
+      'first candidate of its pair among the record\'s, so a value moved part '
+      'way is moved again whole', () {
+    // [4, 2, 0] is the fifth candidate of the second pair, the one apart,
+    // after the seven of the first, the two apart.
+    final List<int> told = _candidates(.moveValue, [6, 0, 0])[11];
+    expect(told, [4, 2, 0]);
+    final int resume = Pass.moveValue.resumeAt(
+      sequenceOf([6, 0, 0]),
+      11,
+      sequenceOf(told),
+    );
+    expect(resume, 7);
+    expect(_candidates(.moveValue, told, from: resume).first, [0, 6, 0]);
+  });
+
+  test('moving value goes on from the told candidate\'s pair among a record '
+      'shorter than the candidate, where the pair sits at another place', () {
+    // [0, 4, 2, 0] moves value within the fifth of six pairs, the third of
+    // the three [0, 4, 2] holds.
+    final List<int> told = _candidates(.moveValue, [0, 6, 0, 0])[11];
+    expect(told, [0, 4, 2, 0]);
+    final List<int> record = [0, 4, 2];
+    final int resume = Pass.moveValue.resumeAt(
+      sequenceOf([0, 6, 0, 0]),
+      11,
+      sequenceOf(record),
+    );
+    expect(_candidates(.moveValue, record, from: resume).first, [0, 0, 6]);
+  });
+
+  test('moving value goes on from the first pair after the told '
+      'candidate\'s, where the record is too short to hold that pair', () {
+    // [1, 4, 0, 2] moves value two apart from the second choice, the third
+    // pair of [1, 6, 0, 0]. [1, 4, 0] lacks that pair, and holds one pair
+    // before it, two apart from the first choice, and two after it.
+    final List<int> told = _candidates(.moveValue, [1, 6, 0, 0])[6];
+    expect(told, [1, 4, 0, 2]);
+    final List<int> record = [1, 4, 0];
+    final int resume = Pass.moveValue.resumeAt(
+      sequenceOf([1, 6, 0, 0]),
+      6,
+      sequenceOf(record),
+    );
+    expect(_candidates(.moveValue, record, from: resume).first, [0, 5, 0]);
+  });
+
+  test('every pass but moving value goes on, after a candidate told as '
+      'failing, from the same place among the record\'s candidates', () {
+    for (final Pass pass in Pass.values.where(
+      (Pass pass) => pass != .moveValue,
+    )) {
+      expect(
+        pass.resumeAt(sequenceOf([6, 0, 0]), 3, sequenceOf([4, 2, 0])),
+        3,
+        reason: pass.name,
+      );
+    }
+  });
+
   test('deleting and lowering lowers each two choices by 1, the farthest '
       'apart first, each with each span just before the first deleted, the '
       'widest first', () {

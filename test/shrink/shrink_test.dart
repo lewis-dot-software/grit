@@ -362,6 +362,22 @@ void main() {
     }
   });
 
+  test('a candidate moving value part way, told as failing, is followed by '
+      'its pair moved whole', () {
+    // Only moving value proposes [4, 2] from [6, 0], from the middle of the
+    // pair's candidates.
+    final ChoiceSequence first = sequenceOf([6, 0]);
+    final ChoiceSequence partWay = sequenceOf([4, 2]);
+    final List<ChoiceSequence> proposed = [];
+    shrunk(.start(first, spansOf(first)), (ChoiceSequence candidate) {
+      proposed.add(candidate);
+      return candidate == partWay
+          ? (read: candidate.choices.length, spans: spansOf(candidate))
+          : null;
+    });
+    expect(proposed[proposed.indexOf(partWay) + 1], sequenceOf([0, 6]));
+  });
+
   test('a round that has accepted a candidate takes no costly pass, so its '
       'candidates wait for a round that accepts nothing', () {
     // Only lowering and copying proposes [0, 3, 3], and only deleting and
