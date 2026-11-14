@@ -171,11 +171,12 @@ void main() {
       final Threw run = _threw(
         draws: [
           (label: 'xs', value: [1, 0, 99], text: '[0, 1]'),
+          (label: null, value: [5, 99], text: '[5]'),
         ],
       );
       expect(
         report(_failed(run), seed: 7, settings: _settings),
-        contains('It drew:\n  xs: [0, 1]\n\n'),
+        contains('It drew:\n  xs: [0, 1]\n  [5]\n\n'),
       );
     });
 
