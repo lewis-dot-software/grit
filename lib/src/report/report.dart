@@ -16,16 +16,18 @@ import 'words.dart';
 /// budget ran out that the case is the smallest found within it, and the
 /// token that replays the case alone. A failure first found from the store
 /// says so. Each of the outcome's warnings follows, one per paragraph. The
-/// outcome of a search ends on the seed and the settings, so the search can
-/// be repeated, a failed one saying that the store's replay of its failure
-/// comes first, and the outcome of a token's replay on how to search
-/// again.
+/// outcome of a search that generated from [seed] ends on the seed and the
+/// settings, so the search can be repeated, a failed one saying that the
+/// store's replay of its failure comes first. A failure first found from the
+/// store ends on what the next search at the call site does, since its
+/// search drew nothing from the seed, and the outcome of a token's replay on
+/// how to search again.
 String report(Outcome outcome, {required int seed, required String settings}) {
   final String repeat =
       'Seed $seed. Repeat this search with `settings: $settings`.';
   final (List<String> body, List<String> end) = switch (outcome) {
     Passed(:final int runs) => (
-      ['The property passed ${runsText(runs)}.'],
+      ['The property passed ${counted(runs, 'run')}.'],
       [repeat],
     ),
     Failed(
@@ -45,9 +47,14 @@ String report(Outcome outcome, {required int seed, required String settings}) {
         [
           'Replay this case alone with '
               '`settings: Settings(replay: \'${Token.encode(sequence)}\')`.',
-          'Seed $seed. The next search at this call site replays this failure '
-              'first, so `settings: $settings` repeats this search once '
-              '`.dart_tool/grit/` no longer holds it.',
+          switch (firstFound) {
+            .generated =>
+              'Seed $seed. The next search at this call site replays this '
+                  'failure first, so `settings: $settings` repeats this search '
+                  'once `.dart_tool/grit/` no longer holds it.',
+            .stored =>
+              'The next search at this call site replays this failure first.',
+          },
         ],
       ),
     Flaky(
@@ -63,7 +70,14 @@ String report(Outcome outcome, {required int seed, required String settings}) {
           ?_found(firstFound),
           'Run again, ${_replayed(replay)}',
         ],
-        [repeat],
+        [
+          switch (firstFound) {
+            .generated => repeat,
+            .stored =>
+              'The search deleted the failure stored for this call site, so '
+                  'the next search generates its runs afresh.',
+          },
+        ],
       ),
     GaveUp(:final int rejected, :final int overran) => (
       [
@@ -112,14 +126,14 @@ String _shrinking(
 }) => switch (end) {
   .shrunk =>
     'The property failed. Its smallest failing case, shrunk in '
-        '${_steps(steps)} over ${timeText(time)}:',
+        '${counted(steps, 'step')} over ${timeText(time)}:',
   .steps =>
     'The property failed. Shrinking ran out of steps after '
-        '${_steps(steps)}, over ${timeText(time)}, so its failing case is the '
+        '${counted(steps, 'step')}, over ${timeText(time)}, so its failing case is the '
         'smallest found within the budget:',
   .time =>
     'The property failed. Shrinking ran out of time after ${timeText(time)}, '
-        'in ${_steps(steps)}, so its failing case is the smallest found '
+        'in ${counted(steps, 'step')}, so its failing case is the smallest found '
         'within the budget:',
 };
 
@@ -157,8 +171,6 @@ String _indented(String text) => text
     .split('\n')
     .map((String line) => line.isEmpty ? line : '  $line')
     .join('\n');
-
-String _steps(int steps) => steps == 1 ? '1 step' : '$steps steps';
 
 String _rejected(int rejected) =>
     rejected == 1 ? '1 run was rejected' : '$rejected runs were rejected';

@@ -7,8 +7,9 @@ const String invalidRuns =
     'value or a set that finds too few distinct elements, and overruns where '
     'it makes more choices than one run may.';
 
-/// [runs] counted in runs.
-String runsText(int runs) => runs == 1 ? '1 run' : '$runs runs';
+/// [count] of [noun], the noun taking an s where [count] is not 1.
+String counted(int count, String noun) =>
+    count == 1 ? '1 $noun' : '$count ${noun}s';
 
 /// [time] in microseconds under a millisecond, in milliseconds under a
 /// second, and in seconds to a tenth above.

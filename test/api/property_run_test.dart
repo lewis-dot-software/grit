@@ -340,7 +340,7 @@ void main() {
       expect(printed, isEmpty);
     });
 
-    test('of a passed outcome prints each of its warnings under its test, '
+    test('of a passed outcome that warns prints its report under its test, '
         'and returns', () async {
       final PropertyRun run = _run(
         .new(runs: 2),
@@ -350,14 +350,59 @@ void main() {
           await _printed(() => run.check(_rejectingFirst(3)));
       expect(thrown, isNull);
       expect(printed, [
-        'Warning: the property is slow. Its runs took 12.0 s each on average, '
-            'so a search of 2 runs takes about 24.0 s. A lower `runs` setting '
-            'makes it faster.',
-        startsWith(
-          'Warning: most of the property\'s runs were invalid, 3 rejected and '
-          '0 overrun against 2 returned.',
+        allOf(
+          startsWith(
+            'The property passed 2 runs.\n'
+            '\n'
+            'Warning: the property is slow. Its runs took 12.0 s each on '
+            'average, so a search of 2 runs takes about 24.0 s. A lower `runs` '
+            'setting makes it faster.\n'
+            '\n'
+            'Warning: most of the property\'s runs were invalid, 3 rejected '
+            'and 0 overrun against 2 returned.',
+          ),
+          endsWith(
+            'Seed 0. Repeat this search with '
+            '`settings: Settings(seed: 0, runs: 2)`.',
+          ),
         ),
       ]);
+    });
+
+    test('of a failure first found from the store names no seed as '
+        'repeating its search', () async {
+      final Map<String, Body> bodies = {
+        'failed': failsOnTrue,
+        'flaky': failsOnce(),
+      };
+      for (final MapEntry(key: String kind, value: Body body)
+          in bodies.entries) {
+        final PropertyRun run = .new(
+          .new(),
+          callSite: _callSite,
+          clock: FakeClock(),
+          store: MemoryStore({
+            _callSite.key: Stored(sequenceOf([1])),
+          }),
+          seed: 7,
+        );
+        final (Object, StackTrace)? thrown = await _thrown(run.check(body));
+        expect(
+          thrown?.$1,
+          isA<TestFailure>().having(
+            (TestFailure failure) => failure.message,
+            'message',
+            allOf(
+              contains(
+                'first found by replaying the failure an earlier '
+                'search stored',
+              ),
+              isNot(contains('Seed')),
+            ),
+          ),
+          reason: kind,
+        );
+      }
     });
 
     test('of a failed outcome carries its warnings in its report, printing '

@@ -1116,6 +1116,16 @@ void main() {
       expect(outcome.warnings, isEmpty);
     });
 
+    test('of a generated outcome cannot be changed by whoever reads '
+        'them', () async {
+      final Outcome outcome = await _search(
+        runs: 10,
+        clock: FakeClock([const .new(seconds: 6)]),
+      ).run((Draw draw) {});
+      expect(outcome.warnings, [isA<SlowProperty>()]);
+      expect(outcome.warnings.clear, throwsUnsupportedError);
+    });
+
     test('warn slow, naming the time per run, where the run count passes 5 s '
         'at it', () async {
       // Generation reads the clock at its start and its end, so it takes one

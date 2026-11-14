@@ -13,7 +13,6 @@ import '../engine/warning.dart';
 import '../report/report.dart';
 import '../store/file_store.dart';
 import '../store/store.dart';
-import '../report/warning_text.dart';
 import 'settings.dart';
 import 'settings_source.dart';
 import 'stopwatch_clock.dart';
@@ -82,8 +81,8 @@ final class PropertyRun {
   }
 
   /// Searches [body], and throws a [TestFailure] carrying the outcome's
-  /// report on every outcome but [Passed], whose warnings it prints, one line
-  /// each, under the test that stands.
+  /// report on every outcome but [Passed], whose report it prints under the
+  /// test that stands where the outcome warns of anything.
   ///
   /// A failure that a run threw is thrown with that run's stack trace, so
   /// the test's failure points at the line of the body that threw.
@@ -91,7 +90,7 @@ final class PropertyRun {
     final Outcome found = await outcome(body);
     switch (found) {
       case Passed(:final List<Warning> warnings):
-        warnings.map(warningText).forEach(print);
+        if (warnings.isNotEmpty) print(_report(found));
       case Failed(:final Threw run) ||
           Flaky(failed: final Threw run) ||
           Reproduced(:final Threw run):
@@ -101,11 +100,11 @@ final class PropertyRun {
     }
   }
 
-  TestFailure _failure(Outcome outcome) => .new(
-    report(
-      outcome,
-      seed: seed,
-      settings: _settings.source(seed: seed),
-    ),
+  TestFailure _failure(Outcome outcome) => .new(_report(outcome));
+
+  String _report(Outcome outcome) => report(
+    outcome,
+    seed: seed,
+    settings: _settings.source(seed: seed),
   );
 }

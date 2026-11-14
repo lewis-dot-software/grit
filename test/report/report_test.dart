@@ -2,6 +2,7 @@ import 'package:grit/grit.dart';
 import 'package:grit/src/report/report.dart';
 import 'package:test/test.dart';
 
+import '../support/outcomes.dart';
 import '../support/small.dart';
 
 /// A run that threw a [StateError] of [message] from line 7 of a test, having
@@ -82,7 +83,8 @@ void main() {
       );
     });
 
-    test('failed from the store says it was first found there', () {
+    test('failed from the store says it was first found there, and that the '
+        'next search replays it first, with no seed', () {
       final Threw run = _threw();
       expect(
         report(
@@ -111,13 +113,12 @@ void main() {
         'Replay this case alone with '
         '`settings: Settings(replay: \'grit1:1.3.0\')`.\n'
         '\n'
-        'Seed 7. The next search at this call site replays this failure '
-        'first, so `settings: Settings(seed: 7)` repeats this search once '
-        '`.dart_tool/grit/` no longer holds it.',
+        'The next search at this call site replays this failure first.',
       );
     });
 
-    test('flaky from the store says it was first found there', () {
+    test('flaky from the store says it was first found there, and that the '
+        'next search generates afresh, with no seed', () {
       final Threw failed = _threw();
       expect(
         report(
@@ -129,13 +130,16 @@ void main() {
           seed: 7,
           settings: _settings,
         ),
-        contains(
+        endsWith(
           '  Bad state: too big\n'
           '\n'
           'It was first found by replaying the failure an earlier search '
           'stored for this call site.\n'
           '\n'
-          'Run again, it returned.',
+          'Run again, it returned.\n'
+          '\n'
+          'The search deleted the failure stored for this call site, so the '
+          'next search generates its runs afresh.',
         ),
       );
     });
@@ -525,6 +529,27 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
+    property('A report says its seed repeats the search only where that '
+        'search generated from the seed.', (Draw draw) {
+      final Outcome outcome = draw(outcomes);
+      final int seed = draw(.integer(min: 0, max: 0xFFFFFFFF), label: 'seed');
+      final bool generated = switch (outcome) {
+        Passed() || GaveUp() => true,
+        Failed(:final FirstFound firstFound) ||
+        Flaky(:final FirstFound firstFound) => switch (firstFound) {
+          .generated => true,
+          .stored => false,
+        },
+        Reproduced() || NotReproduced() => false,
+      };
+      final String printed = report(
+        outcome,
+        seed: seed,
+        settings: 'Settings(seed: $seed)',
+      );
+      expect(printed.contains('Seed $seed.'), generated, reason: printed);
+    });
+
     /// A text over letters, spaces and newlines, which a report indents.
     final Gen<String> text = .string(alphabet: .of('a \n'), maxLength: 8);
 

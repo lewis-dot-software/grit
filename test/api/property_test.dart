@@ -102,7 +102,6 @@ void main() {
           contains('It drew:\n  xs: [10]\n'),
           contains('It noted:\n  sum 10\n'),
           contains('It threw:\n  Expected: a value less than <10>\n'),
-          contains('Seed 1.'),
         ),
       );
     });

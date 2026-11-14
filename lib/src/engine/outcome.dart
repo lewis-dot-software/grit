@@ -6,9 +6,11 @@ import 'warning.dart';
 
 /// What a search came to for one property, with what it warns of.
 sealed class Outcome {
-  Outcome._({this.warnings = const []});
+  Outcome._({List<Warning> warnings = const []})
+    : warnings = .unmodifiable(warnings);
 
-  /// What the search warns of, none of which changed its verdict.
+  /// What the search warns of, none of which changed its verdict, in a list
+  /// that no one who reads it can change.
   final List<Warning> warnings;
 }
 

@@ -78,8 +78,11 @@ void main() {
     }, retry: 1);
   });
 
+  // Flaky on every search, so each deletes its stored failure, and the retry
+  // generates from a seed of its own rather than replaying the first's.
+  int runs = 0;
   property('fails on each retry', (Draw draw) {
-    throw StateError('every attempt');
+    if ((runs++).isEven) throw StateError('every other run');
   }, retry: 1);
 
   test('fails inside a test that stands', () async {
