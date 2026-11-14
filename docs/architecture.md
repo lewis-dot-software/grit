@@ -72,12 +72,12 @@ Why shrinking always ends:
 
 - The shrinker accepts a candidate only where it is smaller than the current sequence and failed as the first did, so every accepted step descends shortlex.
 - Shortlex has no endless descent, though a choice is any natural number, so the accepted steps are finitely many.
-- Each pass proposes finitely many candidates from one sequence, and the passes are finitely many.
+- Each pass proposes finitely many candidates from one sequence and the spans its run made, and the passes are finitely many.
 - The step function ends on a round of every pass that accepts nothing.
 
 The budget then bounds how long shrinking takes, never whether it ends. It counts steps, each one run of a candidate, and wall time from shrinking's start, with defaults in `api`'s settings that no consumer has to set. The two replays are not steps, nor is a candidate the step function proposes again in one shrinking, which the engine tells its answer with no run. A spent budget ends shrinking at the smallest failing sequence found so far.
 
-A pass is a function from the current sequence to its candidates, and the step function chooses among them:
+A pass is a function from the current sequence, and the spans its run made, to its candidates, and the step function chooses among them:
 
 - Deleting a span, alone and with the choice before it lowered by one, since that choice may be the span's length.
 - Lifting a draw's span into the place of a draw it sits in, so a part of a value takes the place of the part around it.

@@ -3,7 +3,7 @@ import '../choice/choice_sequence.dart';
 import '../choice/span.dart';
 
 /// One way of proposing smaller sequences: a function from the current
-/// sequence to its candidates, in a fixed order.
+/// sequence, and the spans its run made, to its candidates, in a fixed order.
 ///
 /// A candidate may be no smaller than the sequence it came from, as where a
 /// span is zeroed that is zero already.
