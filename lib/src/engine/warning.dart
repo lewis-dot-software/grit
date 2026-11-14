@@ -1,3 +1,5 @@
+import '../choice/decoding.dart';
+
 /// What a search warns of, which never changes its verdict.
 sealed class Warning {
   Warning._();
@@ -36,4 +38,13 @@ final class MostlyInvalid extends Warning {
 
   /// How many runs asked for more choices than the limit.
   final int overran;
+}
+
+/// The store held text for the call site that decodes to no sequence.
+final class UnreadableStored extends Warning {
+  /// The warning of stored text that decoded as [reason].
+  UnreadableStored(this.reason) : super._();
+
+  /// Why the stored text decodes to no sequence.
+  final Undecodable reason;
 }

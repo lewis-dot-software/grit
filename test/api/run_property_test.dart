@@ -62,6 +62,44 @@ void main() {
       expect(replay, isA<Returned>());
     });
 
+    test('a failed outcome found from the store, where an earlier search '
+        'at its call site failed', () async {
+      final List<Outcome> outcomes = [
+        // One line, so both searches share a call site.
+        for (int search = 0; search < 2; search++)
+          await runProperty(failsOnTrue),
+      ];
+      expect(
+        outcomes.last,
+        isA<Failed>().having(
+          (Failed failed) => failed.firstFound,
+          'firstFound',
+          FirstFound.stored,
+        ),
+      );
+    });
+
+    test('a reproduced outcome, where a replay token\'s case fails', () async {
+      final Outcome outcome = await runProperty(
+        failsOnTrue,
+        settings: .new(replay: 'grit1:1'),
+      );
+      expect(outcome, isA<Reproduced>());
+      final Threw run = (outcome as Reproduced).run;
+      expect(run.record.choices, [Choice(1)]);
+    });
+
+    test('a not-reproduced outcome whose run is a run, where a replay '
+        'token\'s case no longer fails', () async {
+      final Outcome outcome = await runProperty(
+        failsOnTrue,
+        settings: .new(replay: 'grit1:0'),
+      );
+      expect(outcome, isA<NotReproduced>());
+      final Run run = (outcome as NotReproduced).run;
+      expect(run, isA<Returned>());
+    });
+
     test('a gave-up outcome', () async {
       expect(
         await runProperty((Draw draw) => draw.assume(false)),

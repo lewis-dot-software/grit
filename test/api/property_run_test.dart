@@ -1,30 +1,40 @@
 import 'dart:async';
 
+import 'package:grit/src/api/for_all.dart';
 import 'package:grit/src/api/property_run.dart';
 import 'package:grit/src/api/settings.dart';
+import 'package:grit/src/choice/choice.dart';
+import 'package:grit/src/choice/choice_sequence.dart';
 import 'package:grit/src/engine/body.dart';
 import 'package:grit/src/engine/call_site.dart';
 import 'package:grit/src/engine/clock.dart';
+import 'package:grit/src/engine/first_found.dart';
 import 'package:grit/src/engine/outcome.dart';
 import 'package:grit/src/engine/run.dart';
 import 'package:grit/src/engine/shrink_end.dart';
 import 'package:grit/src/gen/gen.dart';
 import 'package:grit/src/report/report.dart';
+import 'package:grit/src/store/file_store.dart';
+import 'package:grit/src/store/loaded.dart';
 import 'package:test/test.dart';
 
 import '../support/bodies.dart';
 import '../support/fake_clock.dart';
+import '../support/memory_store.dart';
+import '../support/small.dart';
 
 /// The call site of every search in this file.
 final CallSite _callSite = .of(.current);
 
-/// The search of [settings], the defaults where none are given, from seed 0,
-/// timed by [clock], a clock that never moves where none is given.
-PropertyRun _run([Settings? settings, Clock? clock]) => .new(
+/// The search of [settings], the defaults where none are given, from
+/// [seed], timed by [clock], a clock that never moves where none is given,
+/// and keeping its failure in an empty store.
+PropertyRun _run([Settings? settings, Clock? clock, int seed = 0]) => .new(
   settings ?? .new(),
   callSite: _callSite,
   clock: clock ?? FakeClock(),
-  seed: 0,
+  store: MemoryStore(),
+  seed: seed,
 );
 
 /// What [check] throws, or null where it returns, with each line it
@@ -55,6 +65,38 @@ Future<(Object, StackTrace)?> _thrown(Future<void> check) async {
     return (error, stackTrace);
   }
   return null;
+}
+
+/// A body that draws a list of choices from 0 to 3 and fails where it holds
+/// at least [key], choice by choice: with a [StateError] from one line where
+/// its sum is even, and an [ArgumentError] from another where it is odd.
+Body _failingFrom(List<int> key) => (Draw draw) {
+  final List<int> xs = draw(.list(.integer(min: 0, max: 3)));
+  if (xs.length < key.length) return;
+  for (int i = 0; i < key.length; i++) {
+    if (xs[i] < key[i]) return;
+  }
+  if (xs.fold(0, (int sum, int x) => sum + x).isEven) {
+    throw StateError('even');
+  }
+  throw ArgumentError('odd');
+};
+
+/// Checks that the token [failed]'s report prints, searched from [seed],
+/// replays a run of [body] that fails as [failed]'s did.
+Future<void> _expectTokenReplays(Failed failed, Body body, int seed) async {
+  final String token = RegExp(r"replay: '([^']*)'")
+      .firstMatch(report(failed, seed: seed, settings: 'Settings()'))![1]!;
+  final Outcome replayed = await _run(.new(replay: token)).outcome(body);
+  expect(
+    replayed,
+    isA<Reproduced>().having(
+      (Reproduced reproduced) => failed.run.failedAlike(reproduced.run),
+      'failed alike',
+      isTrue,
+    ),
+    reason: token,
+  );
 }
 
 void main() {
@@ -156,17 +198,20 @@ void main() {
 
     test('fill the same draws from the same seed', () async {
       Future<Object?> drawn(int seed) async {
-        final Outcome outcome =
-            await PropertyRun.of(
-              .new(seed: seed, shrinkSteps: 0),
-              callSite: _callSite,
-            ).outcome((Draw draw) {
+        // Each search keeps its failure in a store of its own, so neither
+        // starts from the other's.
+        final Outcome outcome = await _run(.new(shrinkSteps: 0), null, seed)
+            .outcome((Draw draw) {
               draw(.list(.integer()));
               throw StateError('drawn');
             });
         return switch (outcome) {
           Failed(:final Threw run) => run.draws.single.value,
-          Passed() || Flaky() || GaveUp() => fail(
+          Passed() ||
+          Flaky() ||
+          GaveUp() ||
+          Reproduced() ||
+          NotReproduced() => fail(
             'Seed $seed came to ${outcome.runtimeType}, where a failure was '
             'due',
           ),
@@ -195,6 +240,93 @@ void main() {
           (Failed failed) => failed.end,
           'end',
           ShrinkEnd.time,
+        ),
+      );
+    });
+  });
+
+  group('a replay token', () {
+    test('that is no token is thrown at the settings\' construction as a '
+        'format exception saying so', () {
+      for (final String text in ['', 'grit1:01', 'grit1:0 ', '[1, 3]']) {
+        expect(
+          () => Settings(replay: text),
+          throwsA(
+            isA<FormatException>()
+                .having(
+                  (e) => e.message,
+                  'message',
+                  '`replay` is no grit token',
+                )
+                .having((e) => e.source, 'source', text),
+          ),
+          reason: text,
+        );
+      }
+    });
+
+    test('of another format is thrown at the settings\' construction as a '
+        'format exception naming its format', () {
+      expect(
+        () => Settings(replay: 'grit2:3'),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            '`replay` is a token of format `grit2`, and this grit reads '
+                '`grit1` alone',
+          ),
+        ),
+      );
+    });
+
+    test('replays its case alone, failing where it throws', () async {
+      int runs = 0;
+      final Outcome outcome = await _run(.new(replay: 'grit1:1'))
+          .outcome((Draw draw) {
+            runs++;
+            failsOnTrue(draw);
+          });
+      expect(
+        outcome,
+        isA<Reproduced>().having((o) => o.run.record.choices, 'choices', [
+          Choice(1),
+        ]),
+      );
+      expect(runs, 1);
+    });
+
+    test('that no longer fails is not reproduced', () async {
+      expect(
+        await _run(.new(replay: 'grit1:0')).outcome(failsOnTrue),
+        isA<NotReproduced>().having((o) => o.run, 'run', isA<Returned>()),
+      );
+    });
+  });
+
+  group('the store', () {
+    test('keeps a failure under .dart_tool/grit/, which the next search at '
+        'its call site replays first', () async {
+      final CallSite callSite = .of(.current);
+      final FileStore store = .new(.new('.dart_tool/grit'));
+      final List<Outcome> outcomes = [
+        for (int search = 0; search < 2; search++)
+          await PropertyRun.of(.new(), callSite: callSite).outcome(failsOnTrue),
+      ];
+      expect(
+        outcomes.last,
+        isA<Failed>().having(
+          (o) => o.firstFound,
+          'firstFound',
+          FirstFound.stored,
+        ),
+      );
+      expect(
+        store.load(callSite.key),
+        isA<Stored>().having(
+          (Stored stored) => stored.sequence,
+          'sequence',
+          (outcomes.last as Failed).sequence,
         ),
       );
     });
@@ -247,10 +379,11 @@ void main() {
     test(
       'of a failed outcome throws its report with the run\'s stack',
       () async {
-        final PropertyRun run = _run();
-        final Outcome outcome = await run.outcome(failsOnTrue);
+        // Each search keeps its failure in a store of its own, so the check
+        // does not start from the outcome's failure.
+        final Outcome outcome = await _run().outcome(failsOnTrue);
         final (Object, StackTrace)? thrown = await _thrown(
-          run.check(failsOnTrue),
+          _run().check(failsOnTrue),
         );
         expect(
           thrown?.$1,
@@ -346,6 +479,41 @@ void main() {
       },
     );
 
+    test(
+      'of a reproduced outcome throws its report with the run\'s stack',
+      () async {
+        final (Object, StackTrace)? thrown = await _thrown(
+          _run(.new(replay: 'grit1:1')).check(failsOnTrue),
+        );
+        expect(
+          thrown?.$1,
+          isA<TestFailure>().having(
+            (TestFailure failure) => failure.message,
+            'message',
+            startsWith(
+              'The property failed on the case its replay token names',
+            ),
+          ),
+        );
+        expect(thrown?.$2.toString(), startsWith('#0      failsOnTrue '));
+      },
+    );
+
+    test('of a not-reproduced outcome throws its report', () async {
+      expect(
+        (await _thrown(_run(.new(replay: 'grit1:0')).check(failsOnTrue)))?.$1,
+        isA<TestFailure>().having(
+          (TestFailure failure) => failure.message,
+          'message',
+          'The replay token no longer reproduces a failure: run once, it '
+              'returned.\n'
+              '\n'
+              'Remove `replay` from the settings to search for a failure '
+              'again.',
+        ),
+      );
+    });
+
     test('of a gave-up outcome throws its report', () async {
       expect(
         (await _thrown(_run().check((Draw draw) => draw.assume(false))))?.$1,
@@ -359,6 +527,44 @@ void main() {
           ),
         ),
       );
+    });
+  });
+  group('over every small body, each from a few seeds', () {
+    test('The token a failure\'s report prints replays a run that fails as '
+        'the reported one did.', () async {
+      final Set<Type> errors = {};
+      for (final ChoiceSequence key in everySequence(length: 2, bound: 3)) {
+        final Body body = _failingFrom([
+          for (final Choice choice in key.choices) choice.value,
+        ]);
+        for (int seed = 0; seed < 3; seed++) {
+          if (await _run(null, null, seed).outcome(body)
+              case final Failed failed) {
+            errors.add(failed.run.failure.type);
+            await _expectTokenReplays(failed, body, seed);
+          }
+        }
+      }
+      expect(errors, {StateError, ArgumentError});
+    });
+  });
+
+  group('on grit, over larger inputs', () {
+    test('The token a failure\'s report prints replays a run that fails as '
+        'the reported one did.', () async {
+      int failed = 0;
+      await forAll((Draw draw) async {
+        final Body body = _failingFrom(
+          draw(.list(.integer(min: 0, max: 3), maxLength: 4), label: 'key'),
+        );
+        final int seed = draw(.integer(min: 0, max: 0xFFFFFFFF), label: 'seed');
+        if (await _run(null, null, seed).outcome(body)
+            case final Failed found) {
+          failed++;
+          await _expectTokenReplays(found, body, seed);
+        }
+      });
+      expect(failed, greaterThan(0));
     });
   });
 }

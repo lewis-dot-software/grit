@@ -35,6 +35,16 @@ void main() {
     throw StateError('once');
   }, settings: _settings);
 
+  property('replays its token', (Draw draw) {
+    final List<int> xs = draw(.list(.integer(min: 0, max: 100)), label: 'xs');
+    expect(xs.fold(0, (int sum, int x) => sum + x), lessThan(10));
+  }, settings: .new(replay: 'grit1:1.a.0'));
+
+  property('replays a token that no longer fails', (Draw draw) {
+    final List<int> xs = draw(.list(.integer(min: 0, max: 100)), label: 'xs');
+    expect(xs.fold(0, (int sum, int x) => sum + x), lessThan(10));
+  }, settings: .new(replay: 'grit1:1.9.0'));
+
   property(
     'is skipped',
     (Draw draw) => throw StateError('A skipped property ran'),

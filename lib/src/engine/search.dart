@@ -3,16 +3,20 @@ import 'dart:math';
 
 import '../choice/choice_sequence.dart';
 import '../choice/choice_source.dart';
+import '../choice/decoding.dart';
 import '../choice/odds.dart';
 import '../choice/span.dart';
 import '../choice/status.dart';
 import '../choice/sweep.dart';
 import '../gen/gen.dart';
 import '../shrink/shrink.dart';
+import '../store/loaded.dart';
+import '../store/store.dart';
 import 'body.dart';
 import 'budget.dart';
 import 'call_site.dart';
 import 'clock.dart';
+import 'first_found.dart';
 import 'outcome.dart';
 import 'run.dart';
 import 'shrink_end.dart';
@@ -21,10 +25,14 @@ import 'warning.dart';
 /// Everything grit does for one property: its runs, its shrinking and its
 /// replays, ending in the property's outcome.
 ///
-/// Generation runs the body on random fills until one fails, [runs] runs
-/// return, or [invalid] runs are rejected or overrun. A failure is replayed,
-/// shrunk under the budget, and replayed again, and either replay that does
-/// not fail as the first failure did makes the outcome flaky.
+/// The failure the store holds for the call site replays first, and where
+/// it fails, it is the first failure, with no generation. Otherwise
+/// generation runs the body on random fills until one fails, [runs] runs
+/// return, or [invalid] runs are rejected or overrun. A first failure is
+/// replayed, shrunk under the budget, and replayed again, and either replay
+/// that does not fail as it did makes the outcome flaky. The store then
+/// holds a failed outcome's smallest failing sequence for the call site,
+/// and nothing after any other outcome.
 ///
 /// Generation is timed, and every outcome warns where the run count costs
 /// more than 5 s at its mean time per run, and where its runs were mostly
@@ -36,8 +44,8 @@ import 'warning.dart';
 /// candidate that fails any other way is told to the shrinker as not
 /// failing.
 final class Search {
-  /// A search filling from [random] and timing generation and shrinking by
-  /// [clock], called from [callSite].
+  /// A search filling from [random], timing generation and shrinking by
+  /// [clock], called from [callSite] and keeping its failure in [store].
   ///
   /// [runs] is how many runs must return for the property to pass, [limit]
   /// the most choices one run may make, and [invalid] how many runs rejected
@@ -47,6 +55,7 @@ final class Search {
     required this._clock,
     required this._random,
     required this._callSite,
+    required this._store,
     required int runs,
     required int limit,
     required int invalid,
@@ -76,14 +85,56 @@ final class Search {
   final Clock _clock;
   final Random _random;
   final CallSite _callSite;
+  final Store _store;
   final int _runs;
   final int _limit;
   final int _invalid;
   final Budget _budget;
 
-  /// The outcome of searching [body], with the warnings its generation
-  /// earned.
+  /// The outcome of searching [body], the store's failure for the call site
+  /// replayed first, with the warnings the search earned.
   Future<Outcome> run(Body body) async {
+    final Outcome outcome = await _searched(body);
+    switch (outcome) {
+      case Failed(:final ChoiceSequence sequence):
+        _store.save(_callSite.key, sequence);
+      case Passed() || Flaky() || GaveUp():
+        _store.delete(_callSite.key);
+      case Reproduced() || NotReproduced():
+        throw StateError('A search came to a token replay\'s outcome');
+    }
+    return outcome;
+  }
+
+  /// The outcome of [body]'s one run on [sequence], a replay token's, with
+  /// no generation, no shrinking and no store.
+  Future<Outcome> replay(Body body, ChoiceSequence sequence) async {
+    final Run run = (await _replay(body, sequence)).run;
+    return switch (run) {
+      final Threw threw => Reproduced(threw),
+      Returned() || Rejected() || Overran() => NotReproduced(run),
+    };
+  }
+
+  /// The outcome of searching [body] from the store's failure, or from
+  /// generation where the store holds none that fails.
+  Future<Outcome> _searched(Body body) async {
+    final List<Warning> stored = [];
+    switch (_store.load(_callSite.key)) {
+      case Stored(:final ChoiceSequence sequence):
+        if ((await _replay(body, sequence)).run case final Threw first) {
+          return _confirm(body, first, .stored, const []);
+        }
+      case Unreadable(:final Undecodable reason):
+        stored.add(UnreadableStored(reason));
+      case Unstored():
+    }
+    return _generated(body, stored);
+  }
+
+  /// The outcome of generating runs of [body], warning of [stored] and of
+  /// what generation earns.
+  Future<Outcome> _generated(Body body, List<Warning> stored) async {
     // An early run fills a choice at each edge it names in turn, the first
     // times it is made, so every one is filled. Its other choices fill
     // beside earlier choices and towards each choice's edges, so two wide
@@ -124,6 +175,7 @@ final class Search {
     final int made = returned + rejected + overran + (failed == null ? 0 : 1);
     final bool gaveUp = failed == null && returned < _runs;
     final List<Warning> warnings = [
+      ...stored,
       // The mean time per run times the run count, compared in whole
       // microseconds, so no rounding of the mean moves the threshold.
       if (time.inMicroseconds * _runs > _slowAfter.inMicroseconds * made)
@@ -131,36 +183,43 @@ final class Search {
       if (!gaveUp && rejected + overran > returned)
         MostlyInvalid(returned: returned, rejected: rejected, overran: overran),
     ];
-    if (failed != null) return _confirm(body, failed, warnings);
+    if (failed != null) return _confirm(body, failed, .generated, warnings);
     if (gaveUp) {
       return GaveUp(rejected: rejected, overran: overran, warnings: warnings);
     }
     return Passed(runs: returned, warnings: warnings);
   }
 
-  /// The first replay of [first], then shrinking where it fails alike, the
-  /// outcome warning of [warnings].
+  /// The first replay of [first], found as [firstFound] says, then
+  /// shrinking where it fails alike, the outcome warning of [warnings].
   Future<Outcome> _confirm(
     Body body,
     Threw first,
+    FirstFound firstFound,
     List<Warning> warnings,
   ) async {
     final _Ran replay = await _replay(body, first.record);
     if (!first.failedAlike(replay.run)) {
-      return Flaky(first, replay.run, warnings: warnings);
+      return Flaky(
+        first,
+        replay.run,
+        firstFound: firstFound,
+        warnings: warnings,
+      );
     }
-    return _shrink(body, first, replay.spans, warnings);
+    return _shrink(body, first, firstFound, replay.spans, warnings);
   }
 
-  /// Shrinking from [first], whose run made [spans], under the budget, then
-  /// the final replay of the smallest failing sequence, the outcome warning
-  /// of [warnings].
+  /// Shrinking from [first], found as [firstFound] says, whose run made
+  /// [spans], under the budget, then the final replay of the smallest
+  /// failing sequence, the outcome warning of [warnings].
   ///
   /// The smallest failing sequence is the choices its run read, which may be
   /// fewer than the candidate it ran on holds.
   Future<Outcome> _shrink(
     Body body,
     Threw first,
+    FirstFound firstFound,
     List<Span> spans,
     List<Warning> warnings,
   ) async {
@@ -173,15 +232,18 @@ final class Search {
       final Threw last when first.failedAlike(last) => Failed(
         smallest,
         last,
+        firstFound: firstFound,
         steps: shrunk.steps,
         time: time,
         end: shrunk.end,
         warnings: warnings,
       ),
-      Threw() ||
-      Returned() ||
-      Rejected() ||
-      Overran() => Flaky(shrunk.smallest, replay, warnings: warnings),
+      Threw() || Returned() || Rejected() || Overran() => Flaky(
+        shrunk.smallest,
+        replay,
+        firstFound: firstFound,
+        warnings: warnings,
+      ),
     };
   }
 

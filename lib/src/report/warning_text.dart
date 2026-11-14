@@ -1,4 +1,6 @@
+import '../choice/decoding.dart';
 import '../engine/warning.dart';
+import 'undecodable_text.dart';
 import 'words.dart';
 
 /// The line that warns of [warning].
@@ -10,4 +12,8 @@ String warningText(Warning warning) => switch (warning) {
   MostlyInvalid(:final int returned, :final int rejected, :final int overran) =>
     'Warning: most of the property\'s runs were invalid, $rejected rejected '
         'and $overran overrun against $returned returned. $invalidRuns',
+  UnreadableStored(:final Undecodable reason) =>
+    'Warning: the failure stored for this call site '
+        '${undecodableText(reason)}, so the search deleted it and generated '
+        'its runs afresh.',
 };

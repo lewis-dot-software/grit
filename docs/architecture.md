@@ -28,11 +28,13 @@ A run ends in one of four statuses:
 
 ## A search
 
-A search is everything grit does for one property: its runs, its shrinking and its replays, ending in the property's outcome.
+A search is everything grit does for one property: its runs, its shrinking and its replays, ending in the property's outcome. A property whose `replay` setting holds a token runs a token's replay in place of a search.
 
 ```mermaid
 flowchart LR
-  generate["Generate"] -- "Failed" --> confirm["First replay"]
+  stored["Stored replay"] -- "Threw" --> confirm["First replay"]
+  stored -- "Anything else, or none stored" --> generate["Generate"]
+  generate -- "Failed" --> confirm
   generate -- "Count spent" --> passed["Passed"]
   generate -- "Too many rejected or overrun" --> gaveup["Gave up"]
   confirm -- "Same failure" --> shrink["Shrink"]
@@ -40,33 +42,39 @@ flowchart LR
   shrink -- "Ends or spent" --> final["Final replay"]
   final -- "Same failure" --> failed["Failed"]
   final -- "Anything else" --> flaky
+  token["Token's replay"] -- "Threw" --> reproduced["Reproduced"]
+  token -- "Anything else" --> notreproduced["Not reproduced"]
 ```
 
 | Phase | Runs | Ends on |
 |---|---|---|
+| Stored replay | The sequence the store holds for the call site, where it holds one | A throw, which is the first failure, or anything else, which passes the search to generation |
 | Generate | The body on random fills, one run after another | A failure, the run count spent, or too many runs rejected or overrun |
-| First replay | The failing sequence again | The same failure, or anything else, which makes the outcome flaky |
+| First replay | The first failure's sequence again | The same failure, or anything else, which makes the outcome flaky |
 | Shrink | The candidates the step function proposes | The step function's end, or the budget spent |
 | Final replay | The smallest failing sequence, the choices its run read and no more | The error and the draws for the report, or anything else, which makes the outcome flaky |
+| Token's replay | The token's sequence, once, with no generation, no shrinking and no store | A throw, the case reported unshrunk, or anything else, which fails the test saying the token no longer reproduces and how its run ended |
 
-A stored failure replays before generation starts. Where it fails, that failure stands as the first failure and the search goes straight to shrinking. A token passed to a property's `replay` setting replays that sequence alone, with no generation and no shrinking.
+A failure the stored replay found takes the path generation's would, from the first replay on, so a stored failure that no longer fails alike is flaky. Once a search ends, the store holds a failed outcome's smallest sequence for its call site, and nothing after any other outcome.
 
 The outcome is a sealed type, one subtype per row:
 
 | Outcome | Carries |
 |---|---|
 | Passed | The run count |
-| Failed | The smallest failing sequence, its error and draws, the steps and time shrinking took, and the budget's bound that ran out, where one did |
-| Flaky | The failing sequence, and the replay that did not fail as it did |
+| Failed | The smallest failing sequence, its error and draws, whether the stored replay or generation first found it, the steps and time shrinking took, and the budget's bound that ran out, where one did |
+| Flaky | The failing sequence, whether the stored replay or generation found it, and the replay that did not fail as it did |
 | Gave up | How many runs were rejected and overran |
+| Reproduced | The token's replay, which threw |
+| Not reproduced | The token's replay, which returned, was rejected or overran |
 
-Every outcome carries the search's warnings, which never change its verdict: a slow property, and mostly invalid runs, where those rejected and overrun outnumber those that returned in a search that did not give up. A pass prints each under its test, and a failure's report carries them. `runProperty` returns the outcome, and `property` and `forAll` are its bindings to `package:test`, failing the test on every outcome but passed. The report is a pure function of the outcome, the seed the search filled from and the settings it ran under, which it names so the search can be repeated.
+Every outcome carries the search's warnings, which never change its verdict: a slow property, mostly invalid runs, where those rejected and overrun outnumber those that returned in a search that did not give up, and a stored failure that decodes to no sequence, deleted unread. A token's replay warns of nothing. A pass prints each under its test, and a failure's report carries them. `runProperty` returns the outcome, and `property` and `forAll` are its bindings to `package:test`, failing the test on every outcome but passed. The report is a pure function of the outcome, the seed the search filled from and the settings it ran under, which it names so the search can be repeated. A failed outcome's report prints the token of its smallest sequence, says where the stored replay first found it, and says the seed repeats its search only once the store no longer holds its failure.
 
 ## Shrinking
 
 The shrinker is a step function: it proposes a candidate sequence, is told whether the candidate's run failed as the first failure did, with the spans of its draws where it did, and proposes the next. It is pure, so async, time and I/O stay with the engine, which drives it, awaits each run and holds the budget.
 
-The engine decides what counts as the same failure: the same error type, thrown from the same frame. The frame is the first in the package of the property's call site, or where none is, the first outside the Dart SDK and every test package, grit's among them. A candidate that fails any other way is told to the shrinker as not failing, so a case never slips from one bug to another. Both replays hold to the same rule.
+The engine decides what counts as the same failure: the same error type, thrown from the same frame. The frame is the first in the package of the property's call site, or where none is, the first outside the Dart SDK and every test package, grit's among them. A candidate that fails any other way is told to the shrinker as not failing, so a case never slips from one bug to another. The first and final replays hold to the same rule. The stored replay and a token's replay take any throw as a failure, since neither has a failure to compare with.
 
 Why shrinking always ends:
 
@@ -75,7 +83,7 @@ Why shrinking always ends:
 - Each pass proposes finitely many candidates from one sequence and the spans its run made, and the passes are finitely many.
 - The step function ends on a round of every pass that accepts nothing.
 
-The budget then bounds how long shrinking takes, never whether it ends. It counts steps, each one run of a candidate, and wall time from shrinking's start, with defaults in `api`'s settings that no consumer has to set. The two replays are not steps, nor is a candidate the step function proposes again in one shrinking, which the engine tells its answer with no run. A spent budget ends shrinking at the smallest failing sequence found so far.
+The budget then bounds how long shrinking takes, never whether it ends. It counts steps, each one run of a candidate, and wall time from shrinking's start, with defaults in `api`'s settings that no consumer has to set. No replay is a step, nor is a candidate the step function proposes again in one shrinking, which the engine tells its answer with no run. A spent budget ends shrinking at the smallest failing sequence found so far.
 
 A pass is a function from the current sequence, and the spans its run made, to its candidates, and the step function chooses among them:
 
@@ -155,6 +163,7 @@ flowchart TD
   api --> choice["choice"]
   report --> engine
   report --> gen
+  report --> choice
   engine --> store
   engine --> shrink["shrink"]
   engine --> gen
@@ -167,7 +176,7 @@ flowchart TD
 | Layer | Holds | Imports |
 |---|---|---|
 | `api` | The entries, the settings and their defaults, the binding to `package:test`, and the composition root | `report`, `engine`, `store`, `gen`, `choice` |
-| `report` | The outcome as the failure message, and each warning as the line a pass prints | `engine`, `gen` |
+| `report` | The outcome as the failure message, and each warning as the line a pass prints | `engine`, `gen`, `choice` |
 | `engine` | The search: generation, the replays, the shrink driver under the budget, the warnings, the outcome, and every read of a stack | `store`, `shrink`, `gen`, `choice` |
 | `store` | Failing sequences under `.dart_tool/grit/` | `choice` |
 | `shrink` | The step function and its passes | `choice` |
@@ -196,9 +205,11 @@ No other I/O stands below `api`, and nothing writes outside the consumer's `.dar
 
 ## The store
 
-The store keeps each call site's smallest failing sequence in a file of its own under `.dart_tool/grit/`. Its key is the stack at the `property`, `forAll` or `runProperty` call, every frame of it in the consumer's package, by file and line. A property behind a helper is keyed by where the helper is called, and an edit above any of those lines loses its stored failure. Calls from one line in a loop share a key, so they replay each other's failure.
+The store keeps each call site's smallest failing sequence in a file of its own under `.dart_tool/grit/`, in the working directory `dart test` runs from, the consumer's package. No setting turns it off. Its key is the stack at the `property`, `forAll` or `runProperty` call, every frame of it in the consumer's package, by file and line. A property behind a helper is keyed by where the helper is called, and an edit above any of those lines loses its stored failure. Calls from one line in a loop share a key, so they replay each other's failure.
 
-The store's file I/O is synchronous, since async file I/O can deadlock inside a `testWidgets`. A file is written to a temporary name and renamed, since `dart test` runs test files at once. A stored sequence whose replay does not fail, whatever its status, is deleted. The token printed on a failure is the same sequence encoded.
+A file is named for a 64-bit FNV-1a hash of its key, and holds its sequence's token and nothing else. The store's file I/O is synchronous, since async file I/O can deadlock inside a `testWidgets`. A file is written in a temporary directory of its own and renamed into place, since `dart test` runs test files at once. A stored sequence whose replay does not fail, whatever its status, gives way to generation's outcome, and a file that decodes to no sequence is deleted with a warning.
+
+The token is a sequence as one line of text: its format, `grit1`, then a colon, then each choice in base 36, lower case with no leading zero, joined by dots. Its characters all stand inside a Dart string literal as they are. Text that decodes is the one token of its sequence, so no two tokens name one. A token of another format, `grit` and other digits, says so where it fails to decode, and `Settings(replay: ...)` throws a `FormatException` at construction for any text that does not decode, saying which.
 
 ## Platform and packages
 
@@ -215,7 +226,7 @@ grit is one package. A Flutter package under `fixture/flutter/` resolves it besi
 
 ## Testing grit
 
-The shrinking challenge is a public set of shrinking problems, each with the smallest case known (jlink/shrinking-challenge on GitHub). It is a suite under `test/challenge/`, one file per challenge and, for each property it holds, a group of one test per seed, each driving the engine under the default settings on fixed seeds, the fake clock and, once it stands, the in-memory store, and asserting the smallest sequence's value against the smallest known, so a fall in shrink quality fails the suite.
+The shrinking challenge is a public set of shrinking problems, each with the smallest case known (jlink/shrinking-challenge on GitHub). It is a suite under `test/challenge/`, one file per challenge and, for each property it holds, a group of one test per seed, each driving the engine under the default settings on fixed seeds, the fake clock and an empty in-memory store, and asserting the smallest sequence's value against the smallest known, so a fall in shrink quality fails the suite.
 
 A challenge's search finds a failure from each of the seeds from 0 to 9, and is held to the smallest known from each, and from each further seed its file names.
 

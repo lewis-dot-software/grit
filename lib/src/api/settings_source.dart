@@ -7,7 +7,7 @@ typedef _Unit = ({String name, int micros});
 /// The Dart that builds a search's settings, for its report to repeat it by.
 extension SettingsSource on Settings {
   /// The Dart that builds these settings filled from [seed], naming each
-  /// other setting that is not its default.
+  /// other setting a search reads that is not its default.
   String source({required int seed}) {
     final Settings defaults = .new();
     final List<String> named = [

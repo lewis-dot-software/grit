@@ -10,11 +10,16 @@ import 'package:grit/src/engine/clock.dart';
 import 'package:grit/src/engine/search.dart';
 import 'package:grit/src/gen/gen.dart';
 import 'package:grit/src/shrink/shrink.dart';
+import 'package:grit/src/store/loaded.dart';
+import 'package:grit/src/store/store.dart';
+import 'package:grit/src/store/store_key.dart';
 import 'package:test/test.dart';
 
 import '../support/fake_clock.dart';
 import '../support/fixed_random.dart';
+import '../support/bodies.dart';
 import '../support/inputs.dart';
+import '../support/memory_store.dart';
 import '../support/shrinking.dart';
 import '../support/small.dart';
 
@@ -28,11 +33,13 @@ final Budget _unbounded = .new(steps: 1 << 30, time: .new(days: 1));
 const int _seeds = 3;
 
 /// A search over [runs] runs of at most [limit] choices, from [seed], or
-/// from [random] where it is given.
+/// from [random] where it is given, keeping its failure in [store], an empty
+/// one where none is given.
 Search _search({
   int seed = 0,
   Random? random,
   Clock? clock,
+  Store? store,
   int runs = 20,
   int limit = 24,
   int invalid = 100,
@@ -41,6 +48,7 @@ Search _search({
   clock: clock ?? FakeClock(),
   random: random ?? .new(seed),
   callSite: _callSite,
+  store: store ?? MemoryStore(),
   runs: runs,
   limit: limit,
   invalid: invalid,
@@ -249,8 +257,8 @@ final class _Body {
     return .start(record, ranOn(record).spans);
   }
 
-  /// How many candidates the search ran in shrinking: every run but
-  /// generation's and the two replays.
+  /// How many candidates the search ran in shrinking: every run but those
+  /// up to the first that threw, and the first and final replays.
   int get steps => runs - first!.run - 3;
 
   @override
@@ -535,6 +543,8 @@ void _expectSameVerdict(Outcome ticking, Outcome frozen, {String? reason}) {
       expect(ticking, isA<Failed>(), reason: reason);
     case Flaky():
       expect(ticking, isA<Flaky>(), reason: reason);
+    case Reproduced() || NotReproduced():
+      fail('A search came to a token replay\'s outcome');
   }
 }
 
@@ -543,7 +553,7 @@ enum _ByRun {
   /// It never failed.
   passed,
 
-  /// Both replays failed as the first failure did.
+  /// The first and final replays failed as the first failure did.
   failed,
 
   /// The first replay did not fail as the first failure did.
@@ -614,6 +624,8 @@ final class _Scheduled {
     return switch (outcome) {
       Failed() || Flaky() => ran.sublist(0, ran.indexOf(.throws) + 1),
       Passed() || GaveUp() => ran,
+      Reproduced() ||
+      NotReproduced() => fail('A search came to a token replay\'s outcome'),
     };
   }
 
@@ -671,6 +683,71 @@ SlowProperty? _slowOf(Outcome outcome) =>
 /// The mostly-invalid warning of [outcome], or null where it has none.
 MostlyInvalid? _invalidOf(Outcome outcome) =>
     outcome.warnings.whereType<MostlyInvalid>().firstOrNull;
+
+/// A store holding [held] under this file's call site alone.
+MemoryStore _holding(Loaded held) => .new({_callSite.key: held});
+
+/// What [store] holds under this file's call site.
+Loaded _heldIn(MemoryStore store) => store.load(_callSite.key);
+
+/// Matches a load of [sequence].
+Matcher _storedAs(ChoiceSequence sequence) => isA<Stored>().having(
+  (Stored stored) => stored.sequence,
+  'sequence',
+  sequence,
+);
+
+/// What a store may hold for a call site before a search: nothing, text
+/// that decodes to no sequence of either kind, or a few sequences.
+List<Loaded> get _smallHeld => [
+  Unstored(),
+  Unreadable(NotAToken()),
+  Unreadable(OtherFormat('grit0')),
+  for (final List<int> values in [
+    <int>[],
+    [0],
+    [3],
+    [3, 3],
+    [1, 2, 3],
+  ])
+    Stored(sequenceOf(values)),
+];
+
+/// What a store may hold for a call site before a search: nothing, text
+/// that decodes to no sequence, or a sequence of small choices.
+final Gen<Loaded> _anyHeld = .oneOf([
+  .element([0]).map((_) => Unstored()),
+  .element([NotAToken(), OtherFormat('grit0')]).map(Unreadable.new),
+  smallSequence.map(Stored.new),
+]);
+
+/// The sequence [outcome] reports its failure on: a failed outcome's
+/// smallest, or the failed run's of a flaky one, with where it was first
+/// found, or null where the outcome reports none.
+(ChoiceSequence, FirstFound)? _reportedOf(Outcome outcome) => switch (outcome) {
+  Failed(:final ChoiceSequence sequence, :final FirstFound firstFound) => (
+    sequence,
+    firstFound,
+  ),
+  Flaky(:final Threw failed, :final FirstFound firstFound) => (
+    failed.record,
+    firstFound,
+  ),
+  Passed() || GaveUp() || Reproduced() || NotReproduced() => null,
+};
+
+/// Bodies that fail by their run's place alone, as each small sequence of
+/// ways says, returning on every run past its end, so a stored failure's
+/// first replay can fail another way or not at all.
+List<_Body Function()> get _byRun => [
+  for (final ChoiceSequence ways in everySequence(length: 3, bound: 3))
+    () => .new(
+      'failing by run as $ways',
+      _shapes['one choice']!,
+      (int run, _) =>
+          run < ways.choices.length ? .values[ways.choices[run].value] : .none,
+    ),
+];
 
 void main() {
   group('an outcome', () {
@@ -954,6 +1031,203 @@ void main() {
       expect(flaky, isA<Flaky>());
       expect(gaveUp, isA<GaveUp>());
       expect(gaveUp.warnings, [isA<SlowProperty>()]);
+    });
+  });
+
+  group('the store', () {
+    test('replays its failure for the call site first, which is the first '
+        'failure, found from the store, with no generation', () async {
+      final _Body body = .new(
+        'one choice, failing from [2]',
+        _shapes['one choice']!,
+        _failingFrom(sequenceOf([2])),
+      );
+      final Outcome outcome = await _search(
+        store: _holding(Stored(sequenceOf([3]))),
+      ).run(body.call);
+      expect(
+        outcome,
+        isA<Failed>()
+            .having((o) => o.firstFound, 'firstFound', FirstFound.stored)
+            .having((o) => o.sequence, 'sequence', sequenceOf([2])),
+      );
+      expect(body.first!.record, sequenceOf([3]));
+      expect(body.first!.run, 0);
+      // The stored replay, the first replay, each step and the final replay,
+      // and no run of generation's.
+      expect(body.runs, (outcome as Failed).steps + 3);
+    });
+
+    test('passes a stored sequence that does not fail over to generation, '
+        'which finds its own failure', () async {
+      final MemoryStore store = _holding(Stored(sequenceOf([0])));
+      final Outcome outcome = await _search(store: store).run(
+        _Body(
+          'one choice, failing from [2]',
+          _shapes['one choice']!,
+          _failingFrom(sequenceOf([2])),
+        ).call,
+      );
+      expect(
+        outcome,
+        isA<Failed>()
+            .having((o) => o.firstFound, 'firstFound', FirstFound.generated)
+            .having((o) => o.sequence, 'sequence', sequenceOf([2])),
+      );
+      expect(_heldIn(store), _storedAs(sequenceOf([2])));
+    });
+
+    test('passes a stored sequence that is rejected or overruns over to '
+        'generation, and holds nothing after its pass', () async {
+      for (final List<int> values in [
+        [9],
+        <int>[],
+      ]) {
+        final MemoryStore store = _holding(Stored(sequenceOf(values)));
+        final Outcome outcome = await _search(store: store).run((Draw draw) {
+          draw(_choice);
+        });
+        expect(outcome, isA<Passed>(), reason: '$values');
+        expect(_heldIn(store), isA<Unstored>(), reason: '$values');
+      }
+    });
+
+    test(
+      'holds a failed outcome\'s smallest sequence after its search',
+      () async {
+        final MemoryStore store = .new();
+        final Failed failed =
+            await _search(store: store).run(failsOnTrue) as Failed;
+        expect(_heldIn(store), _storedAs(failed.sequence));
+      },
+    );
+
+    test('holds nothing after a passed, flaky or gave-up outcome, whatever '
+        'it held before', () async {
+      final Map<Type, Body> bodies = {
+        Passed: (Draw draw) {
+          draw(_choice);
+        },
+        Flaky: failsOnce(),
+        GaveUp: (Draw draw) => draw.assume(false),
+      };
+      for (final MapEntry(key: Type type, value: Body body) in bodies.entries) {
+        final MemoryStore store = _holding(Stored(sequenceOf([1])));
+        final Outcome outcome = await _search(store: store).run(body);
+        expect(outcome.runtimeType, type);
+        expect(_heldIn(store), isA<Unstored>(), reason: '$type');
+      }
+    });
+
+    test('deletes a stored failure that decodes to no sequence, warning of '
+        'why, and generates as usual', () async {
+      for (final Undecodable reason in [NotAToken(), OtherFormat('grit0')]) {
+        final MemoryStore store = _holding(Unreadable(reason));
+        final Outcome passed = await _search(store: store).run((Draw draw) {
+          draw(_choice);
+        });
+        expect(passed, isA<Passed>().having((o) => o.runs, 'runs', 20));
+        expect(
+          passed.warnings.single,
+          isA<UnreadableStored>().having((w) => w.reason, 'reason', reason),
+        );
+        expect(_heldIn(store), isA<Unstored>());
+        final MemoryStore failing = _holding(Unreadable(reason));
+        final Outcome failed = await _search(store: failing).run(failsOnTrue);
+        expect(
+          failed,
+          isA<Failed>().having(
+            (o) => o.warnings.single,
+            'warning',
+            isA<UnreadableStored>(),
+          ),
+        );
+        expect(_heldIn(failing), _storedAs((failed as Failed).sequence));
+      }
+    });
+
+    test('makes a stored failure whose first replay does not fail alike '
+        'flaky, found from the store', () async {
+      final MemoryStore store = _holding(Stored(sequenceOf([1])));
+      final Outcome outcome = await _search(store: store).run(failsOnce());
+      expect(
+        outcome,
+        isA<Flaky>()
+            .having((o) => o.firstFound, 'firstFound', FirstFound.stored)
+            .having((o) => o.failed.record, 'failed', sequenceOf([]))
+            .having((o) => o.replay, 'replay', isA<Returned>()),
+      );
+      expect(_heldIn(store), isA<Unstored>());
+    });
+
+    test('keeps what another call site\'s key holds as it stood', () async {
+      const StoreKey other = .new('file:///elsewhere_test.dart:1');
+      final Loaded held = Stored(sequenceOf([3]));
+      for (final Body body in [failsOnTrue, (Draw draw) {}]) {
+        final MemoryStore store = .new({other: held});
+        await _search(store: store).run(body);
+        expect(store.held[other], same(held));
+      }
+    });
+  });
+
+  group('a token\'s replay', () {
+    test('runs the body once on the token\'s sequence, reproduced where it '
+        'throws', () async {
+      final _Body body = .new(
+        'two choices, failing from [1]',
+        _shapes['two choices']!,
+        _failingFrom(sequenceOf([1])),
+      );
+      final Outcome outcome = await _search().replay(
+        body.call,
+        sequenceOf([3, 2]),
+      );
+      expect(
+        outcome,
+        isA<Reproduced>()
+            .having((o) => o.run.record, 'record', sequenceOf([3, 2]))
+            .having((o) => o.run.error, 'error', isA<StateError>())
+            .having((o) => o.warnings, 'warnings', isEmpty),
+      );
+      expect(body.runs, 1);
+    });
+
+    test('is not reproduced, with its run, where the run returns, is '
+        'rejected or overruns', () async {
+      final Map<List<int>, Matcher> runs = {
+        [0, 0]: isA<Returned>(),
+        [0, 9]: isA<Rejected>(),
+        [0]: isA<Overran>(),
+      };
+      for (final MapEntry(key: List<int> values, value: Matcher run)
+          in runs.entries) {
+        final _Body body = .new(
+          'two choices, failing from [1]',
+          _shapes['two choices']!,
+          _failingFrom(sequenceOf([1])),
+        );
+        final Outcome outcome = await _search().replay(
+          body.call,
+          sequenceOf(values),
+        );
+        expect(
+          outcome,
+          isA<NotReproduced>().having((o) => o.run, 'run', run),
+          reason: '$values',
+        );
+        expect(body.runs, 1, reason: '$values');
+      }
+    });
+
+    test('neither reads nor writes the store', () async {
+      for (final Loaded held in _smallHeld) {
+        final MemoryStore store = _holding(held);
+        final Outcome outcome = await _search(store: store)
+            .replay(failsOnTrue, sequenceOf([0]));
+        expect(outcome, isA<NotReproduced>(), reason: '$held');
+        expect(_heldIn(store), same(held));
+      }
     });
   });
 
@@ -1249,6 +1523,80 @@ void main() {
   });
 
   group('over every small body, each from a few seeds', () {
+    test('After a search with no token, its call site\'s stored sequence is '
+        'the smallest failing sequence of a failed outcome, and nothing '
+        'after any other.', () async {
+      final Set<Type> outcomes = {};
+      for (final _Body Function() make in [..._deterministic, ..._byRun]) {
+        for (final Loaded held in _smallHeld) {
+          for (int seed = 0; seed < 2; seed++) {
+            final _Body body = make();
+            final MemoryStore store = _holding(held);
+            final Outcome outcome = await _search(
+              seed: seed,
+              store: store,
+            ).run(body.call);
+            outcomes.add(outcome.runtimeType);
+            final String reason = '$body from $seed, holding $held';
+            switch (outcome) {
+              case Failed(:final ChoiceSequence sequence):
+                expect(_heldIn(store), _storedAs(sequence), reason: reason);
+              case Passed() || Flaky() || GaveUp():
+                expect(_heldIn(store), isA<Unstored>(), reason: reason);
+              case Reproduced() || NotReproduced():
+                fail('A search came to a token replay\'s outcome');
+            }
+          }
+        }
+      }
+      expect(outcomes, {Passed, Failed, Flaky, GaveUp});
+    });
+
+    test('A failure found from a stored sequence is never reported larger '
+        'than that sequence.', () async {
+      final Set<Type> found = {};
+      for (final _Body Function() make in [..._deterministic, ..._byRun]) {
+        for (final ChoiceSequence stored in everySequence(
+          length: 2,
+          bound: 3,
+        )) {
+          final _Body body = make();
+          final Outcome outcome = await _search(
+            runs: 1,
+            store: _holding(Stored(stored)),
+          ).run(body.call);
+          if (_reportedOf(outcome) case (
+            final ChoiceSequence reported,
+            FirstFound.stored,
+          )) {
+            found.add(outcome.runtimeType);
+            expect(
+              stored.isSmallerThan(reported),
+              isFalse,
+              reason: '$body, holding $stored',
+            );
+          }
+        }
+      }
+      expect(found, {Failed, Flaky});
+    });
+
+    test('A token\'s replay runs the body once and leaves the store as it '
+        'stood.', () async {
+      for (final _Body Function() make in _deterministic) {
+        for (final ChoiceSequence token in everySequence(length: 3, bound: 3)) {
+          final _Body body = make();
+          final MemoryStore store = _holding(
+            _smallHeld[token.choices.length % _smallHeld.length],
+          );
+          final Map<StoreKey, Loaded> before = {...store.held};
+          await _search(store: store).replay(body.call, token);
+          expect(body.runs, 1, reason: '$body on $token');
+          expect(store.held, before, reason: '$body on $token');
+        }
+      }
+    });
+
     test('A failed outcome\'s sequence fails again, the same way, when '
         'replayed.', () async {
       int failed = 0;
@@ -1453,6 +1801,23 @@ void main() {
   });
 
   group('a bug in grit', () {
+    test('a token replay\'s outcome of a run that threw, called not '
+        'reproduced, is thrown', () {
+      expect(
+        () => NotReproduced(
+          Threw(
+            sequenceOf([]),
+            const [],
+            const [],
+            error: StateError('x'),
+            stackTrace: .empty,
+            failure: (type: StateError, frame: null),
+          ),
+        ),
+        throwsArgumentError,
+      );
+    });
+
     test('a negative setting, or a search that gives up on no invalid run, '
         'is thrown', () {
       for (final Search Function() make in [
@@ -1476,6 +1841,66 @@ void main() {
   });
 
   group('on grit, over larger bodies', () {
+    test('After a search with no token, its call site\'s stored sequence is '
+        'the smallest failing sequence of a failed outcome, and nothing '
+        'after any other.', () async {
+      final Set<Type> outcomes = {};
+      await forAll((Draw draw) async {
+        final _Body body = draw(_anyBody, label: 'body');
+        final MemoryStore store = _holding(draw(_anyHeld, label: 'held'));
+        final Outcome outcome = await _search(
+          seed: draw(_anySeed, label: 'seed'),
+          limit: _drawnLimit,
+          store: store,
+        ).run(body.call);
+        outcomes.add(outcome.runtimeType);
+        switch (outcome) {
+          case Failed(:final ChoiceSequence sequence):
+            expect(_heldIn(store), _storedAs(sequence));
+          case Passed() || Flaky() || GaveUp():
+            expect(_heldIn(store), isA<Unstored>());
+          case Reproduced() || NotReproduced():
+            fail('A search came to a token replay\'s outcome');
+        }
+      });
+      expect(outcomes, containsAll([Passed, Failed]));
+    });
+
+    test('A failure found from a stored sequence is never reported larger '
+        'than that sequence.', () async {
+      int found = 0;
+      await forAll((Draw draw) async {
+        final _Body body = draw(_anyBody, label: 'body');
+        final ChoiceSequence stored = draw(smallSequence, label: 'stored');
+        final Outcome outcome = await _search(
+          runs: 1,
+          limit: _drawnLimit,
+          store: _holding(Stored(stored)),
+        ).run(body.call);
+        if (_reportedOf(outcome) case (
+          final ChoiceSequence reported,
+          FirstFound.stored,
+        )) {
+          found++;
+          expect(stored.isSmallerThan(reported), isFalse);
+        }
+      });
+      expect(found, greaterThan(0));
+    });
+
+    property('A token\'s replay runs the body once and leaves the store as it '
+        'stood.', (Draw draw) async {
+      final _Body body = draw(_anyBody, label: 'body');
+      final MemoryStore store = _holding(draw(_anyHeld, label: 'held'));
+      final Map<StoreKey, Loaded> before = {...store.held};
+      await _search(
+        limit: _drawnLimit,
+        store: store,
+      ).replay(body.call, draw(anySequence, label: 'token'));
+      expect(body.runs, 1);
+      expect(store.held, before);
+    });
+
     property('A search from one seed fills the same sequences in the same '
         'order.', (Draw draw) async {
       final List<int> bounds = draw(

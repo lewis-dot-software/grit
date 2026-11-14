@@ -26,7 +26,14 @@ Failed _failed(
   ShrinkEnd end = .shrunk,
   int steps = 12,
   Duration time = const .new(milliseconds: 34),
-}) => .new(run.record, run, steps: steps, time: time, end: end);
+}) => .new(
+  run.record,
+  run,
+  firstFound: .generated,
+  steps: steps,
+  time: time,
+  end: end,
+);
 
 /// The Dart of the default settings filled from seed 7.
 const String _settings = 'Settings(seed: 7)';
@@ -42,7 +49,8 @@ void main() {
       );
     });
 
-    test('failed reports its smallest case, its shrinking and its seed', () {
+    test('failed reports its smallest case, its shrinking, its token and its '
+        'seed', () {
       final Threw run = _threw(
         draws: [
           (label: 'xs', value: [3], text: '[3]'),
@@ -65,15 +73,125 @@ void main() {
         'It threw:\n'
         '  Bad state: too big\n'
         '\n'
-        'Seed 7. Repeat this search with `settings: Settings(seed: 7)`.',
+        'Replay this case alone with '
+        '`settings: Settings(replay: \'grit1:1.3.0\')`.\n'
+        '\n'
+        'Seed 7. The next search at this call site replays this failure '
+        'first, so `settings: Settings(seed: 7)` repeats this search once '
+        '`.dart_tool/grit/` no longer holds it.',
       );
+    });
+
+    test('failed from the store says it was first found there', () {
+      final Threw run = _threw();
+      expect(
+        report(
+          Failed(
+            run.record,
+            run,
+            firstFound: .stored,
+            steps: 12,
+            time: const .new(milliseconds: 34),
+            end: .shrunk,
+          ),
+          seed: 7,
+          settings: _settings,
+        ),
+        'The property failed. Its smallest failing case, shrunk in 12 steps '
+        'over 34 ms:\n'
+        '\n'
+        'It drew nothing.\n'
+        '\n'
+        'It threw:\n'
+        '  Bad state: too big\n'
+        '\n'
+        'It was first found by replaying the failure an earlier search '
+        'stored for this call site.\n'
+        '\n'
+        'Replay this case alone with '
+        '`settings: Settings(replay: \'grit1:1.3.0\')`.\n'
+        '\n'
+        'Seed 7. The next search at this call site replays this failure '
+        'first, so `settings: Settings(seed: 7)` repeats this search once '
+        '`.dart_tool/grit/` no longer holds it.',
+      );
+    });
+
+    test('flaky from the store says it was first found there', () {
+      final Threw failed = _threw();
+      expect(
+        report(
+          Flaky(
+            failed,
+            Returned(failed.record, const [], const []),
+            firstFound: .stored,
+          ),
+          seed: 7,
+          settings: _settings,
+        ),
+        contains(
+          '  Bad state: too big\n'
+          '\n'
+          'It was first found by replaying the failure an earlier search '
+          'stored for this call site.\n'
+          '\n'
+          'Run again, it returned.',
+        ),
+      );
+    });
+
+    test('reproduced reports its case, unshrunk, and how to search again, '
+        'with no seed', () {
+      final Threw run = _threw(
+        draws: [(label: 'x', value: 2, text: '2')],
+        notes: ['x is 2'],
+      );
+      expect(
+        report(Reproduced(run), seed: 7, settings: _settings),
+        'The property failed on the case its replay token names, run once '
+        'with no shrinking:\n'
+        '\n'
+        'It drew:\n'
+        '  x: 2\n'
+        '\n'
+        'It noted:\n'
+        '  x is 2\n'
+        '\n'
+        'It threw:\n'
+        '  Bad state: too big\n'
+        '\n'
+        'Remove `replay` from the settings to search for a failure again.',
+      );
+    });
+
+    test('not reproduced reports how its run ended, and how to search '
+        'again, with no seed', () {
+      final ChoiceSequence record = sequenceOf([1]);
+      final Map<Run, String> ended = {
+        Returned(record, const [], const []): 'it returned.',
+        Rejected(record, const [], const []): 'it was rejected.',
+        Overran(record, const [], const []):
+            'it made more choices than its case holds.',
+      };
+      for (final MapEntry(key: Run run, value: String end) in ended.entries) {
+        expect(
+          report(NotReproduced(run), seed: 7, settings: _settings),
+          'The replay token no longer reproduces a failure: run once, $end\n'
+          '\n'
+          'Remove `replay` from the settings to search for a failure again.',
+        );
+      }
     });
 
     test('flaky reports its failure and how its replay ended', () {
       final Threw failed = _threw(draws: [(label: 'x', value: 2, text: '2')]);
       final Run replay = Returned(failed.record, const [], const []);
       expect(
-        report(Flaky(failed, replay), seed: 7, settings: _settings),
+        report(
+          Flaky(failed, replay, firstFound: .generated),
+          seed: 7,
+          settings: _settings,
+        ),
         'The property is flaky: it failed, then did not fail the same way '
         'when its failing case ran again.\n'
         '\n'
@@ -136,6 +254,31 @@ void main() {
   });
 
   group('the warnings', () {
+    test('of a stored failure that decodes to no sequence say why, and that '
+        'it was deleted', () {
+      final Map<Undecodable, String> why = {
+        NotAToken(): 'is no grit token',
+        OtherFormat('grit0'):
+            'is a token of format `grit0`, and this grit reads `grit1` alone',
+      };
+      for (final MapEntry(key: Undecodable reason, value: String text)
+          in why.entries) {
+        expect(
+          report(
+            Passed(runs: 100, warnings: [UnreadableStored(reason)]),
+            seed: 7,
+            settings: _settings,
+          ),
+          'The property passed 100 runs.\n'
+          '\n'
+          'Warning: the failure stored for this call site $text, so the '
+          'search deleted it and generated its runs afresh.\n'
+          '\n'
+          'Seed 7. Repeat this search with `settings: Settings(seed: 7)`.',
+        );
+      }
+    });
+
     test('of a slow property name its time per run and what its run count '
         'costs', () {
       expect(
@@ -182,13 +325,14 @@ void main() {
     });
 
     test('follow a failed outcome\'s case, one per paragraph, before its '
-        'seed', () {
+        'token and its seed', () {
       final Threw run = _threw();
       expect(
         report(
           Failed(
             run.record,
             run,
+            firstFound: .generated,
             steps: 12,
             time: const .new(milliseconds: 34),
             end: .shrunk,
@@ -214,7 +358,12 @@ void main() {
           'distinct elements, and overruns where it makes more choices than '
           'one run may.\n'
           '\n'
-          'Seed 7. Repeat this search with `settings: Settings(seed: 7)`.',
+          'Replay this case alone with '
+          '`settings: Settings(replay: \'grit1:1.3.0\')`.\n'
+          '\n'
+          'Seed 7. The next search at this call site replays this failure '
+          'first, so `settings: Settings(seed: 7)` repeats this search once '
+          '`.dart_tool/grit/` no longer holds it.',
         ),
       );
     });
@@ -422,7 +571,11 @@ void main() {
     test('rejected says so', () {
       expect(
         report(
-          Flaky(failed, Rejected(failed.record, [], [])),
+          Flaky(
+            failed,
+            Rejected(failed.record, [], []),
+            firstFound: .generated,
+          ),
           seed: 7,
           settings: _settings,
         ),
@@ -433,7 +586,7 @@ void main() {
     test('overrun says so', () {
       expect(
         report(
-          Flaky(failed, Overran(failed.record, [], [])),
+          Flaky(failed, Overran(failed.record, [], []), firstFound: .generated),
           seed: 7,
           settings: _settings,
         ),
@@ -454,7 +607,11 @@ void main() {
         ),
       );
       expect(
-        report(Flaky(failed, other), seed: 7, settings: _settings),
+        report(
+          Flaky(failed, other, firstFound: .generated),
+          seed: 7,
+          settings: _settings,
+        ),
         contains(
           'Run again, it threw another way, ArgumentError from '
           'file:///a_test.dart:9:\n'
@@ -474,7 +631,11 @@ void main() {
         failure: (type: StateError, frame: null),
       );
       expect(
-        report(Flaky(failed, other), seed: 7, settings: _settings),
+        report(
+          Flaky(failed, other, firstFound: .generated),
+          seed: 7,
+          settings: _settings,
+        ),
         contains(
           ':\n'
           '  Bad state: first\n'
@@ -495,7 +656,11 @@ void main() {
         failure: (type: ArgumentError, frame: null),
       );
       expect(
-        report(Flaky(failed, other), seed: 7, settings: _settings),
+        report(
+          Flaky(failed, other, firstFound: .generated),
+          seed: 7,
+          settings: _settings,
+        ),
         contains('ArgumentError from a stack grit could not read:'),
       );
     });

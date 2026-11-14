@@ -1,6 +1,7 @@
 import 'package:grit/src/engine/call_site.dart';
 import 'package:grit/src/engine/failure.dart';
 import 'package:grit/src/engine/frame.dart';
+import 'package:grit/src/store/store_key.dart';
 import 'package:test/test.dart';
 
 /// A stack in the Dart VM's form, its frames at [frames] in turn, innermost
@@ -155,6 +156,69 @@ void main() {
           _failure(FormatException, .new(Frame.of(.current).first.uri, line)),
         );
       }
+    });
+  });
+
+  group('a call site\'s key', () {
+    test('is every frame of its stack in its package, by library and line, '
+        'innermost first', () {
+      final CallSite site = .of(
+        _stack([
+          'package:grit/src/api/property.dart:30:5',
+          'file:///p/test/support/helper.dart:7:3',
+          'package:collection/src/list.dart:12:5',
+          'file:///p/test/a_test.dart:20:9',
+          'package:test_api/src/backend/declarer.dart:253:25',
+          'file:///p/test/a_test.dart:4:1',
+        ]),
+      );
+      expect(
+        site.key.text,
+        'file:///p/test/support/helper.dart:7\n'
+        'file:///p/test/a_test.dart:20\n'
+        'file:///p/test/a_test.dart:4',
+      );
+    });
+
+    test('is the same for two calls from one line, whatever their columns', () {
+      expect(
+        CallSite.of(_stack(['file:///p/test/a_test.dart:20:9'])).key,
+        CallSite.of(_stack(['file:///p/test/a_test.dart:20:31'])).key,
+      );
+    });
+
+    test(
+      'differs for calls from two lines, or from one behind two callers',
+      () {
+        final StoreKey here = CallSite.of(
+          _stack(['file:///p/test/a_test.dart:20:9']),
+        ).key;
+        expect(
+          CallSite.of(_stack(['file:///p/test/a_test.dart:21:9'])).key,
+          isNot(here),
+        );
+        expect(
+          CallSite.of(
+            _stack([
+              'file:///p/test/a_test.dart:20:9',
+              'file:///p/test/a_test.dart:30:1',
+            ]),
+          ).key,
+          isNot(here),
+        );
+      },
+    );
+
+    test('holds no frame where its stack has none of its own', () {
+      expect(
+        CallSite.of(
+          _stack([
+            'package:grit/src/api/property.dart:30:5',
+            'dart:async/zone.dart:1:1',
+          ]),
+        ).key.text,
+        '',
+      );
     });
   });
 

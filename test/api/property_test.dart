@@ -144,6 +144,42 @@ void main() {
       );
     });
 
+    test('fails a dart test run where its replay token\'s case fails, '
+        'with that case unshrunk', () {
+      final _Result replays = results['replays its token']!;
+      expect(replays.result, _Verdict.failure);
+      expect(
+        replays.errors.single,
+        allOf(
+          startsWith(
+            'The property failed on the case its replay token names, run '
+            'once with no shrinking:',
+          ),
+          contains('It drew:\n  xs: [10]\n'),
+          isNot(contains('Seed')),
+        ),
+      );
+      expect(
+        replays.stackTraces.single,
+        matches(
+          RegExp(r'^package:matcher +expect\nfixture/properties_test\.dart '),
+        ),
+      );
+    });
+
+    test('fails a dart test run where its replay token\'s case no longer '
+        'fails', () {
+      final _Result stale = results['replays a token that no longer fails']!;
+      expect(stale.result, _Verdict.failure);
+      expect(
+        stale.errors.single,
+        startsWith(
+          'The replay token no longer reproduces a failure: run once, it '
+          'returned.',
+        ),
+      );
+    });
+
     group('takes test\'s own', () {
       test('skip', () {
         expect(results['is skipped']!.skipped, isTrue);

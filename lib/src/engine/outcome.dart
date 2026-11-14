@@ -1,4 +1,5 @@
 import '../choice/choice_sequence.dart';
+import 'first_found.dart';
 import 'run.dart';
 import 'shrink_end.dart';
 import 'warning.dart';
@@ -25,11 +26,13 @@ final class Passed extends Outcome {
 /// final replay.
 final class Failed extends Outcome {
   /// The outcome whose smallest failing sequence is [sequence], replayed
-  /// last as [run], after a shrinking of [steps] steps that took [time] and
-  /// ended on [end], warning of [warnings].
+  /// last as [run], first found as [firstFound] says, after a shrinking of
+  /// [steps] steps that took [time] and ended on [end], warning of
+  /// [warnings].
   Failed(
     this.sequence,
     this.run, {
+    required this.firstFound,
     required this.steps,
     required this.time,
     required this.end,
@@ -41,6 +44,9 @@ final class Failed extends Outcome {
 
   /// The final replay of [sequence], with its error, its draws and its notes.
   final Threw run;
+
+  /// Where the failure shrinking started from was found.
+  final FirstFound firstFound;
 
   /// How many candidates shrinking ran.
   final int steps;
@@ -55,12 +61,17 @@ final class Failed extends Outcome {
 /// The property failed once, then did not fail as it did when the failing
 /// sequence was replayed.
 final class Flaky extends Outcome {
-  /// The outcome of [failed], whose sequence's replay [replay] did not fail
-  /// as it did, warning of [warnings].
-  Flaky(this.failed, this.replay, {super.warnings}) : super._();
+  /// The outcome of [failed], first found as [firstFound] says, whose
+  /// sequence's replay [replay] did not fail as it did, warning of
+  /// [warnings].
+  Flaky(this.failed, this.replay, {required this.firstFound, super.warnings})
+    : super._();
 
   /// The run that failed.
   final Threw failed;
+
+  /// Where the failure was first found.
+  final FirstFound firstFound;
 
   /// The replay of [failed]'s sequence, which did not fail as it did.
   final Run replay;
@@ -78,4 +89,28 @@ final class GaveUp extends Outcome {
 
   /// How many runs asked for more choices than the limit.
   final int overran;
+}
+
+/// The body failed on the one run a replay token's sequence made.
+final class Reproduced extends Outcome {
+  /// The outcome of [run], the token's replay, which threw.
+  Reproduced(this.run) : super._();
+
+  /// The replay of the token's sequence, with its error, its draws and its
+  /// notes.
+  final Threw run;
+}
+
+/// The one run a replay token's sequence made did not fail.
+final class NotReproduced extends Outcome {
+  /// The outcome of [run], the token's replay, which is never a run that
+  /// threw.
+  NotReproduced(this.run) : super._() {
+    if (run is Threw) {
+      throw ArgumentError.value(run, 'run', 'Must be a run that did not throw');
+    }
+  }
+
+  /// The replay of the token's sequence: returned, rejected or overrun.
+  final Run run;
 }

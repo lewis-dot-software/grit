@@ -8,6 +8,7 @@ import 'package:test/test.dart';
 import '../support/doubles.dart';
 import '../support/drawing.dart';
 import '../support/fake_clock.dart';
+import '../support/memory_store.dart';
 import '../support/small.dart';
 
 /// A float's bounds and flags, as `Gen.float` takes them.
@@ -442,6 +443,7 @@ void main() {
         clock: FakeClock(),
         random: .new(seed),
         callSite: .of(.current),
+        store: MemoryStore(),
         runs: 100,
         limit: 24,
         invalid: 100,

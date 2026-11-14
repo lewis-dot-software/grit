@@ -26,6 +26,20 @@ void main() {
       expect(forAll(failsOnce()), _failure('The property is flaky'));
     });
 
+    test('fails the test on a reproduced outcome', () {
+      expect(
+        forAll(failsOnTrue, settings: .new(replay: 'grit1:1')),
+        _failure('The property failed on the case its replay token names'),
+      );
+    });
+
+    test('fails the test on a not-reproduced outcome', () {
+      expect(
+        forAll(failsOnTrue, settings: .new(replay: 'grit1:0')),
+        _failure('The replay token no longer reproduces a failure'),
+      );
+    });
+
     test('fails the test on a gave-up outcome', () {
       expect(
         forAll((Draw draw) => draw.assume(false)),
