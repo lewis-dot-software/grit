@@ -257,6 +257,39 @@ void main() {
     );
   });
 
+  test(
+    'deleting and raising deletes each span, the widest first and each '
+    'width from the end back, with the choice after it raised by its sum',
+    () {
+      expect(_candidates(.deleteAndRaise, [2, 0, 1, 3]), [
+        [6],
+        [2, 4],
+        [3, 3],
+        [2, 0, 4],
+        [2, 1, 3],
+      ]);
+    },
+  );
+
+  test('deleting and raising proposes nothing for a span of 0s, nor where '
+      'the raise passes the largest', () {
+    expect(_candidates(.deleteAndRaise, [0, 0, 5]), isEmpty);
+    expect(_candidates(.deleteAndRaise, [1, Choice.largest.value]), isEmpty);
+    expect(_candidates(.deleteAndRaise, [1, Choice.largest.value - 1]), [
+      [Choice.largest.value],
+    ]);
+  });
+
+  test('deleting and raising folds an element of a list into the positive '
+      'integer after it', () {
+    // The list [3, 4] of integers from -10 to 10, each element behind a "one
+    // more" choice: 3, 4 and 7 are the choices 5, 7 and 13.
+    expect(
+      _candidates(.deleteAndRaise, [1, 5, 1, 7, 0]),
+      contains(equals([1, 13, 0])),
+    );
+  });
+
   test('zeroing, sorting, swapping and moving value reach spans and '
       'distances of 8', () {
     expect(_candidates(.zeroSpan, _nineDown).first, [9, ...List.filled(8, 0)]);

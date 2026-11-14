@@ -71,7 +71,16 @@ enum Pass {
   ///
   /// The 0 is a choice such as an empty branch's, so it takes the branch the
   /// draw after it took, where a value lowered before it leaves the room.
-  lowerAndCopy;
+  lowerAndCopy,
+
+  /// Each span of 8, 4, 3, 2 or 1 choices deleted, the spans in the order
+  /// [deleteSpan] takes them, with the choice after the span raised by the
+  /// span's sum, where that sum is above 0 and the raise stays within
+  /// [Choice.largest].
+  ///
+  /// The span is a value such as a list's element, whose choices move into
+  /// the value after it as it is deleted, so two values fold into one.
+  deleteAndRaise;
 
   /// Whether a round takes this pass only where it has accepted nothing yet.
   ///
@@ -86,7 +95,7 @@ enum Pass {
     reorder ||
     swapSpan ||
     moveValue => false,
-    deleteAndLower || lowerAndCopy => true,
+    deleteAndLower || lowerAndCopy || deleteAndRaise => true,
   };
 
   /// The candidates this pass proposes from [sequence], whose run made
@@ -108,6 +117,7 @@ enum Pass {
     moveValue => _moveValue(sequence.choices),
     deleteAndLower => _deleteAndLower(sequence.choices),
     lowerAndCopy => _lowerAndCopy(sequence.choices),
+    deleteAndRaise => _deleteAndRaise(sequence.choices),
   }.skip(from).map((_Build build) => build());
 }
 
@@ -278,6 +288,31 @@ Iterable<_Build> _lowerAndCopy(List<Choice> choices) sync* {
       }
     }
   }
+}
+
+Iterable<_Build> _deleteAndRaise(List<Choice> choices) sync* {
+  for (final int width in _widths) {
+    for (final int start in _startsBack(choices.length - 1, width)) {
+      final int after = start + width;
+      final int? raised = _sum(choices.sublist(start, after + 1));
+      if (raised == null || raised == choices[after].value) continue;
+      yield () => .new([
+        ...choices.take(start),
+        .new(raised),
+        ...choices.skip(after + 1),
+      ]);
+    }
+  }
+}
+
+/// The sum of [choices], or null where it passes [Choice.largest].
+int? _sum(List<Choice> choices) {
+  int sum = 0;
+  for (final Choice choice in choices) {
+    if (choice.value > Choice.largest.value - sum) return null;
+    sum += choice.value;
+  }
+  return sum;
 }
 
 /// The values below [value] a binary search for the smallest failing value

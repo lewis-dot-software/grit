@@ -7,16 +7,21 @@ import 'fake_clock.dart';
 /// The seeds every challenge is searched from.
 const List<int> everySeed = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
-/// Declares a test for each of [everySeed] that the search of [body] from it,
-/// under the default settings, fails and shrinks to the draws [smallest]
-/// holds, in order.
+/// Declares a test for each of [everySeed] and each of [moreSeeds] that the
+/// search of [body] from it, under the default settings, fails and shrinks to
+/// the draws [smallest] holds, in order.
 ///
 /// The search is timed by a clock that never moves, so shrinking ends on its
 /// own end or its step budget alone, and a fall in shrink quality fails the
 /// test however loaded the machine is.
-void challenge(String name, Body body, List<Object?> smallest) {
+void challenge(
+  String name,
+  Body body,
+  List<Object?> smallest, {
+  List<int> moreSeeds = const [],
+}) {
   group(name, () {
-    for (final int seed in everySeed) {
+    for (final int seed in [...everySeed, ...moreSeeds]) {
       test('shrinks to $smallest from seed $seed', () async {
         final Outcome outcome = await PropertyRun(
           .new(),

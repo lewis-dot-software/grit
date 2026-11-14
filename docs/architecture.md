@@ -89,8 +89,9 @@ A pass is a function from the current sequence, and the spans its run made, to i
 - Moving value from one choice to another.
 - Deleting a span just before two choices, both lowered by one, since those may be indices that count the elements before them.
 - Lowering a choice, with a later 0 set to the choice after it, so an empty branch takes the branch the next draw took.
+- Deleting a span with the choice after it raised by the span's sum, so a list's element folds into the positive integer after it.
 
-The last two are costly: each proposes candidates that rarely fail where a cheaper pass has not, so a round takes them only where it has accepted nothing yet.
+The last three are costly: each proposes candidates that rarely fail where a cheaper pass has not, so a round takes them only where it has accepted nothing yet.
 
 A pass for one kind of value, floats or strings, is added where shrink quality shows the need. It needs the record to carry each draw's kind beside its span, since a span alone cannot say what kind of value its choices make, and that change is settled with the pass.
 
@@ -216,7 +217,7 @@ grit is one package. A Flutter package under `fixture/flutter/` resolves it besi
 
 The shrinking challenge is a public set of shrinking problems, each with the smallest case known (jlink/shrinking-challenge on GitHub). It is a suite under `test/challenge/`, one file per challenge and, for each property it holds, a group of one test per seed, each driving the engine under the default settings on fixed seeds, the fake clock and, once it stands, the in-memory store, and asserting the smallest sequence's value against the smallest known, so a fall in shrink quality fails the suite.
 
-A challenge's search finds a failure from each of the seeds from 0 to 9, and is held to the smallest known from each.
+A challenge's search finds a failure from each of the seeds from 0 to 9, and is held to the smallest known from each, and from each further seed its file names.
 
 grit departs from the stack's property-test row, which names glados, since it is the library that replaces it. Before `property` runs, a property a layer's issue carries is checked over every sequence up to a small length and bound, by plain loops in the test. Those checks stay once grit stands, beside the same property written on grit over larger inputs.
 

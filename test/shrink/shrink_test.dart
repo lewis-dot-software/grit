@@ -330,9 +330,9 @@ void main() {
 
   test('a round that has accepted a candidate takes no costly pass, so its '
       'candidates wait for a round that accepts nothing', () {
-    // Only lowering and copying proposes [0, 3, 3], from [2, 0, 3], told as
-    // failing in the first round. The empty sequence opens each round of
-    // [2, 0, 3].
+    // Only lowering and copying proposes [0, 3, 3], and only deleting and
+    // raising [5], from [2, 0, 3], told as failing in the first round. The
+    // empty sequence opens each round of [2, 0, 3].
     final ChoiceSequence first = sequenceOf([2, 0, 3, 3]);
     final ChoiceSequence accepted = sequenceOf([2, 0, 3]);
     final List<ChoiceSequence> proposed = [];
@@ -340,9 +340,15 @@ void main() {
       proposed.add(candidate);
       return candidate == accepted ? spansOf(candidate) : null;
     });
-    final int copied = proposed.indexOf(sequenceOf([0, 3, 3]));
-    expect(copied, isNot(-1));
-    expect(copied, greaterThan(proposed.lastIndexOf(sequenceOf([]))));
+    final int lastRound = proposed.lastIndexOf(sequenceOf([]));
+    for (final List<int> costly in [
+      [0, 3, 3],
+      [5],
+    ]) {
+      final int at = proposed.indexOf(sequenceOf(costly));
+      expect(at, isNot(-1), reason: '$costly is proposed');
+      expect(at, greaterThan(lastRound), reason: '$costly waits');
+    }
   });
 
   group('over every small first failure and every answer', () {
