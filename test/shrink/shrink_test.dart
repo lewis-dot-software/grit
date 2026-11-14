@@ -263,6 +263,44 @@ void main() {
       );
     });
 
+    test('a list holding two elements that index each other, behind four '
+        'elements of 0, shrinks to the two alone, by deleting an element with '
+        'both lowered', () {
+      // No list of six elements smaller than [0, 0, 0, 0, 5, 4] fails, and
+      // deleting an element alone leaves an index past the list's end.
+      expect(
+        _smallest([1, 0, 1, 0, 1, 0, 1, 0, 1, 5, 1, 4, 0], (
+          ChoiceSource source,
+        ) {
+          final List<int> list = _drawList(source, 10);
+          if (list.any((int x) => x >= list.length)) return;
+          for (int i = 0; i < list.length; i++) {
+            final int j = list[i];
+            if (j != i && list[j] == i) throw 'coupled';
+          }
+        }),
+        sequenceOf([1, 1, 1, 0, 0]),
+      );
+    });
+
+    test('a value needing a later option while the earlier one is empty '
+        'shrinks to 0 with the earlier option taken, by lowering it and '
+        'copying the later choice into the 0', () {
+      // An option is taken where its first choice is 3, then holds a value.
+      int? option(ChoiceSource source) => source.choose(.new(3)).value == 3
+          ? source.choose(.new(9)).value
+          : null;
+      expect(
+        _smallest([1, 0, 3, 0], (ChoiceSource source) {
+          final int value = source.choose(.new(9)).value;
+          final int? earlier = option(source);
+          final int? later = option(source);
+          if (value == 0 ? earlier != null : later != null) throw 'option';
+        }),
+        sequenceOf([0, 3, 0, 0]),
+      );
+    });
+
     test('a first failure no candidate of which fails is its own smallest', () {
       final ChoiceSequence first = sequenceOf([3, 1, 2]);
       final Shrunk end = shrunk(.start(first, spansOf(first)), (_) => null);
@@ -289,6 +327,23 @@ void main() {
     expect(start.current, sequenceOf([2, 2]));
     expect(failed.current, candidate);
     expect(passed.current, sequenceOf([2, 2]));
+  });
+
+  test('a round that has accepted a candidate takes no costly pass, so its '
+      'candidates wait for a round that accepts nothing', () {
+    // Only lowering and copying proposes [0, 3, 3], from [2, 0, 3], told as
+    // failing in the first round. The empty sequence opens each round of
+    // [2, 0, 3].
+    final ChoiceSequence first = sequenceOf([2, 0, 3, 3]);
+    final ChoiceSequence accepted = sequenceOf([2, 0, 3]);
+    final List<ChoiceSequence> proposed = [];
+    shrunk(.start(first, spansOf(first)), (ChoiceSequence candidate) {
+      proposed.add(candidate);
+      return candidate == accepted ? spansOf(candidate) : null;
+    });
+    final int copied = proposed.indexOf(sequenceOf([0, 3, 3]));
+    expect(copied, isNot(-1));
+    expect(copied, greaterThan(proposed.lastIndexOf(sequenceOf([]))));
   });
 
   group('over every small first failure and every answer', () {

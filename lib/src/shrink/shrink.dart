@@ -7,9 +7,10 @@ import 'pass.dart';
 /// failing, and the spans its run made.
 ///
 /// A round takes every [Pass] in order, each proposing its candidates of the
-/// current sequence. A candidate no smaller than the current sequence is never
-/// proposed. Where a candidate is told as failing it becomes the current
-/// sequence, and its pass goes on from the same place among the new
+/// current sequence, and a [Pass.costly] one only where the round has
+/// accepted nothing yet. A candidate no smaller than the current sequence is
+/// never proposed. Where a candidate is told as failing it becomes the
+/// current sequence, and its pass goes on from the same place among the new
 /// sequence's candidates. Shrinking ends on a round that accepts nothing.
 sealed class Shrink {
   Shrink._(this.current);
@@ -104,8 +105,12 @@ Shrink _seek({
         accepted: accepted,
       );
     }
-    if (pass.index + 1 < Pass.values.length) {
-      pass = .values[pass.index + 1];
+    final Pass? next = .values
+        .skip(pass.index + 1)
+        .where((Pass later) => !accepted || !later.costly)
+        .firstOrNull;
+    if (next != null) {
+      pass = next;
     } else if (accepted) {
       pass = .values.first;
       accepted = false;

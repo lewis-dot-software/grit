@@ -8,33 +8,24 @@ import 'fake_clock.dart';
 const List<int> everySeed = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 /// Declares a test for each of [everySeed] that the search of [body] from it,
-/// under the default settings, fails, and shrinks to the draws [smallest]
-/// holds, in order, where [shrinks] holds the seed.
+/// under the default settings, fails and shrinks to the draws [smallest]
+/// holds, in order.
 ///
 /// The search is timed by a clock that never moves, so shrinking ends on its
 /// own end or its step budget alone, and a fall in shrink quality fails the
 /// test however loaded the machine is.
-void challenge(
-  String name,
-  Body body,
-  List<Object?> smallest, {
-  List<int> shrinks = everySeed,
-}) {
+void challenge(String name, Body body, List<Object?> smallest) {
   group(name, () {
     for (final int seed in everySeed) {
-      final bool held = shrinks.contains(seed);
-      test(
-        held ? 'shrinks to $smallest from seed $seed' : 'fails from seed $seed',
-        () async {
-          final Outcome outcome = await PropertyRun(
-            .new(),
-            callSite: .of(.current),
-            clock: FakeClock(),
-            seed: seed,
-          ).outcome(body);
-          expect(outcome, held ? _shrinksTo(smallest) : isA<Failed>());
-        },
-      );
+      test('shrinks to $smallest from seed $seed', () async {
+        final Outcome outcome = await PropertyRun(
+          .new(),
+          callSite: .of(.current),
+          clock: FakeClock(),
+          seed: seed,
+        ).outcome(body);
+        expect(outcome, _shrinksTo(smallest));
+      });
     }
   });
 }

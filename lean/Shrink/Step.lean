@@ -59,15 +59,18 @@ def inPasses (current : Seq) (spans : List Span) (accepted : Bool) (passes : Lis
     | some s => some s
     | none => inPasses current spans accepted ps
 
+/-- The passes of `ps` a round takes, having `accepted` a candidate or not: each, less the costly ones where it has. -/
+def taken (accepted : Bool) (ps : List Pass) : List Pass := ps.filter fun p => !accepted || !p.costly
+
 /-- The first state from the candidates `cs` of `pass` on, the first at `position`, that proposes a candidate smaller
-than `current`, whose run made `spans`, moving through the later passes and into a new round as each runs out, or
-ended where a round ends with nothing `accepted`. -/
+than `current`, whose run made `spans`, moving through the later passes a round takes and into a new round as each runs
+out, or ended where a round ends with nothing `accepted`. -/
 def seek (current : Seq) (spans : List Span) (pass : Pass) (position : Nat) (cs : List Seq) (accepted : Bool) :
     Shrink :=
   match firstSmaller current spans pass accepted position cs with
   | some s => .shrinking s
   | none =>
-    match inPasses current spans accepted pass.later with
+    match inPasses current spans accepted (taken accepted pass.later) with
     | some s => .shrinking s
     | none =>
       if accepted then

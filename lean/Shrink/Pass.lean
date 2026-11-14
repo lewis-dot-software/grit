@@ -17,19 +17,40 @@ inductive Pass where
   | reorder
   | swapSpan
   | moveValue
+  | deleteAndLower
+  | lowerAndCopy
   deriving DecidableEq, Repr
 
-/-- The passes a round takes after `p`, in order. -/
+/-- The passes after `p`, in the order a round takes them. -/
 def Pass.later (p : Pass) : List Pass :=
   match p with
-  | .deleteSpan => [.liftSpan, .zeroSpan, .lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue]
-  | .liftSpan => [.zeroSpan, .lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue]
-  | .zeroSpan => [.lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue]
-  | .lowerChoice => [.lowerTogether, .reorder, .swapSpan, .moveValue]
-  | .lowerTogether => [.reorder, .swapSpan, .moveValue]
-  | .reorder => [.swapSpan, .moveValue]
-  | .swapSpan => [.moveValue]
-  | .moveValue => []
+  | .deleteSpan =>
+    [.liftSpan, .zeroSpan, .lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue, .deleteAndLower,
+      .lowerAndCopy]
+  | .liftSpan =>
+    [.zeroSpan, .lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue, .deleteAndLower, .lowerAndCopy]
+  | .zeroSpan => [.lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue, .deleteAndLower, .lowerAndCopy]
+  | .lowerChoice => [.lowerTogether, .reorder, .swapSpan, .moveValue, .deleteAndLower, .lowerAndCopy]
+  | .lowerTogether => [.reorder, .swapSpan, .moveValue, .deleteAndLower, .lowerAndCopy]
+  | .reorder => [.swapSpan, .moveValue, .deleteAndLower, .lowerAndCopy]
+  | .swapSpan => [.moveValue, .deleteAndLower, .lowerAndCopy]
+  | .moveValue => [.deleteAndLower, .lowerAndCopy]
+  | .deleteAndLower => [.lowerAndCopy]
+  | .lowerAndCopy => []
+
+/-- Whether a round takes `p` only where it has accepted nothing yet. -/
+def Pass.costly (p : Pass) : Bool :=
+  match p with
+  | .deleteSpan => false
+  | .liftSpan => false
+  | .zeroSpan => false
+  | .lowerChoice => false
+  | .lowerTogether => false
+  | .reorder => false
+  | .swapSpan => false
+  | .moveValue => false
+  | .deleteAndLower => true
+  | .lowerAndCopy => true
 
 /-- Every pass, in the order a round takes them. -/
 def Pass.all : List Pass := .deleteSpan :: Pass.deleteSpan.later
@@ -156,6 +177,27 @@ def moveValues (cs : Seq) : List Seq :=
       ((moved :: if moved > 1 then [moved - 1] else []).filter (· ≤ largest - target)).map fun raised =>
         (cs.set i lowered).set j (target + raised)
 
+/-- Each two choices 8, 4, 3, 2 or 1 apart, the farthest apart first and each from the first on, both lowered by 1,
+where both are above 0, each with each span of 8, 4, 3, 2 or 1 choices just before the first of them deleted, the
+widest first. -/
+def deleteAndLowers (cs : Seq) : List Seq :=
+  widths.flatMap fun apart => (pairsFrom cs.length apart).flatMap fun i =>
+    let j := i + apart
+    if choiceAt cs i > 0 ∧ choiceAt cs j > 0 then
+      (widths.filter (· ≤ i)).map fun width =>
+        cs.take (i - width) ++ [choiceAt cs i - 1] ++ (cs.drop (i + 1)).take (j - (i + 1)) ++
+          [choiceAt cs j - 1] ++ cs.drop (j + 1)
+    else []
+
+/-- Each choice, from the first, lowered to each of its `probes`, each with each 0 among the 8 choices after it set to
+the choice that follows the 0, where that is above 0. -/
+def lowerAndCopies (cs : Seq) : List Seq :=
+  (List.range cs.length).flatMap fun i => (probes (choiceAt cs i)).flatMap fun lowered =>
+    ((List.range 8).map (i + 1 + ·)).filterMap fun j =>
+      if j + 1 < cs.length ∧ choiceAt cs j = 0 ∧ choiceAt cs (j + 1) > 0 then
+        some ((cs.set i lowered).set j (choiceAt cs (j + 1)))
+      else none
+
 /-- The candidates `p` proposes from `cs`, whose run made `spans`, in order. -/
 def Pass.candidates (p : Pass) (cs : Seq) (spans : List Span) : List Seq :=
   match p with
@@ -167,5 +209,7 @@ def Pass.candidates (p : Pass) (cs : Seq) (spans : List Span) : List Seq :=
   | .reorder => reorders cs
   | .swapSpan => swapSpans cs spans
   | .moveValue => moveValues cs
+  | .deleteAndLower => deleteAndLowers cs
+  | .lowerAndCopy => lowerAndCopies cs
 
 end Grit

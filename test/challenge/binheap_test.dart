@@ -68,26 +68,13 @@ Gen<_Heap?> _heap(int least) => .build((Draw draw) {
   return .new(head, draw(_heap(head)), draw(_heap(head)));
 });
 
-/// The seeds this challenge's shrinking is held to: those whose search
-/// shrinks to the smallest known.
-///
-/// Seeds 3, 6 and 9 stop at `(0, (0, (1, None, None), None), (0, None,
-/// None))`, from which every smaller failure needs a choice lowered and a
-/// later one raised to its bound at once.
-const List<int> _seeds = [0, 1, 2, 4, 5, 7, 8];
-
 /// A binary heap, under the false property that a wrong sort of its keys is
 /// sorted and holds its keys.
 void main() {
-  challenge(
-    'binheap',
-    (Draw draw) {
-      final _Heap? heap = draw(_heap(0));
-      final List<int> sorted = _wronglySorted(heap);
-      expect(sorted, [...sorted]..sort());
-      expect(sorted, [..._keys(heap)]..sort());
-    },
-    [_Heap(0, null, .new(0, .new(0, null, null), .new(1, null, null)))],
-    shrinks: _seeds,
-  );
+  challenge('binheap', (Draw draw) {
+    final _Heap? heap = draw(_heap(0));
+    final List<int> sorted = _wronglySorted(heap);
+    expect(sorted, [...sorted]..sort());
+    expect(sorted, [..._keys(heap)]..sort());
+  }, [_Heap(0, null, .new(0, .new(0, null, null), .new(1, null, null)))]);
 }

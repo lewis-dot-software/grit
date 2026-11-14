@@ -87,6 +87,10 @@ A pass is a function from the current sequence to its candidates, and the step f
 - Sorting a span, and swapping two.
 - Swapping two sibling draws' spans, two with the same draw around both, so two parts of a value change places whatever their widths.
 - Moving value from one choice to another.
+- Deleting a span just before two choices, both lowered by one, since those may be indices that count the elements before them.
+- Lowering a choice, with a later 0 set to the choice after it, so an empty branch takes the branch the next draw took.
+
+The last two are costly: each proposes candidates that rarely fail where a cheaper pass has not, so a round takes them only where it has accepted nothing yet.
 
 A pass for one kind of value, floats or strings, is added where shrink quality shows the need. It needs the record to carry each draw's kind beside its span, since a span alone cannot say what kind of value its choices make, and that change is settled with the pass.
 
@@ -212,7 +216,7 @@ grit is one package. A Flutter package under `fixture/flutter/` resolves it besi
 
 The shrinking challenge is a public set of shrinking problems, each with the smallest case known (jlink/shrinking-challenge on GitHub). It is a suite under `test/challenge/`, one file a challenge, each driving the engine under the default settings on fixed seeds, the fake clock and, once it stands, the in-memory store, and asserting the smallest sequence's value against the smallest known, so a fall in shrink quality fails the suite.
 
-A challenge's search finds a failure from each of the seeds from 0 to 9, and is held to the smallest known from each seed whose search reaches it. Its file names each seed it leaves out of that and why.
+A challenge's search finds a failure from each of the seeds from 0 to 9, and is held to the smallest known from each.
 
 grit departs from the stack's property-test row, which names glados, since it is the library that replaces it. Before `property` runs, a property a layer's issue carries is checked over every sequence up to a small length and bound, by plain loops in the test. Those checks stay once grit stands, beside the same property written on grit over larger inputs.
 

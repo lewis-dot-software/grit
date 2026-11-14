@@ -61,7 +61,7 @@ theorem seek_spec {current spans pass position cs accepted s}
       obtain ⟨h1, h2, h3, h4⟩ := inPasses_spec hi
       refine ⟨h1, h3, ?_⟩
       simp only [remaining, h2]
-      exact .right _ (.left _ _ (later_shorter h4))
+      exact .right _ (.left _ _ (later_shorter (List.mem_filter.mp h4).1))
     · split at h
       · next ha =>
         split at h

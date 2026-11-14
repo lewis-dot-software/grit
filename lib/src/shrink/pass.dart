@@ -54,7 +54,40 @@ enum Pass {
   ///
   /// The raise by 1 less moves value to an integer counted on along one side
   /// of its zigzag, where one choice is one value and not two.
-  moveValue;
+  moveValue,
+
+  /// Each two choices 8, 4, 3, 2 or 1 apart, the farthest apart first and
+  /// each from the first on, both lowered by 1, where both are above 0, each
+  /// with each span of 8, 4, 3, 2 or 1 choices just before the first of them
+  /// deleted, the widest first.
+  ///
+  /// The two lowered choices are values such as indices, which count the
+  /// elements before them, so each falls by 1 as one of those is deleted.
+  deleteAndLower,
+
+  /// Each choice, from the first, lowered to the values [lowerChoice] probes,
+  /// each with each 0 among the 8 choices after it set to the choice that
+  /// follows the 0, where that is above 0.
+  ///
+  /// The 0 is a choice such as an empty branch's, so it takes the branch the
+  /// draw after it took, where a value lowered before it leaves the room.
+  lowerAndCopy;
+
+  /// Whether a round takes this pass only where it has accepted nothing yet.
+  ///
+  /// A costly pass proposes candidates that rarely fail where a cheaper pass
+  /// has not, so it waits for the cheaper passes to stall.
+  bool get costly => switch (this) {
+    deleteSpan ||
+    liftSpan ||
+    zeroSpan ||
+    lowerChoice ||
+    lowerTogether ||
+    reorder ||
+    swapSpan ||
+    moveValue => false,
+    deleteAndLower || lowerAndCopy => true,
+  };
 
   /// The candidates this pass proposes from [sequence], whose run made
   /// [spans], in order, from the one at [from] on.
@@ -73,6 +106,8 @@ enum Pass {
     reorder => _reorder(sequence.choices),
     swapSpan => _swapSpans(sequence.choices, spans),
     moveValue => _moveValue(sequence.choices),
+    deleteAndLower => _deleteAndLower(sequence.choices),
+    lowerAndCopy => _lowerAndCopy(sequence.choices),
   }.skip(from).map((_Build build) => build());
 }
 
@@ -210,6 +245,36 @@ Iterable<_Build> _moveValue(List<Choice> choices) sync* {
           yield () =>
               _replaced(choices, {i: .new(lowered), j: .new(to + raised)});
         }
+      }
+    }
+  }
+}
+
+Iterable<_Build> _deleteAndLower(List<Choice> choices) sync* {
+  for (final int apart in _widths) {
+    for (int i = 0; i + apart < choices.length; i++) {
+      final int j = i + apart;
+      if (choices[i].value == 0 || choices[j].value == 0) continue;
+      for (final int width in _widths.where((int width) => width <= i)) {
+        yield () => .new([
+          ...choices.take(i - width),
+          .new(choices[i].value - 1),
+          ...choices.sublist(i + 1, j),
+          .new(choices[j].value - 1),
+          ...choices.skip(j + 1),
+        ]);
+      }
+    }
+  }
+}
+
+Iterable<_Build> _lowerAndCopy(List<Choice> choices) sync* {
+  for (int i = 0; i < choices.length; i++) {
+    for (final int lowered in _probes(choices[i].value)) {
+      for (int j = i + 1; j <= i + 8 && j + 1 < choices.length; j++) {
+        final Choice following = choices[j + 1];
+        if (choices[j].value != 0 || following.value == 0) continue;
+        yield () => _replaced(choices, {i: .new(lowered), j: following});
       }
     }
   }

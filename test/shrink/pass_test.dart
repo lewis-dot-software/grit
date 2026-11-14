@@ -198,6 +198,65 @@ void main() {
     ]);
   });
 
+  test('deleting and lowering lowers each two choices by 1, the farthest '
+      'apart first, each with each span just before the first deleted, the '
+      'widest first', () {
+    expect(_candidates(.deleteAndLower, [5, 1, 2, 3]), [
+      [0, 2, 2],
+      [0, 1, 3],
+      [1, 2],
+      [5, 1, 2],
+    ]);
+  });
+
+  test('deleting and lowering proposes nothing for a pair holding a 0, nor '
+      'for a pair with no choice before it', () {
+    expect(_candidates(.deleteAndLower, [3, 0, 4]), isEmpty);
+    expect(_candidates(.deleteAndLower, [2, 3]), isEmpty);
+  });
+
+  test('deleting and lowering deletes an element before two indices into '
+      'the list, so each still indexes the element it did', () {
+    // The list [0, 2, 1], each element behind a "one more" choice: deleting
+    // its first element leaves 2 and 1 indexing each other as 1 and 0.
+    expect(
+      _candidates(.deleteAndLower, [1, 0, 1, 2, 1, 1, 0]),
+      contains(equals([1, 1, 1, 0, 0])),
+    );
+  });
+
+  test('lowering and copying lowers each choice to the values lowering a '
+      'choice probes, each with each later 0 set to the choice after it', () {
+    expect(_candidates(.lowerAndCopy, [2, 0, 3, 0, 1]), [
+      [0, 3, 3, 0, 1],
+      [0, 0, 3, 1, 1],
+      [1, 3, 3, 0, 1],
+      [1, 0, 3, 1, 1],
+      [2, 0, 0, 1, 1],
+      [2, 0, 1, 1, 1],
+      [2, 0, 2, 1, 1],
+    ]);
+  });
+
+  test('lowering and copying reaches a 0 8 choices after the lowered choice '
+      'and no farther', () {
+    final List<int> seven = List.filled(7, 5);
+    expect(
+      _candidates(.lowerAndCopy, [1, ...seven, 0, 2]),
+      contains(equals([0, ...seven, 2, 2])),
+    );
+    expect(
+      _candidates(.lowerAndCopy, [
+        1,
+        ...seven,
+        5,
+        0,
+        2,
+      ]).where((List<int> candidate) => candidate.first == 0),
+      isEmpty,
+    );
+  });
+
   test('zeroing, sorting, swapping and moving value reach spans and '
       'distances of 8', () {
     expect(_candidates(.zeroSpan, _nineDown).first, [9, ...List.filled(8, 0)]);
@@ -293,12 +352,15 @@ void main() {
         (start: start, width: 1, depth: 1),
       ],
     ];
+    // Nine choices down from 9 with a 0 after each odd one, so every pass
+    // proposes some.
+    final List<int> choices = [9, 0, 7, 0, 5, 0, 3, 0, 1];
     for (final Pass pass in Pass.values) {
-      final List<List<int>> all = _candidates(pass, _nineDown, spans: spans);
+      final List<List<int>> all = _candidates(pass, choices, spans: spans);
       expect(all, isNotEmpty, reason: pass.name);
       for (int from = 0; from <= all.length + 1; from++) {
         expect(
-          _candidates(pass, _nineDown, spans: spans, from: from),
+          _candidates(pass, choices, spans: spans, from: from),
           all.skip(from),
           reason: '${pass.name} from $from',
         );
