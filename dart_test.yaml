@@ -4,3 +4,15 @@ tags:
   # The model test, which builds lean/ and needs elan. `dart test -x lean`
   # leaves it out by choice, and nothing leaves it out by default.
   lean:
+  # Each challenge's benchmark of shrinking's steps, which the suite skips.
+  bench:
+    skip: 'A benchmark: dart test -P bench'
+
+presets:
+  # Every challenge's benchmark alone, one file at a time so its lines print
+  # in the same order on every run.
+  bench:
+    include_tags: bench
+    run_skipped: true
+    concurrency: 1
+    reporter: expanded

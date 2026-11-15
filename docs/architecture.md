@@ -234,6 +234,8 @@ The shrinking challenge is a public set of shrinking problems, each with the sma
 
 A challenge's search finds a failure from each of the seeds from 0 to 9, and is held to the smallest known from each, and from each further seed its file names.
 
+Each challenge carries a benchmark as well, tagged `bench`, which the suite skips and `dart test -P bench` runs alone. It searches from each seed from 0 to 99 and prints how many failed, how many of those reached the smallest known, and how many steps shrinking ran over them. The clock never moves and the seeds are fixed, so the counts repeat exactly, and a change to the passes shows its cost as the difference from a run at the tree it starts from.
+
 grit departs from the stack's property-test row, which names glados, since it is the library that replaces it. Before `property` runs, a property a layer's issue carries is checked over every sequence up to a small length and bound, by plain loops in the test. Those checks stay once grit stands, beside the same property written on grit over larger inputs.
 
 ## Why this model

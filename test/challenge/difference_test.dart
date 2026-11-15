@@ -21,25 +21,20 @@ void main() {
     ('positive', .integer(min: 1)),
     ('default', .integer()),
   ]) {
-    group('over the $range range', () {
-      challenge(
-        'difference must not be zero',
-        _differing(integer, (int difference) => difference != 0),
-        [10, 10],
-      );
-      challenge(
-        'difference must not be small',
-        _differing(
-          integer,
-          (int difference) => difference < 1 || difference > 4,
-        ),
-        [10, 6],
-      );
-      challenge(
-        'difference must not be one',
-        _differing(integer, (int difference) => difference != 1),
-        [10, 9],
-      );
-    });
+    challenge(
+      'difference must not be zero over the $range range',
+      _differing(integer, (int difference) => difference != 0),
+      [10, 10],
+    );
+    challenge(
+      'difference must not be small over the $range range',
+      _differing(integer, (int difference) => difference < 1 || difference > 4),
+      [10, 6],
+    );
+    challenge(
+      'difference must not be one over the $range range',
+      _differing(integer, (int difference) => difference != 1),
+      [10, 9],
+    );
   }
 }
