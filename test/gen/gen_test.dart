@@ -4,17 +4,36 @@ import 'package:grit/src/choice/status.dart';
 import 'package:grit/src/gen/gen.dart';
 import 'package:test/test.dart';
 
+import '../support/any_generator.dart';
 import '../support/bits.dart';
+import '../support/exactly.dart';
+import '../support/draw_from.dart';
 import '../support/drawing.dart';
+import '../support/expect_alike.dart';
 import '../support/generator.dart';
-import '../support/predicate.dart';
-import '../support/generators.dart';
 import '../support/inputs.dart';
+import '../support/predicate.dart';
+import '../support/simple_generator.dart';
 import '../support/small.dart';
 
-/// The largest choice and length the exhaustive checks reach.
+/// The largest choice the exhaustive checks reach.
 const int _bound = 3;
+
+/// The longest sequence the exhaustive checks reach.
 const int _length = 5;
+
+/// A generator with the simplest value its docs give it:
+///
+/// - `name`: the generator, as a check names it.
+/// - `gen`: the generator.
+/// - `simplest`: its simplest value.
+typedef _Simplest = ({String name, Gen<Object?> gen, Object? simplest});
+
+/// A count drawn first, and a list at least that long drawn after it:
+///
+/// - `length`: the count.
+/// - `list`: the list.
+typedef _Counted = ({int length, List<bool> list});
 
 /// What filtering [gen] by [accepts] draws from [sequence], read off drawing
 /// [gen] alone up to three times, each from where the one before it ended.
@@ -37,7 +56,7 @@ Drawing<Object?> _filtered(
   return Stopped(.rejected, upTo(at));
 }
 
-/// Generators of every kind the stage has, each built on the others, so a
+/// Generators of every kind grit has, each built on the others, so a
 /// property checked over them is checked over each.
 final Map<String, Gen<Object?>> _generators = {
   'an integer': .integer(),
@@ -52,7 +71,9 @@ final Map<String, Gen<Object?>> _generators = {
   'one of a few generators': .oneOf([.boolean(), .integer(min: 0, max: 2)]),
   'a set': .set(.integer(min: 0, max: 2)),
   'a bounded set': .set(.boolean(), minSize: 1, maxSize: 2),
-  // NaN equals nothing, so a float drawing it would never draw alike.
+  // NaN equals nothing by `==`, nor by `equals` in a `matcher` before
+  // 0.12.18, which `test`'s floor admits, so a float drawing it would never
+  // draw alike there.
   'a float': .float(nan: false),
   'a bounded float': .float(min: -1.5, max: 2.5),
   'a mapped generator': .integer(min: 0, max: 3).map((int i) => i * 10),
@@ -68,80 +89,116 @@ void main() {
     test('Each of `.integer`, `.boolean`, `.list`, `.element`, `.string`, '
         '`.oneOf`, `.set` and `.float` draws its documented simplest value '
         'from all-zero choices.', () {
-      final List<(String, Gen<Object?>, Object?)> cases = [
+      final List<_Simplest> cases = [
         for (int min = -4; min <= 4; min++)
           for (int max = min; max <= 4; max++)
             (
-              'an integer from $min to $max', .integer(min: min, max: max),
+              name: 'an integer from $min to $max',
+              gen: .integer(min: min, max: max),
               // The value in range nearest 0.
-              min > 0 ? min : (max < 0 ? max : 0),
+              simplest: min > 0 ? min : (max < 0 ? max : 0),
             ),
-        ('an integer of the default range', .integer(), 0),
-        ('an integer of the widest range', .integer(min: 1 << 63, max: -1), -1),
-        ('a boolean', .boolean(), false),
-        ('a list', .list(.integer()), <int>[]),
+        (name: 'an integer of the default range', gen: .integer(), simplest: 0),
         (
-          'a list with a minimum length',
-          .list(.integer(min: 3, max: 5), minLength: 2),
-          [3, 3],
+          name: 'an integer of the widest range',
+          gen: .integer(min: 1 << 63, max: -1),
+          simplest: -1,
+        ),
+        (name: 'a boolean', gen: .boolean(), simplest: false),
+        (name: 'a list', gen: .list(.integer()), simplest: <int>[]),
+        (
+          name: 'a list with a minimum length',
+          gen: .list(.integer(min: 3, max: 5), minLength: 2),
+          simplest: [3, 3],
         ),
         (
-          'a list of lists with a minimum length',
-          .list(.list(.boolean(), minLength: 1), minLength: 2),
-          [
+          name: 'a list of lists with a minimum length',
+          gen: .list(.list(.boolean(), minLength: 1), minLength: 2),
+          simplest: [
             [false],
             [false],
           ],
         ),
         (
-          'a list with a maximum length of 0',
-          .list(.boolean(), maxLength: 0),
-          <bool>[],
+          name: 'a list with a maximum length of 0',
+          gen: .list(.boolean(), maxLength: 0),
+          simplest: <bool>[],
         ),
-        ('an element', .element(['a', 'b', 'c']), 'a'),
-        ('an element of one value', .element([7]), 7),
-        ('a string', .string(), ''),
-        ('a string with a minimum length', .string(minLength: 2), '00'),
+        (name: 'an element', gen: .element(['a', 'b', 'c']), simplest: 'a'),
+        (name: 'an element of one value', gen: .element([7]), simplest: 7),
+        (name: 'a string', gen: .string(), simplest: ''),
         (
-          'a string of letters with a minimum length',
-          .string(alphabet: .letters, minLength: 3),
-          'AAA',
-        ),
-        (
-          'a string of a string\'s characters',
-          .string(alphabet: .of('xyz'), minLength: 1),
-          'x',
+          name: 'a string with a minimum length',
+          gen: .string(minLength: 2),
+          simplest: '00',
         ),
         (
-          'one of a few generators',
-          .oneOf([.integer(min: 3, max: 5), .boolean()]),
-          3,
-        ),
-        ('a set', .set(.integer()), <int>{}),
-        (
-          'a set with a minimum size of 1',
-          .set(.integer(min: 3, max: 5), minSize: 1),
-          {3},
+          name: 'a string of letters with a minimum length',
+          gen: .string(alphabet: .letters, minLength: 3),
+          simplest: 'AAA',
         ),
         (
-          'a set with a maximum size of 0',
-          .set(.boolean(), maxSize: 0),
-          <bool>{},
+          name: 'a string of a string\'s characters',
+          gen: .string(alphabet: .of('xyz'), minLength: 1),
+          simplest: 'x',
         ),
-        ('a float', .float(), 0.0),
-        ('a float above 0', .float(min: 0.5, max: 3.25), 1.0),
-        ('a float of fractions alone', .float(min: 0.25, max: 0.75), 0.25),
-        ('a float below 0', .float(min: -3.25, max: -0.5), -1.0),
         (
-          'a float of infinities alone',
-          .float(min: .infinity),
-          double.infinity,
+          name: 'one of a few generators',
+          gen: .oneOf([.integer(min: 3, max: 5), .boolean()]),
+          simplest: 3,
+        ),
+        (name: 'a set', gen: .set(.integer()), simplest: <int>{}),
+        (
+          name: 'a set with a minimum size of 1',
+          gen: .set(.integer(min: 3, max: 5), minSize: 1),
+          simplest: {3},
+        ),
+        (
+          name: 'a set with a maximum size of 0',
+          gen: .set(.boolean(), maxSize: 0),
+          simplest: <bool>{},
+        ),
+        (name: 'a float', gen: .float(), simplest: 0.0),
+        (
+          name: 'a float above 0',
+          gen: .float(min: 0.5, max: 3.25),
+          simplest: 1.0,
+        ),
+        (
+          name: 'a float of fractions alone',
+          gen: .float(min: 0.25, max: 0.75),
+          simplest: 0.25,
+        ),
+        (
+          name: 'a float below 0',
+          gen: .float(min: -3.25, max: -0.5),
+          simplest: -1.0,
+        ),
+        (
+          name: 'a float up to -0.0',
+          gen: .float(min: -1, max: -0.0),
+          simplest: -0.0,
+        ),
+        (
+          name: 'a list of floats up to -0.0',
+          gen: .list(.float(min: -0.0, max: -0.0), minLength: 1),
+          simplest: [-0.0],
+        ),
+        (
+          name: 'a float of infinities alone',
+          gen: .float(min: .infinity),
+          simplest: double.infinity,
         ),
       ];
-      for (final (String name, Gen<Object?> gen, Object? simplest) in cases) {
+      for (final (:String name, :Gen<Object?> gen, :Object? simplest)
+          in cases) {
         final Drawing<Object?> drawing = drawFrom(gen, sequenceOf(zeros));
         expect(drawing, isA<Drew<Object?>>(), reason: name);
-        expect((drawing as Drew<Object?>).value, simplest, reason: name);
+        expect(
+          (drawing as Drew<Object?>).value,
+          exactly(simplest),
+          reason: name,
+        );
       }
     });
 
@@ -164,17 +221,19 @@ void main() {
 
   group('Gen.build', () {
     test('draws a value that depends on one drawn before it', () {
-      final Gen<(int, List<bool>)> gen = .build((Draw draw) {
+      final Gen<_Counted> gen = .build((Draw draw) {
         final int length = draw(.integer(min: 0, max: 3));
-        return (length, draw(.list(.boolean(), minLength: length)));
+        return (
+          length: length,
+          list: draw(.list(.boolean(), minLength: length)),
+        );
       });
-      final Drawing<(int, List<bool>)> drawing = drawFrom(
+      final Drawing<_Counted> drawing = drawFrom(
         gen,
         sequenceOf([3, 0, 1, 0, 0, 0, 1, 0]),
       );
-      expect(drawing, isA<Drew<(int, List<bool>)>>());
-      final (int length, List<bool> list) =
-          (drawing as Drew<(int, List<bool>)>).value;
+      expect(drawing, isA<Drew<_Counted>>());
+      final (:int length, :List<bool> list) = (drawing as Drew<_Counted>).value;
       expect(length, 3);
       expect(list, [true, false, true]);
     });
@@ -395,7 +454,7 @@ void main() {
         sequenceOf(zeros),
       );
       expect(drawing, isA<Drew<Object?>>());
-      expect((drawing as Drew<Object?>).value, simple.simplest);
+      expect((drawing as Drew<Object?>).value, exactly(simple.simplest));
     });
 
     property('The same sequence always draws the same value.', (Draw draw) {
@@ -410,25 +469,36 @@ void main() {
       );
     });
 
-    property('A draw keeps each value\'s text as the draw returned it, '
-        'whatever the body does to the value after.', (Draw draw) {
-      final Generator generator = draw(anyGenerator, label: 'generator');
-      final ChoiceSequence sequence = draw(
-        smallOrAnySequence,
-        label: 'sequence',
-      );
-      final ChoiceSource source = .fixed(sequence);
-      final RunDraw inner = .new(source);
-      final Status status = run(source, () {
-        final Object? value = inner(generator.gen);
-        if (value case final List<Object?> list) list.clear();
-      });
-      final ChoiceSource untouched = .fixed(sequence);
-      final RunDraw left = .new(untouched);
-      run(untouched, () => left(generator.gen));
-      if (status == .returned) {
+    test('A draw keeps each value\'s text as the draw returned it, '
+        'whatever the body does to the value after.', () async {
+      int returned = 0;
+      await forAll((Draw draw) {
+        final Generator generator = draw(anyGenerator, label: 'generator');
+        final ChoiceSequence sequence = draw(
+          smallOrAnySequence,
+          label: 'sequence',
+        );
+        final ChoiceSource source = .fixed(sequence);
+        final RunDraw inner = .new(source);
+        final Status status = run(source, () {
+          switch (inner(generator.gen)) {
+            case final List<Object?> list:
+              list.clear();
+            case final Set<Object?> set:
+              set.clear();
+          }
+        });
+        final ChoiceSource untouched = .fixed(sequence);
+        final RunDraw left = .new(untouched);
+        // A run that failed would leave the text unread, so a generator that
+        // throws fails the check.
+        expect(run(untouched, () => left(generator.gen)), status);
+        expect(status, isNot(Status.failed));
+        if (status != .returned) return;
+        returned++;
         expect(inner.draws.single.text, left.draws.single.text);
-      }
+      });
+      expect(returned, greaterThan(0));
     });
 
     property('A filtered generator only ever draws a value its predicate '

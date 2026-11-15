@@ -11,9 +11,21 @@ Set<String> _declared(Type type) => {
     if (!declaration.isPrivate) MirrorSystem.getName(declaration.simpleName),
 };
 
+/// A declaration a library exports:
+///
+/// - `library`: the library it is declared in.
+/// - `declaration`: the declaration.
+typedef _Exported = ({LibraryMirror library, DeclarationMirror declaration});
+
+/// A value a library exports without a call:
+///
+/// - `name`: its name, a class's static member's under its class's.
+/// - `value`: the value.
+typedef _Value = ({String name, Object? value});
+
 /// Every public declaration `package:grit/grit.dart` exports, with the
 /// library it is declared in, past each export's combinators.
-Iterable<(LibraryMirror, DeclarationMirror)> get _exported sync* {
+Iterable<_Exported> get _exported sync* {
   final LibraryMirror grit =
       currentMirrorSystem().libraries[Uri.parse('package:grit/grit.dart')]!;
   for (final LibraryDependencyMirror export in grit.libraryDependencies) {
@@ -22,7 +34,7 @@ Iterable<(LibraryMirror, DeclarationMirror)> get _exported sync* {
     for (final DeclarationMirror declaration in library.declarations.values) {
       if (!declaration.isPrivate &&
           _passes(export.combinators, declaration.simpleName)) {
-        yield (library, declaration);
+        yield (library: library, declaration: declaration);
       }
     }
   }
@@ -30,7 +42,7 @@ Iterable<(LibraryMirror, DeclarationMirror)> get _exported sync* {
 
 /// Every class `package:grit/grit.dart` exports.
 Iterable<ClassMirror> get _exportedClasses => [
-  for (final (_, DeclarationMirror declaration) in _exported)
+  for (final (:DeclarationMirror declaration, library: _) in _exported)
     if (declaration is ClassMirror) declaration,
 ];
 
@@ -38,21 +50,22 @@ Iterable<ClassMirror> get _exportedClasses => [
 /// top-level variable and getter, an extension type's static members among
 /// them as the VM lowers them, and each static field and getter of every
 /// class.
-Iterable<(String, Object?)> get _exportedValues sync* {
-  for (final (LibraryMirror library, DeclarationMirror declaration)
+Iterable<_Value> get _exportedValues sync* {
+  for (final (:LibraryMirror library, :DeclarationMirror declaration)
       in _exported) {
     if (_isValue(declaration)) {
       yield (
-        MirrorSystem.getName(declaration.simpleName),
-        library.getField(declaration.simpleName).reflectee,
+        name: MirrorSystem.getName(declaration.simpleName),
+        value: library.getField(declaration.simpleName).reflectee,
       );
     } else if (declaration is ClassMirror) {
       for (final DeclarationMirror member in declaration.declarations.values) {
         if (member.isPrivate || !_isStaticValue(member)) continue;
         yield (
-          '${MirrorSystem.getName(declaration.simpleName)}.'
+          name:
+              '${MirrorSystem.getName(declaration.simpleName)}.'
               '${MirrorSystem.getName(member.simpleName)}',
-          declaration.getField(member.simpleName).reflectee,
+          value: declaration.getField(member.simpleName).reflectee,
         );
       }
     }
@@ -113,7 +126,7 @@ void main() {
     test('exports no empty choice sequence', () {
       final List<String> read = [];
       final List<String> empty = [];
-      for (final (String name, Object? value) in _exportedValues) {
+      for (final (:String name, :Object? value) in _exportedValues) {
         read.add(name);
         if (value is ChoiceSequence && value.choices.isEmpty) empty.add(name);
       }

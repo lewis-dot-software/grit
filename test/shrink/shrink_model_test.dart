@@ -100,7 +100,7 @@ void main() {
   property('Shrink proposes each candidate and ends as the Lean model does, '
       'whatever the oracle answers', (Draw draw) async {
     final ChoiceSequence first = draw(anySequence, label: 'first failure');
-    final (List<ShrinkStep> path, Shrunk end) = answered(
+    final (:List<ShrinkStep> path, :Shrunk end) = answered(
       first,
       drawOracle(draw, first),
     );

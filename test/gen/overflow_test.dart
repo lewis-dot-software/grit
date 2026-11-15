@@ -2,8 +2,8 @@ import 'package:grit/src/choice/choice_source.dart';
 import 'package:grit/src/gen/gen.dart';
 import 'package:test/test.dart';
 
+import '../support/bottomless.dart';
 import '../support/fixed_random.dart';
-import '../support/generators.dart';
 
 void main() {
   // This test stands alone in its file, so its draws are the first its

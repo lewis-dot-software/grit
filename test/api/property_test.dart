@@ -17,6 +17,12 @@ enum _Verdict {
   error,
 }
 
+/// One error a test of a `dart test` run reported:
+///
+/// - `error`: its message.
+/// - `stackTrace`: its stack trace.
+typedef _Error = ({String error, String stackTrace});
+
 /// How one test of a `dart test` run ended.
 ///
 /// - `result`: the reporter's result.
@@ -44,7 +50,7 @@ Future<Map<String, _Result>> _results(String path) async {
     path,
   ]);
   final Map<int, String> names = {};
-  final Map<int, List<(String, String)>> errors = {};
+  final Map<int, List<_Error>> errors = {};
   final Map<String, _Result> results = {};
   for (final String line in LineSplitter.split(run.stdout as String)) {
     switch (jsonDecode(line)) {
@@ -59,7 +65,7 @@ Future<Map<String, _Result>> _results(String path) async {
         'error': final String error,
         'stackTrace': final String stackTrace,
       }:
-        (errors[id] ??= []).add((error, stackTrace));
+        (errors[id] ??= []).add((error: error, stackTrace: stackTrace));
       case {
         'type': 'testDone',
         'testID': final int id,
@@ -67,12 +73,14 @@ Future<Map<String, _Result>> _results(String path) async {
         'skipped': final bool skipped,
         'hidden': false,
       }:
-        final List<(String, String)> reported = errors[id] ?? [];
+        final List<_Error> reported = errors[id] ?? [];
         results[names[id]!] = (
           result: .values.byName(result),
           skipped: skipped,
-          errors: [for (final (String error, _) in reported) error],
-          stackTraces: [for (final (_, String trace) in reported) trace],
+          errors: [for (final _Error reported in reported) reported.error],
+          stackTraces: [
+            for (final _Error reported in reported) reported.stackTrace,
+          ],
         );
     }
   }

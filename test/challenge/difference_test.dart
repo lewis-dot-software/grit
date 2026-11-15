@@ -13,13 +13,19 @@ Body _differing(Gen<int> integer, bool Function(int difference) holds) =>
       expect(holds((first - second).abs()), isTrue);
     };
 
+/// A range the challenge draws its integers from:
+///
+/// - `range`: its name.
+/// - `integer`: the integers drawn.
+typedef _Range = ({String range, Gen<int> integer});
+
 /// Two integers, positive or from the default range across 0, under three
 /// false properties of their absolute difference where the first is at
 /// least 10.
 void main() {
-  for (final (String range, Gen<int> integer) in [
-    ('positive', .integer(min: 1)),
-    ('default', .integer()),
+  for (final (:String range, :Gen<int> integer) in <_Range>[
+    (range: 'positive', integer: .integer(min: 1)),
+    (range: 'default', integer: .integer()),
   ]) {
     challenge(
       'difference must not be zero over the $range range',

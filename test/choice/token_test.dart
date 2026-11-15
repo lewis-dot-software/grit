@@ -6,8 +6,9 @@ import 'package:test/test.dart';
 import '../support/inputs.dart';
 import '../support/small.dart';
 
-/// The choices past one base 36 digit, and the largest a choice holds, so
-/// the small sequences reach tokens of several digits a choice.
+/// The choices either side of where a choice takes a second and a third base
+/// 36 digit, and the largest a choice holds, so the small sequences reach
+/// tokens of several digits a choice.
 final List<int> _wide = [35, 36, 1295, 1296, Choice.largest.value];
 
 /// Every sequence of up to three choices from 0 to 36, then each of up to
@@ -126,8 +127,8 @@ Iterable<String> _everyText({required int length}) sync* {
   yield 'grit1:0.zzzzzzzzzzzzzz';
 }
 
-/// Text built from [length] characters of a token's alphabet and a few that
-/// are none, drawn one by one, after one of a few openings.
+/// Text of one of a few openings, then any number of characters drawn one by
+/// one, each one a token may hold or one of a few it may not.
 final Gen<String> _anyText = .build((Draw draw) {
   final String opening = draw(
     .element(['', 'grit1:', 'grit2:', 'grit:', 'grit1']),

@@ -35,7 +35,8 @@ final List<StoreKey> _keys = [
   const .new('file:///ä_test.dart:7'),
 ];
 
-/// Each file [directory] holds, by name, whatever its depth.
+/// Each file and directory [directory] holds, at any depth, by its path from
+/// [directory].
 Set<String> _files(Directory directory) => {
   for (final FileSystemEntity entity in directory.listSync(recursive: true))
     entity.path.substring(directory.path.length + 1),

@@ -5,6 +5,7 @@ import 'package:grit/src/gen/gen.dart';
 import 'package:grit/src/shrink/pass.dart';
 import 'package:test/test.dart';
 
+import '../support/draw_from.dart';
 import '../support/drawing.dart';
 import '../support/small.dart';
 

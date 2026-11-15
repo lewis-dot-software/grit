@@ -13,12 +13,24 @@ import '../support/fixed_random.dart';
 import '../support/inputs.dart';
 import '../support/small.dart';
 
-/// The largest choice and length the exhaustive checks reach.
+/// The largest choice the exhaustive checks reach.
 const int _bound = 3;
+
+/// The longest sequence the exhaustive checks reach.
 const int _length = 4;
 
 /// The bound every choice lies within.
 final Bound _widest = .new(Choice.largest.value);
+
+/// A bound at one of a few scales, so a later bound often equals an earlier
+/// one.
+final Gen<Bound> _anyBound = anyChoice.map((Choice c) => .new(c.value));
+
+/// A choice a source handed a run:
+///
+/// - `bound`: the bound it was asked for under.
+/// - `choice`: the choice handed over.
+typedef _Handed = ({Bound bound, Choice choice});
 
 /// Odds from 0 to 1 in hundredths.
 final Gen<Odds> _odds = .integer(
@@ -57,7 +69,7 @@ final class _Weigh extends _Ask {
 /// within it, or for a weighted choice at any odds.
 final Gen<_Ask> _ask = .build((Draw draw) {
   if (draw(.boolean())) return _Weigh(draw(_odds));
-  final Bound bound = .new(draw(anyChoice).value);
+  final Bound bound = draw(_anyBound);
   return _Choose(bound, edges: draw(_edgesWithin(bound)));
 });
 
@@ -87,23 +99,121 @@ final List<Odds> _someOdds = [.never, .new(0.5), .new(1)];
 /// [_scaled] names where its value names one, naming the edges 0 and the
 /// bound's middle, and a weighted choice where it is one past, each with the
 /// bound it lies within.
-List<(Bound, Choice)> _handedTo(ChoiceSource source, ChoiceSequence asks) {
-  final List<(Bound, Choice)> handed = [];
+List<_Handed> _handedTo(ChoiceSource source, ChoiceSequence asks) {
+  final List<_Handed> handed = [];
   run(source, () {
     for (final Choice ask in asks.choices) {
       if (ask.value == _scaled.length) {
-        handed.add((.binary, .new(source.weigh(.new(0.5)) ? 1 : 0)));
+        handed.add((
+          bound: .binary,
+          choice: .new(source.weigh(.new(0.5)) ? 1 : 0),
+        ));
       } else {
         final Bound bound = _scaled[ask.value];
         handed.add((
-          bound,
-          source.choose(bound, edges: [.new(0), .new(bound.value ~/ 2)]),
+          bound: bound,
+          choice: source.choose(
+            bound,
+            edges: [.new(0), .new(bound.value ~/ 2)],
+          ),
         ));
       }
     }
   });
   return handed;
 }
+
+/// The two choices a run of the sweep checks fills:
+///
+/// - `earlier`: one that names no edge.
+/// - `named`: one after it under the same bound that names edges.
+typedef _Filled = ({Choice earlier, Choice named});
+
+/// A way a source stops a run:
+///
+/// - `name`: what stops it, as a test names it.
+/// - `stopped`: the status it stops the run with.
+/// - `make`: a source whose next ask stops it so.
+/// - `first`: the ask that stops it.
+typedef _Stop = ({
+  String name,
+  Status stopped,
+  ChoiceSource Function() make,
+  void Function(ChoiceSource) first,
+});
+
+/// A choice asked for under a bound, naming edges within it:
+///
+/// - `bound`: the bound it is asked for under.
+/// - `edges`: the edges it names.
+typedef _Named = ({Bound bound, List<Choice> edges});
+
+/// A fixed choice and the bound a generator asks for it under:
+///
+/// - `choice`: the choice the sequence holds.
+/// - `bound`: the bound it is asked for under.
+typedef _Asked = ({Choice choice, Bound bound});
+
+/// What an ask beside a zigzag's distances asks for: a distance along it, or
+/// along its mirror, which shares its bound with its sides swapped, a choice
+/// under its bound alone, which counts along another zigzag of that bound, or
+/// a weighted choice.
+enum _Beside { along, mirrored, under, weighed }
+
+/// An ask an early run makes beside a zigzag's distances:
+///
+/// - `beside`: what it asks for.
+/// - `zigzag`: the zigzag it asks beside.
+typedef _ZigzagAsk = ({_Beside beside, Zigzag zigzag});
+
+/// Checks that [source] fills each distance [asks] asks for within its
+/// zigzag, and each choice under a bound within that bound.
+void _expectWithinZigzags(
+  ChoiceSource source,
+  List<_ZigzagAsk> asks, {
+  required String reason,
+}) {
+  for (final (:_Beside beside, :Zigzag zigzag) in asks) {
+    final Zigzag mirror = .new(below: zigzag.above, above: zigzag.below);
+    switch (beside) {
+      case .along || .mirrored:
+        final Zigzag asked = beside == .along ? zigzag : mirror;
+        expect(
+          source.distance(asked),
+          inInclusiveRange(-asked.below, asked.above),
+          reason: '$reason: $asked',
+        );
+      case .under:
+        expect(
+          zigzag.bound.admits(source.choose(zigzag.bound)),
+          isTrue,
+          reason: '$reason: under ${zigzag.bound}',
+        );
+      case .weighed:
+        source.weigh(.new(0.5));
+    }
+  }
+}
+
+/// A weighted choice's fill:
+///
+/// - `draw`: the double the random draws.
+/// - `weighed`: whether the choice weighs true.
+typedef _Weighing = ({double draw, bool weighed});
+
+/// Odds a run fills at once a sweep is spent:
+///
+/// - `name`: the odds, as a check names them.
+/// - `near`: the odds of near.
+/// - `edges`: the odds of edges.
+/// - `asOddsSay`: whether a named choice filled after an earlier one is as
+///   the odds say.
+typedef _SweptOdds = ({
+  String name,
+  Odds near,
+  Odds edges,
+  bool Function(Choice earlier, Choice named) asOddsSay,
+});
 
 void main() {
   group('a fixed source', () {
@@ -146,7 +256,15 @@ void main() {
       final List<Choice> choices = [
         for (int i = 0; i < 200; i++) source.choose(_widest),
       ];
-      expect(choices.any((Choice c) => c.value >= 1 << 62), isTrue);
+      // Each bit the bound spans is set in some choice and clear in another,
+      // the low word's and the top bit among them.
+      for (int bit = 0; bit < _widest.value.bitLength; bit++) {
+        expect(
+          {for (final Choice c in choices) c.value >> bit & 1},
+          {0, 1},
+          reason: 'bit $bit',
+        );
+      }
     });
 
     test('fills a bound of one word with every choice within it', () {
@@ -186,11 +304,11 @@ void main() {
 
     test('weighs true below the odds asked and false from them up', () {
       for (final double odds in [0.25, 0.5, 0.75]) {
-        for (final (double draw, bool weighed) in [
-          (0, true),
-          (odds - 0.01, true),
-          (odds, false),
-          (odds + 0.01, false),
+        for (final (:double draw, :bool weighed) in <_Weighing>[
+          (draw: 0, weighed: true),
+          (draw: odds - 0.01, weighed: true),
+          (draw: odds, weighed: false),
+          (draw: odds + 0.01, weighed: false),
         ]) {
           final ChoiceSource source = .random(FixedRandom(draw), limit: 1);
           expect(
@@ -301,29 +419,29 @@ void main() {
       // of 1 fill the named choice beside it, and odds of edges of 1 at one
       // of 0, the bound and the named edges, where the sweep does not.
       for (final (
-            String odds,
-            Odds near,
-            Odds edgeOdds,
-            bool Function(Choice earlier, Choice named) asOddsSay,
+            name: String odds,
+            :Odds near,
+            edges: Odds edgeOdds,
+            :bool Function(Choice earlier, Choice named) asOddsSay,
           )
-          in [
+          in <_SweptOdds>[
             (
-              'near of 1',
-              .new(1),
-              .never,
-              (Choice earlier, Choice named) =>
+              name: 'near of 1',
+              near: .new(1),
+              edges: .never,
+              asOddsSay: (Choice earlier, Choice named) =>
                   (earlier.value - named.value).abs() <= 1,
             ),
             (
-              'edges of 1',
-              .never,
-              .new(1),
-              (Choice _, Choice named) =>
+              name: 'edges of 1',
+              near: .never,
+              edges: .new(1),
+              asOddsSay: (Choice _, Choice named) =>
                   [Choice(0), Choice(bound.value), ...edges].contains(named),
             ),
           ]) {
         final Sweep sweep = .new();
-        final List<(Choice, Choice)> filled = [
+        final List<_Filled> filled = [
           for (int run = 0; run < 4; run++)
             () {
               final ChoiceSource source = .random(
@@ -333,15 +451,18 @@ void main() {
                 near: near,
                 edges: edgeOdds,
               );
-              return (source.choose(bound), source.choose(bound, edges: edges));
+              return (
+                earlier: source.choose(bound),
+                named: source.choose(bound, edges: edges),
+              );
             }(),
         ];
         expect(
-          [for (final (_, Choice named) in filled.take(3)) named],
+          [for (final _Filled run in filled.take(3)) run.named],
           edges,
           reason: odds,
         );
-        final (Choice earlier, Choice named) = filled.last;
+        final (:Choice earlier, :Choice named) = filled.last;
         expect(
           asOddsSay(earlier, named),
           isTrue,
@@ -557,48 +678,49 @@ void main() {
     // stopped, wherever a source can. A later ask that only repeats the
     // stop, another past an overrun or a reject after a reject, stops alike
     // either way, as does a weighted choice above 1 asked again.
-    final List<
-      (String, Status, ChoiceSource Function(), void Function(ChoiceSource))
-    >
-    stops = [
+    final List<_Stop> stops = [
       (
-        'an overrun',
-        .overrun,
-        () => .fixed(sequenceOf([])),
-        (ChoiceSource source) => source.choose(.new(1)),
+        name: 'an overrun',
+        stopped: .overrun,
+        make: () => .fixed(sequenceOf([])),
+        first: (ChoiceSource source) => source.choose(.new(1)),
       ),
       (
-        'a fixed choice above its bound',
-        .rejected,
-        () => .fixed(sequenceOf([1, 0])),
-        (ChoiceSource source) => source.choose(.new(0)),
+        name: 'a fixed choice above its bound',
+        stopped: .rejected,
+        make: () => .fixed(sequenceOf([1, 0])),
+        first: (ChoiceSource source) => source.choose(.new(0)),
       ),
       (
-        'a weighted choice above 1',
-        .rejected,
-        () => .fixed(sequenceOf([2, 0])),
-        (ChoiceSource source) => source.weigh(.new(0.5)),
+        name: 'a weighted choice above 1',
+        stopped: .rejected,
+        make: () => .fixed(sequenceOf([2, 0])),
+        first: (ChoiceSource source) => source.weigh(.new(0.5)),
       ),
       (
-        'a reject',
-        .rejected,
-        () => .fixed(sequenceOf([0, 1])),
-        (ChoiceSource source) => source.reject(),
+        name: 'a reject',
+        stopped: .rejected,
+        make: () => .fixed(sequenceOf([0, 1])),
+        first: (ChoiceSource source) => source.reject(),
       ),
     ];
-    final List<(String, void Function(ChoiceSource))> asks = [
-      ('a choice', (ChoiceSource source) => source.choose(.new(3))),
-      ('a weighted choice', (ChoiceSource source) => source.weigh(.new(0.5))),
-      ('a reject', (ChoiceSource source) => source.reject()),
-    ];
+    final Map<String, void Function(ChoiceSource)> asks = {
+      'a choice': (ChoiceSource source) => source.choose(.new(3)),
+      'a weighted choice': (ChoiceSource source) => source.weigh(.new(0.5)),
+      'a reject': (ChoiceSource source) => source.reject(),
+    };
     for (final (
-          String stop,
-          Status stopped,
-          ChoiceSource Function() make,
-          void Function(ChoiceSource) first,
+          name: String stop,
+          :Status stopped,
+          :ChoiceSource Function() make,
+          :void Function(ChoiceSource) first,
         )
         in stops) {
-      for (final (String ask, void Function(ChoiceSource) then) in asks) {
+      for (final MapEntry(
+            key: String ask,
+            value: void Function(ChoiceSource) then,
+          )
+          in asks.entries) {
         test('keeps the stop of $stop, and stops $ask asked after it', () {
           final ChoiceSource source = make();
           expect(() => first(source), throwsException);
@@ -693,20 +815,20 @@ void main() {
             bound: _bound + 1,
           )) {
             final ChoiceSource source = .random(.new(seed), limit: limit);
-            final List<(Bound, Choice)> handed = [];
+            final List<_Handed> handed = [];
             final Status status = run(source, () {
               for (final Choice ask in asks.choices) {
                 if (ask.value > _bound) {
                   final bool weighed = source.weigh(.new(0.5));
-                  handed.add((.binary, .new(weighed ? 1 : 0)));
+                  handed.add((bound: .binary, choice: .new(weighed ? 1 : 0)));
                 } else {
                   final Bound bound = .new(ask.value);
-                  handed.add((bound, source.choose(bound)));
+                  handed.add((bound: bound, choice: source.choose(bound)));
                 }
               }
             });
             final String reason = 'seed $seed, limit $limit, asks $asks';
-            for (final (Bound bound, Choice choice) in handed) {
+            for (final (:Bound bound, :Choice choice) in handed) {
               expect(bound.admits(choice), isTrue, reason: reason);
             }
             expect(source.record.choices, hasLength(handed.length));
@@ -735,7 +857,7 @@ void main() {
                 length: _length,
                 bound: _scaled.length,
               )) {
-                final List<(Bound, Choice)> handed = _handedTo(
+                final List<_Handed> handed = _handedTo(
                   .random(
                     .new(seed),
                     limit: _length,
@@ -746,7 +868,7 @@ void main() {
                   asks,
                 );
                 expect(handed, hasLength(asks.choices.length));
-                for (final (Bound bound, Choice choice) in handed) {
+                for (final (:Bound bound, :Choice choice) in handed) {
                   expect(
                     bound.admits(choice),
                     isTrue,
@@ -764,25 +886,37 @@ void main() {
 
     test('An early run never fills a distance outside its zigzag, whatever '
         'fill it takes.', () {
+      // Each run asks along a zigzag beside asks along its mirror, under its
+      // bound alone and weighted, so a near fill reaches a distance beside a
+      // choice of another zigzag of the same bound.
       for (int seed = 0; seed < 3; seed++) {
         for (final Odds near in _someOdds) {
           for (final Odds edges in _someOdds) {
-            for (int below = 0; below <= _bound; below++) {
-              for (int above = 0; above <= _bound; above++) {
-                final Zigzag zigzag = .new(below: below, above: above);
-                final ChoiceSource source = .random(
-                  .new(seed),
-                  limit: _length,
-                  sweep: .new(),
-                  near: near,
-                  edges: edges,
-                );
-                for (int ask = 0; ask < _length; ask++) {
-                  expect(
-                    source.distance(zigzag),
-                    inInclusiveRange(-below, above),
-                    reason: 'seed $seed, near $near, edges $edges, $zigzag',
-                  );
+            for (final Sweep? sweep in [null, .new()]) {
+              for (int below = 0; below <= _bound; below++) {
+                for (int above = 0; above <= _bound; above++) {
+                  final Zigzag zigzag = .new(below: below, above: above);
+                  for (final ChoiceSequence kinds in everySequence(
+                    length: _length,
+                    bound: _Beside.values.length - 1,
+                  )) {
+                    _expectWithinZigzags(
+                      .random(
+                        .new(seed),
+                        limit: _length,
+                        sweep: sweep,
+                        near: near,
+                        edges: edges,
+                      ),
+                      [
+                        for (final Choice kind in kinds.choices)
+                          (beside: .values[kind.value], zigzag: zigzag),
+                      ],
+                      reason:
+                          'seed $seed, near $near, edges $edges, sweep '
+                          '${sweep != null}, asks $kinds',
+                    );
+                  }
                 }
               }
             }
@@ -892,22 +1026,22 @@ void main() {
         edges: draw(_odds, label: 'edges'),
       );
       final List<_Ask> asks = draw(.list(_ask), label: 'asks');
-      final List<(Bound, Choice)> handed = [];
+      final List<_Handed> handed = [];
       final Status status = run(source, () {
         for (final _Ask ask in asks) {
           handed.add(switch (ask) {
             _Choose(:final Bound bound, :final List<Choice> edges) => (
-              bound,
-              source.choose(bound, edges: edges),
+              bound: bound,
+              choice: source.choose(bound, edges: edges),
             ),
             _Weigh(:final Odds odds) => (
-              .binary,
-              .new(source.weigh(odds) ? 1 : 0),
+              bound: .binary,
+              choice: .new(source.weigh(odds) ? 1 : 0),
             ),
           });
         }
       });
-      for (final (Bound bound, Choice choice) in handed) {
+      for (final (:Bound bound, :Choice choice) in handed) {
         expect(bound.admits(choice), isTrue, reason: '$choice above $bound');
       }
       expect(source.record.choices, hasLength(handed.length));
@@ -933,18 +1067,14 @@ void main() {
       // A few bounds, so a later choice is often asked for under an earlier
       // one's.
       final List<Bound> bounds = draw(
-        .list(
-          anyChoice.map((Choice c) => .new(c.value)),
-          minLength: 1,
-          maxLength: 3,
-        ),
+        .list(_anyBound, minLength: 1, maxLength: 3),
         label: 'bounds',
       );
-      final List<(Bound, List<Choice>)> asks = draw(
+      final List<_Named> asks = draw(
         .list(
           .build((Draw draw) {
             final Bound bound = draw(.element(bounds));
-            return (bound, draw(_edgesWithin(bound)));
+            return (bound: bound, edges: draw(_edgesWithin(bound)));
           }),
           maxLength: 64,
         ),
@@ -958,8 +1088,8 @@ void main() {
           near: near,
           edges: edges,
         );
-        for (final (Bound bound, List<Choice> named) in asks) {
-          final Choice choice = source.choose(bound, edges: named);
+        for (final (:Bound bound, :List<Choice> edges) in asks) {
+          final Choice choice = source.choose(bound, edges: edges);
           expect(bound.admits(choice), isTrue, reason: '$choice above $bound');
         }
       }
@@ -976,31 +1106,30 @@ void main() {
         edges: draw(_odds, label: 'edges'),
       );
       // A few zigzags, so a later distance is often asked for along an
-      // earlier one's.
+      // earlier one's, each ask beside one of them of any kind.
       final List<Zigzag> zigzags = draw(
         .list(anyZigzag, minLength: 1, maxLength: 3),
         label: 'zigzags',
       );
-      final List<Zigzag> asks = draw(
-        .list(.element(zigzags), maxLength: 64),
+      final List<_ZigzagAsk> asks = draw(
+        .list(
+          .build(
+            (Draw draw) => (
+              beside: draw(.element(_Beside.values)),
+              zigzag: draw(.element(zigzags)),
+            ),
+          ),
+          maxLength: 64,
+        ),
         label: 'asks',
       );
-      for (final Zigzag zigzag in asks) {
-        expect(
-          source.distance(zigzag),
-          inInclusiveRange(-zigzag.below, zigzag.above),
-          reason: '$zigzag',
-        );
-      }
+      _expectWithinZigzags(source, asks, reason: 'seed $seed');
     });
 
     property('Naming a choice\'s edges changes no value a given sequence '
         'draws.', (Draw draw) {
       final ChoiceSequence sequence = draw(anySequence, label: 'sequence');
-      final List<Bound> bounds = draw(
-        .list(anyChoice.map((Choice c) => .new(c.value))),
-        label: 'bounds',
-      );
+      final List<Bound> bounds = draw(.list(_anyBound), label: 'bounds');
       final List<List<Choice>> edges = [
         for (final (int i, Bound bound) in bounds.indexed)
           draw(_edgesWithin(bound), label: 'edges $i'),
@@ -1025,21 +1154,25 @@ void main() {
         'the run rejected.', (Draw draw) {
       // Each choice is asked for under the bound drawn beside it, each at a
       // scale of its own, so a choice lies above its bound as often as not.
-      final List<(Choice, Choice)> pairs = draw(
-        .list(.build((Draw draw) => (draw(anyChoice), draw(anyChoice)))),
+      final List<_Asked> asked = draw(
+        .list(
+          .build(
+            (Draw draw) => (choice: draw(anyChoice), bound: draw(_anyBound)),
+          ),
+        ),
         label: 'choices and bounds',
       );
       final ChoiceSequence sequence = .new([
-        for (final (Choice choice, _) in pairs) choice,
+        for (final _Asked ask in asked) ask.choice,
       ]);
       final ChoiceSource source = .fixed(sequence);
       final Status status = run(source, () {
-        for (final (_, Choice bound) in pairs) {
-          source.choose(.new(bound.value));
+        for (final _Asked ask in asked) {
+          source.choose(ask.bound);
         }
       });
-      final int firstAbove = pairs.indexWhere(
-        ((Choice, Choice) pair) => pair.$1.value > pair.$2.value,
+      final int firstAbove = asked.indexWhere(
+        (_Asked ask) => !ask.bound.admits(ask.choice),
       );
       if (firstAbove == -1) {
         expect(status, Status.returned);

@@ -2,25 +2,11 @@ import 'package:grit/grit.dart';
 
 import 'alphabets.dart';
 import 'generator.dart';
-import 'predicate.dart';
+import 'integer_range.dart';
 
 /// A generator of `.integer`, `.boolean`, `.element`, `.list`, `.string`,
 /// `.oneOf`, `.set` or `.float`, with the simplest value its docs give it.
 typedef Simple = ({Generator generator, Object? simplest});
-
-/// The largest magnitude a range's ends reach at each of its scales, the
-/// widest of which still holds no more values than a choice does.
-final List<int> _magnitudes = [3, 255, 0xFFFFFFFF, (1 << 62) - 1];
-
-/// A range of integers, its minimum and maximum, at one of a few scales,
-/// either side of 0 or across it.
-final Gen<(int, int)> integerRange = .build((Draw draw) {
-  final int magnitude = draw(.element(_magnitudes));
-  final Gen<int> end = .integer(min: -magnitude, max: magnitude);
-  final int a = draw(end);
-  final int b = draw(end);
-  return a <= b ? (a, b) : (b, a);
-});
 
 /// A float's range, with the simplest double in it.
 ///
@@ -29,8 +15,9 @@ final Gen<(int, int)> integerRange = .build((Draw draw) {
 /// - `simplest`: the simplest double from `min` to `max`.
 typedef _Float = ({double min, double max, double simplest});
 
-/// Ranges of a float, none drawing NaN, since NaN equals nothing a value is
-/// checked against.
+/// Ranges of a float, none drawing NaN, since NaN equals nothing by `==`,
+/// nor by `equals` in a `matcher` before 0.12.18, which `test`'s floor
+/// admits.
 final List<_Float> _floats = [
   (min: .negativeInfinity, max: .infinity, simplest: 0),
   (min: 0.5, max: 3.25, simplest: 1),
@@ -60,7 +47,7 @@ Gen<Simple> _simple(int depth) => .build((Draw draw) {
   );
   switch (kind) {
     case .integer:
-      final (int min, int max) = draw(integerRange);
+      final (:int min, :int max) = draw(integerRange);
       return (
         generator: .new(
           'an integer from $min to $max',
@@ -154,48 +141,3 @@ Gen<Simple> _simple(int depth) => .build((Draw draw) {
       );
   }
 });
-
-/// The kinds of generator [anyGenerator] draws.
-enum _Any { simple, map, filter, build }
-
-/// A generator of any kind the stage has, each built on the others at most
-/// twice over: one of [simpleGenerator]'s, or one mapped, filtered or built
-/// from another.
-final Gen<Generator> anyGenerator = _any(2);
-
-Gen<Generator> _any(int depth) => .build((Draw draw) {
-  final _Any kind = depth > 0 ? draw(.element(_Any.values)) : .simple;
-  switch (kind) {
-    case .simple:
-      return draw(simpleGenerator).generator;
-    case .map:
-      final Generator base = draw(_any(depth - 1));
-      return .new('the text of $base', base.gen.map((Object? v) => '$v'));
-    case .filter:
-      final Generator base = draw(_any(depth - 1));
-      final Predicate predicate = draw(.element(Predicate.values));
-      return .new(
-        '$base, filtered to ${predicate.name}',
-        base.gen.filter(predicate.accepts),
-      );
-    case .build:
-      final Generator base = draw(_any(depth - 1));
-      return .new(
-        'up to 3 of $base, as many as drawn first',
-        .build((Draw draw) {
-          final int count = draw(.integer(min: 0, max: 3));
-          return [for (int i = 0; i < count; i++) draw(base.gen)];
-        }),
-      );
-  }
-});
-
-/// A generator that draws itself inside itself and reads no choice, so its
-/// draw recurses until the stack overflows.
-final Gen<int> bottomless = .build((Draw draw) => 1 + draw(bottomless));
-
-/// A generator that reads a choice up to 3, and draws [bottomless] where it
-/// is above 0.
-final Gen<int> overflowing = .build(
-  (Draw draw) => draw(.integer(min: 0, max: 3)) > 0 ? draw(bottomless) : 0,
-);

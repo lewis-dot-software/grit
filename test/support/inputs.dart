@@ -20,8 +20,8 @@ final Gen<ChoiceSequence> anySequence = .list(
 ).map(ChoiceSequence.new);
 
 /// A sequence of choices from 0 to 3, runs of them flattened, so it reaches
-/// dozens of choices, most of which the stage's generators draw from without
-/// a stop.
+/// dozens of choices, most of which grit's generators draw from without a
+/// stop.
 final Gen<ChoiceSequence> smallSequence =
     .list(.list(.integer(min: 0, max: 3).map(Choice.new))).map(
       (List<List<Choice>> runs) =>

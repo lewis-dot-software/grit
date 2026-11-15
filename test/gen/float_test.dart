@@ -6,6 +6,7 @@ import 'package:grit/src/gen/gen.dart';
 import 'package:test/test.dart';
 
 import '../support/doubles.dart';
+import '../support/draw_from.dart';
 import '../support/drawing.dart';
 import '../support/fake_clock.dart';
 import '../support/memory_store.dart';
@@ -79,28 +80,34 @@ double? _drawn(Gen<double> gen, List<int> choices) =>
       Stopped() => null,
     };
 
+/// A float's bounds:
+///
+/// - `min`: its minimum.
+/// - `max`: its maximum.
+typedef _Bounds = ({double min, double max});
+
 /// Each range the exhaustive checks cover, at each set of flags it holds a
 /// double at.
 final List<_Range> _ranges = [
-  for (final (double min, double max) in [
-    (.negativeInfinity, .infinity),
-    (0, .infinity),
-    (.negativeInfinity, 0),
-    (.negativeInfinity, -0.0),
-    (0, 0),
-    (-0.0, 0),
-    (-0.0, -0.0),
-    (0.5, 3.25),
-    (-3.25, -0.5),
-    (-2.5, 1.5),
-    (0.25, 0.75),
-    (1e300, .infinity),
-    (.negativeInfinity, -double.maxFinite),
-    (.infinity, .infinity),
-    (.negativeInfinity, .negativeInfinity),
-    (-3 * double.minPositive, 2 * double.minPositive),
-    (4503599627370494.5, 4503599627370497),
-    (9007199254740990, 9007199254740996),
+  for (final (:double min, :double max) in <_Bounds>[
+    (min: .negativeInfinity, max: .infinity),
+    (min: 0, max: .infinity),
+    (min: .negativeInfinity, max: 0),
+    (min: .negativeInfinity, max: -0.0),
+    (min: 0, max: 0),
+    (min: -0.0, max: 0),
+    (min: -0.0, max: -0.0),
+    (min: 0.5, max: 3.25),
+    (min: -3.25, max: -0.5),
+    (min: -2.5, max: 1.5),
+    (min: 0.25, max: 0.75),
+    (min: 1e300, max: .infinity),
+    (min: .negativeInfinity, max: -double.maxFinite),
+    (min: .infinity, max: .infinity),
+    (min: .negativeInfinity, max: .negativeInfinity),
+    (min: -3 * double.minPositive, max: 2 * double.minPositive),
+    (min: 4503599627370494.5, max: 4503599627370497),
+    (min: 9007199254740990, max: 9007199254740996),
   ])
     for (final bool? nan in [null, true, false])
       for (final bool infinite in [true, false])
@@ -240,11 +247,13 @@ void _expectAllowed(_Range range, List<int> choices) {
 /// less simple double, or where two choices draw the same one.
 void _expectOrdered(_Range range, List<int> a, List<int> b) {
   final Gen<double> gen = _genOf(range);
-  final (double? x, double? y) = (_drawn(gen, a), _drawn(gen, b));
+  final double? x = _drawn(gen, a);
+  final double? y = _drawn(gen, b);
   if (x == null || y == null) return;
   final int order = sequenceOf(a).compareTo(sequenceOf(b));
   if (order == 0) return;
-  final (double simpler, double other) = order < 0 ? (x, y) : (y, x);
+  final double simpler = order < 0 ? x : y;
+  final double other = order < 0 ? y : x;
   final String reason = '$range: $a drew $x, $b drew $y';
   expect(sameDouble(simpler, other), isFalse, reason: reason);
   if (_kindOf(simpler) == .nonfinite && _kindOf(other) == .nonfinite) return;
@@ -475,9 +484,9 @@ void main() {
 
     test('a range holding no double its flags allow is thrown, saying '
         'neither an infinity nor NaN is allowed', () {
-      for (final (double min, double max) in [
-        (.infinity, .infinity),
-        (.negativeInfinity, .negativeInfinity),
+      for (final (:double min, :double max) in <_Bounds>[
+        (min: .infinity, max: .infinity),
+        (min: .negativeInfinity, max: .negativeInfinity),
       ]) {
         expect(
           () => Gen.float(min: min, max: max, infinite: false),
@@ -509,7 +518,8 @@ void main() {
       final double target = draw(anyDouble, label: 'target');
       final double a = draw(anyDouble.filter((double x) => !x.isNaN));
       final double b = draw(anyDouble.filter((double x) => !x.isNaN));
-      final (double low, double high) = a.compareTo(b) <= 0 ? (a, b) : (b, a);
+      final double low = a.compareTo(b) <= 0 ? a : b;
+      final double high = a.compareTo(b) <= 0 ? b : a;
       // The bounds widened to the target where it lies past them, so the
       // range holds it.
       final _Range range = (

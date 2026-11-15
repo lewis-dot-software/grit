@@ -4,8 +4,9 @@ import 'package:grit/src/choice/status.dart';
 import 'package:grit/src/gen/gen.dart';
 import 'package:test/test.dart';
 
+import '../support/draw_from.dart';
 import '../support/drawing.dart';
-import '../support/generators.dart';
+import '../support/integer_range.dart';
 import '../support/small.dart';
 
 /// Where in a range a drawn choice lies: anywhere within it, or at one of
@@ -15,6 +16,12 @@ enum _Seam { anywhere, farEnd, turn }
 /// The value [gen] draws from the one choice [choice].
 int _drawn(Gen<int> gen, int choice) =>
     (drawFrom(gen, sequenceOf([choice])) as Drew<int>).value;
+
+/// An integer's bounds:
+///
+/// - `min`: its minimum.
+/// - `max`: its maximum.
+typedef _IntegerBounds = ({int min, int max});
 
 void main() {
   test('An integer always draws within its range, and a smaller choice never '
@@ -126,16 +133,16 @@ void main() {
 
   test('draws its target and both its ends, and nothing else, from a random '
       'fill at edges of 1', () {
-    for (final (int min, int max) in [
-      (-0x80000000, 0x7FFFFFFF),
-      (-10, 3),
-      (-3, 10),
-      (-4, 4),
-      (-1, 1),
-      (0, 5),
-      (-5, -1),
-      (7, 7),
-      (1 << 63 >> 1, -(1 << 63 >> 1) - 1),
+    for (final (:int min, :int max) in <_IntegerBounds>[
+      (min: -0x80000000, max: 0x7FFFFFFF),
+      (min: -10, max: 3),
+      (min: -3, max: 10),
+      (min: -4, max: 4),
+      (min: -1, max: 1),
+      (min: 0, max: 5),
+      (min: -5, max: -1),
+      (min: 7, max: 7),
+      (min: 1 << 63 >> 1, max: -(1 << 63 >> 1) - 1),
     ]) {
       final ChoiceSource source = .random(
         .new(min ^ max),
@@ -164,7 +171,7 @@ void main() {
   group('on grit, over larger inputs', () {
     property('An integer always draws within its range, and a smaller choice '
         'never draws a value further from its target.', (Draw draw) {
-      final (int min, int max) = draw(integerRange, label: 'range');
+      final (:int min, :int max) = draw(integerRange, label: 'range');
       final int target = 0.clamp(min, max);
       final int width = max - min;
       // The choice where the zigzag runs out of one side and counts on along

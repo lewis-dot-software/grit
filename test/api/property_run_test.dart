@@ -37,17 +37,26 @@ PropertyRun _run([Settings? settings, Clock? clock, int seed = 0]) => .new(
   seed: seed,
 );
 
-/// What [check] throws, or null where it returns, with each line it
-/// printed.
-Future<((Object, StackTrace)?, List<String>)> _printed(
-  Future<void> Function() check,
-) async {
+/// What a check threw:
+///
+/// - `error`: the error.
+/// - `stackTrace`: where it was thrown.
+typedef _Thrown = ({Object error, StackTrace stackTrace});
+
+/// How a check ended:
+///
+/// - `thrown`: what it threw, or null where it returned.
+/// - `printed`: each line it printed, in order.
+typedef _Printed = ({_Thrown? thrown, List<String> printed});
+
+/// How [check] ended, with each line it printed.
+Future<_Printed> _printed(Future<void> Function() check) async {
   final List<String> printed = [];
-  final (Object, StackTrace)? thrown = await runZoned(
+  final _Thrown? thrown = await runZoned(
     () => _thrown(check()),
     zoneSpecification: .new(print: (_, _, _, String line) => printed.add(line)),
   );
-  return (thrown, printed);
+  return (thrown: thrown, printed: printed);
 }
 
 /// A body whose first [rejecting] runs are rejected, and whose every run
@@ -58,11 +67,11 @@ Body _rejectingFirst(int rejecting) {
 }
 
 /// What [check] throws, or null where it returns.
-Future<(Object, StackTrace)?> _thrown(Future<void> check) async {
+Future<_Thrown?> _thrown(Future<void> check) async {
   try {
     await check;
   } on Object catch (error, stackTrace) {
-    return (error, stackTrace);
+    return (error: error, stackTrace: stackTrace);
   }
   return null;
 }
@@ -334,8 +343,9 @@ void main() {
 
   group('a check', () {
     test('of a passed outcome returns, printing nothing', () async {
-      final ((Object, StackTrace)? thrown, List<String> printed) =
-          await _printed(() => _run().check((Draw draw) {}));
+      final (:_Thrown? thrown, :List<String> printed) = await _printed(
+        () => _run().check((Draw draw) {}),
+      );
       expect(thrown, isNull);
       expect(printed, isEmpty);
     });
@@ -346,8 +356,9 @@ void main() {
         .new(runs: 2),
         FakeClock([const .new(minutes: 1)]),
       );
-      final ((Object, StackTrace)? thrown, List<String> printed) =
-          await _printed(() => run.check(_rejectingFirst(3)));
+      final (:_Thrown? thrown, :List<String> printed) = await _printed(
+        () => run.check(_rejectingFirst(3)),
+      );
       expect(thrown, isNull);
       expect(printed, [
         allOf(
@@ -386,9 +397,9 @@ void main() {
           }),
           seed: 7,
         );
-        final (Object, StackTrace)? thrown = await _thrown(run.check(body));
+        final _Thrown? thrown = await _thrown(run.check(body));
         expect(
-          thrown?.$1,
+          thrown?.error,
           isA<TestFailure>().having(
             (TestFailure failure) => failure.message,
             'message',
@@ -408,11 +419,12 @@ void main() {
     test('of a failed outcome carries its warnings in its report, printing '
         'none', () async {
       final PropertyRun run = _run(null, FakeClock([const .new(minutes: 1)]));
-      final ((Object, StackTrace)? thrown, List<String> printed) =
-          await _printed(() => run.check(failsOnTrue));
+      final (:_Thrown? thrown, :List<String> printed) = await _printed(
+        () => run.check(failsOnTrue),
+      );
       expect(printed, isEmpty);
       expect(
-        thrown?.$1,
+        thrown?.error,
         isA<TestFailure>().having(
           (TestFailure failure) => failure.message,
           'message',
@@ -427,24 +439,25 @@ void main() {
         // Each search keeps its failure in a store of its own, so the check
         // does not start from the outcome's failure.
         final Outcome outcome = await _run().outcome(failsOnTrue);
-        final (Object, StackTrace)? thrown = await _thrown(
-          _run().check(failsOnTrue),
-        );
+        final _Thrown? thrown = await _thrown(_run().check(failsOnTrue));
         expect(
-          thrown?.$1,
+          thrown?.error,
           isA<TestFailure>().having(
             (TestFailure failure) => failure.message,
             'message',
             report(outcome, seed: 0, settings: 'Settings(seed: 0)'),
           ),
         );
-        expect(thrown?.$2.toString(), startsWith('#0      failsOnTrue '));
+        expect(
+          thrown?.stackTrace.toString(),
+          startsWith('#0      failsOnTrue '),
+        );
       },
     );
 
     test('of a failed outcome reports each value as the draw returned it, '
         'not as the body left it', () async {
-      final (Object, StackTrace)? thrown = await _thrown(
+      final _Thrown? thrown = await _thrown(
         _run().check((Draw draw) {
           final List<int> xs = draw(
             .list(.integer(min: 0, max: 1), minLength: 2, maxLength: 2),
@@ -459,7 +472,7 @@ void main() {
         }),
       );
       expect(
-        thrown?.$1,
+        thrown?.error,
         isA<TestFailure>().having(
           (TestFailure failure) => failure.message,
           'message',
@@ -470,14 +483,14 @@ void main() {
 
     test('of a failed outcome prints a drawn string quoted, so its '
         'whitespace shows', () async {
-      final (Object, StackTrace)? thrown = await _thrown(
+      final _Thrown? thrown = await _thrown(
         _run().check((Draw draw) {
           final String text = draw(.string(alphabet: .of('a ')), label: 'text');
           if (text.contains(' ')) throw StateError('a space');
         }),
       );
       expect(
-        thrown?.$1,
+        thrown?.error,
         isA<TestFailure>().having(
           (TestFailure failure) => failure.message,
           'message',
@@ -489,18 +502,16 @@ void main() {
     test(
       'of a flaky outcome throws its report with the failure\'s stack',
       () async {
-        final (Object, StackTrace)? thrown = await _thrown(
-          _run().check(failsOnce()),
-        );
+        final _Thrown? thrown = await _thrown(_run().check(failsOnce()));
         expect(
-          thrown?.$1,
+          thrown?.error,
           isA<TestFailure>().having(
             (TestFailure failure) => failure.message,
             'message',
             startsWith('The property is flaky'),
           ),
         );
-        expect(thrown?.$2.toString(), startsWith('#0      failsOnce.'));
+        expect(thrown?.stackTrace.toString(), startsWith('#0      failsOnce.'));
       },
     );
 
@@ -511,7 +522,7 @@ void main() {
           (await _thrown(
             _run(.new(runs: 3, shrinkSteps: 0))
                 .check((Draw draw) => draw.assume(false)),
-          ))?.$1,
+          ))?.error,
           isA<TestFailure>().having(
             (TestFailure failure) => failure.message,
             'message',
@@ -527,11 +538,11 @@ void main() {
     test(
       'of a reproduced outcome throws its report with the run\'s stack',
       () async {
-        final (Object, StackTrace)? thrown = await _thrown(
+        final _Thrown? thrown = await _thrown(
           _run(.new(replay: 'grit1:1')).check(failsOnTrue),
         );
         expect(
-          thrown?.$1,
+          thrown?.error,
           isA<TestFailure>().having(
             (TestFailure failure) => failure.message,
             'message',
@@ -540,13 +551,17 @@ void main() {
             ),
           ),
         );
-        expect(thrown?.$2.toString(), startsWith('#0      failsOnTrue '));
+        expect(
+          thrown?.stackTrace.toString(),
+          startsWith('#0      failsOnTrue '),
+        );
       },
     );
 
     test('of a not-reproduced outcome throws its report', () async {
       expect(
-        (await _thrown(_run(.new(replay: 'grit1:0')).check(failsOnTrue)))?.$1,
+        (await _thrown(_run(.new(replay: 'grit1:0')).check(failsOnTrue)))
+            ?.error,
         isA<TestFailure>().having(
           (TestFailure failure) => failure.message,
           'message',
@@ -561,7 +576,7 @@ void main() {
 
     test('of a gave-up outcome throws its report', () async {
       expect(
-        (await _thrown(_run().check((Draw draw) => draw.assume(false))))?.$1,
+        (await _thrown(_run().check((Draw draw) => draw.assume(false))))?.error,
         isA<TestFailure>().having(
           (TestFailure failure) => failure.message,
           'message',

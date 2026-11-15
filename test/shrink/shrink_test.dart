@@ -10,12 +10,14 @@ import '../support/shrinking.dart';
 import '../support/small.dart';
 import '../support/spans.dart';
 
-/// The longest sequence and the largest choice the exhaustive checks reach.
+/// The longest sequence the exhaustive checks reach.
 ///
 /// Every answer to every candidate is followed from each start, a failing
 /// one for each count of its choices read, and the paths grow past a million
 /// at a length of 3.
 const int _length = 2;
+
+/// The largest choice the exhaustive checks reach.
 const int _bound = 2;
 
 /// The most steps a path may take before it is held never to end, far past
@@ -493,7 +495,7 @@ void main() {
     property('Every accepted candidate\'s record is shortlex smaller than the '
         'sequence it replaces.', (Draw draw) {
       final ChoiceSequence first = draw(anySequence, label: 'first failure');
-      final (List<ShrinkStep> path, Shrunk end) = answered(
+      final (:List<ShrinkStep> path, :Shrunk end) = answered(
         first,
         drawOracle(draw, first),
       );
@@ -505,7 +507,7 @@ void main() {
       Draw draw,
     ) {
       final ChoiceSequence first = draw(anySequence, label: 'first failure');
-      final (List<ShrinkStep> path, Shrunk end) = answered(
+      final (:List<ShrinkStep> path, :Shrunk end) = answered(
         first,
         drawOracle(draw, first),
       );

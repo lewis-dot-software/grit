@@ -15,10 +15,10 @@ import 'package:grit/src/store/store.dart';
 import 'package:grit/src/store/store_key.dart';
 import 'package:test/test.dart';
 
+import '../support/bodies.dart';
+import '../support/bottomless.dart';
 import '../support/fake_clock.dart';
 import '../support/fixed_random.dart';
-import '../support/generators.dart';
-import '../support/bodies.dart';
 import '../support/inputs.dart';
 import '../support/memory_store.dart';
 import '../support/shrinking.dart';
@@ -88,11 +88,16 @@ final int _tailedAt = () {
   throw StateError('Shrinking 3 and 3 accepted no candidate past its read');
 }();
 
+/// A run on a fixed sequence:
+///
+/// - `status`: how it ended.
+/// - `record`: the choices it read.
+/// - `spans`: the spans its draws made.
+typedef _FixedRun = ({Status status, ChoiceSequence record, List<Span> spans});
+
 /// How [_readsSecondUnlessZero]'s run on [sequence] ended, with the choices
 /// and the spans its draws made.
-({Status status, ChoiceSequence record, List<Span> spans}) _readOf(
-  ChoiceSequence sequence,
-) {
+_FixedRun _readOf(ChoiceSequence sequence) {
   final ChoiceSource source = .fixed(sequence);
   final RunDraw draw = .new(source);
   final Status status = run(source, () => _readsSecondUnlessZero()(draw));
@@ -188,8 +193,10 @@ typedef _First = ({ChoiceSequence record, _Way way, int run});
 /// - `way`: the way it failed.
 typedef _Read = ({int run, ChoiceSequence record, _Way way});
 
-/// A body that draws as its shape says and fails as its [_fails] says,
-/// logging each run.
+/// A body that draws as its shape says and fails as its [_fails] says of each
+/// run's place and record, counting its runs and keeping the record of each
+/// whose draws did not stop short, and that reads how it fails on a sequence
+/// by its own rule.
 final class _Body {
   _Body(this.name, this._shape, this._fails);
 
@@ -436,6 +443,19 @@ final Gen<int> _anySeed = .integer(min: 0, max: 0xFFFFFFFF);
 /// The most choices a run of a drawn body may make, past most of its lists.
 const int _drawnLimit = 64;
 
+/// One search of the property checks:
+///
+/// - `body`: the body it searched, by name.
+/// - `seed`: the seed it searched from.
+typedef _Searched = ({String body, int seed});
+
+/// An integer's range, and the edge it names:
+///
+/// - `min`: its minimum.
+/// - `max`: its maximum.
+/// - `named`: the value of the choice its bound does not stand for.
+typedef _NamedEdge = ({int min, int max, int named});
+
 /// Each deterministic body's search from each seed, with the body after it.
 Future<void> _eachSearch(
   Future<void> Function(_Body body, int seed, Outcome outcome) check, {
@@ -533,6 +553,24 @@ int _expectAcceptedAlike(_Body body, Outcome outcome) {
   expect(outcome.sequence, smallest, reason: '$body');
   expect(body.wayOn(outcome.sequence), first.way, reason: '$body');
   return crossed;
+}
+
+/// Checks that each candidate [body]'s failed search ran in shrinking read a
+/// record smaller than each record read before it by a run that failed as the
+/// first failure did, and returns how many candidates it checked.
+int _expectCandidatesSmaller(_Body body) {
+  final _First first = body.first!;
+  int checked = 0;
+  ChoiceSequence smallest = first.record;
+  for (final (:int run, :ChoiceSequence record, :_Way way) in body.read) {
+    // The first failure and its replay come before shrinking, and the final
+    // replay after.
+    if (run <= first.run + 1 || run == body.runs - 1) continue;
+    checked++;
+    expect(record.isSmallerThan(smallest), isTrue, reason: '$body');
+    if (way == first.way) smallest = record;
+  }
+  return checked;
 }
 
 /// Checks that [ticking] came to the verdict [frozen] did: a pass of as many
@@ -648,9 +686,15 @@ final class _Scheduled {
   String toString() => 'ending as $endings';
 }
 
+/// A search of a [_Scheduled] body:
+///
+/// - `body`: the body it searched.
+/// - `outcome`: what it came to.
+typedef _ScheduledSearch = ({_Scheduled body, Outcome outcome});
+
 /// The search of a fresh [_Scheduled] body of [endings], over [runs] runs
 /// that gives up at [invalid], timed by [clock], with the body it searched.
-Future<(_Scheduled, Outcome)> _scheduled(
+Future<_ScheduledSearch> _scheduled(
   List<_Ending> endings, {
   required int runs,
   required int invalid,
@@ -663,7 +707,7 @@ Future<(_Scheduled, Outcome)> _scheduled(
     invalid: invalid,
     clock: clock,
   ).run(body.call);
-  return (body, outcome);
+  return (body: body, outcome: outcome);
 }
 
 /// Calls [check] on every small schedule of run endings, with every small
@@ -698,6 +742,104 @@ SlowProperty? _slowOf(Outcome outcome) =>
 /// The mostly-invalid warning of [outcome], or null where it has none.
 MostlyInvalid? _invalidOf(Outcome outcome) =>
     outcome.warnings.whereType<MostlyInvalid>().firstOrNull;
+
+/// Checks that the search of a [_Scheduled] body of [endings], over [runs]
+/// runs that gives up at [invalid], by a clock whose one tick lies [offset]
+/// microseconds past the slow warning's threshold, is warned slow exactly
+/// where its runs' mean time times [runs] passes 5 s, and returns whether it
+/// was.
+Future<bool> _expectSlowExactly(
+  List<_Ending> endings, {
+  required int runs,
+  required int invalid,
+  required int offset,
+}) async {
+  final (:_Scheduled body, :Outcome outcome) = await _scheduled(
+    endings,
+    runs: runs,
+    invalid: invalid,
+  );
+  final int made = body.generated(outcome).length;
+  // Generation reads the clock at its start and its end, so it takes one
+  // tick, and the threshold falls between two ticks a microsecond apart.
+  final int micros = 5000000 * made ~/ runs + offset;
+  final (outcome: Outcome timed, body: _) = await _scheduled(
+    endings,
+    runs: runs,
+    invalid: invalid,
+    clock: FakeClock([.new(microseconds: micros)]),
+  );
+  final String reason = '$body, $runs runs, giving up at $invalid, $micros µs';
+  final bool slow = micros * runs > 5000000 * made;
+  expect(
+    _slowOf(timed),
+    slow
+        ? isA<SlowProperty>()
+              .having(
+                (w) => w.perRun,
+                'perRun',
+                Duration(microseconds: micros ~/ made),
+              )
+              .having((w) => w.runs, 'runs', runs)
+        : isNull,
+    reason: reason,
+  );
+  return slow;
+}
+
+/// How a search's invalid runs stood beside those that returned.
+enum _Invalid {
+  /// They outnumbered them, and the search did not give up.
+  warned,
+
+  /// They outnumbered them, and the search gave up.
+  outnumberedButGaveUp,
+
+  /// They did not outnumber them.
+  notOutnumbered,
+}
+
+/// Checks that the search of a [_Scheduled] body of [endings], over [runs]
+/// runs that gives up at [invalid], is warned of its invalid runs, counting
+/// each kind, exactly where they outnumber those that returned and it did not
+/// give up, and returns how they stood.
+Future<_Invalid> _expectInvalidExactly(
+  List<_Ending> endings, {
+  required int runs,
+  required int invalid,
+}) async {
+  final (:_Scheduled body, :Outcome outcome) = await _scheduled(
+    endings,
+    runs: runs,
+    invalid: invalid,
+  );
+  final List<_Ending> generated = body.generated(outcome);
+  int count(_Ending ending) =>
+      generated.where((_Ending ran) => ran == ending).length;
+  final int returned = count(.returns);
+  final int rejected = count(.rejects);
+  final int overran = count(.overruns);
+  final _Invalid stood = rejected + overran <= returned
+      ? .notOutnumbered
+      : outcome is GaveUp
+      ? .outnumberedButGaveUp
+      : .warned;
+  expect(_invalidOf(outcome), switch (stood) {
+    .warned =>
+      isA<MostlyInvalid>()
+          .having((w) => w.returned, 'returned', returned)
+          .having((w) => w.rejected, 'rejected', rejected)
+          .having((w) => w.overran, 'overran', overran),
+    .outnumberedButGaveUp || .notOutnumbered => isNull,
+  }, reason: '$body, $runs runs, giving up at $invalid');
+  return stood;
+}
+
+/// A schedule of run endings, longer than the exhaustive checks reach.
+final Gen<List<_Ending>> _anyEndings = .list(
+  .element(_Ending.values),
+  maxLength: 12,
+);
 
 /// A store holding [held] under this file's call site alone.
 MemoryStore _holding(Loaded held) => .new({_callSite.key: held});
@@ -736,17 +878,23 @@ final Gen<Loaded> _anyHeld = .oneOf([
   smallSequence.map(Stored.new),
 ]);
 
+/// A failure an outcome reports:
+///
+/// - `sequence`: the sequence it reports the failure on.
+/// - `firstFound`: where the failure was first found.
+typedef _Reported = ({ChoiceSequence sequence, FirstFound firstFound});
+
 /// The sequence [outcome] reports its failure on: a failed outcome's
 /// smallest, or the failed run's of a flaky one, with where it was first
 /// found, or null where the outcome reports none.
-(ChoiceSequence, FirstFound)? _reportedOf(Outcome outcome) => switch (outcome) {
+_Reported? _reportedOf(Outcome outcome) => switch (outcome) {
   Failed(:final ChoiceSequence sequence, :final FirstFound firstFound) => (
-    sequence,
-    firstFound,
+    sequence: sequence,
+    firstFound: firstFound,
   ),
   Flaky(:final Threw failed, :final FirstFound firstFound) => (
-    failed.record,
-    firstFound,
+    sequence: failed.record,
+    firstFound: firstFound,
   ),
   Passed() || GaveUp() || Reproduced() || NotReproduced() => null,
 };
@@ -1182,7 +1330,7 @@ void main() {
 
     test('warn of mostly invalid runs, counting each kind, in a search that '
         'passed', () async {
-      final (_, Outcome outcome) = await _scheduled(
+      final (:Outcome outcome, body: _) = await _scheduled(
         [.rejects, .overruns, .rejects],
         runs: 2,
         invalid: 10,
@@ -1206,13 +1354,13 @@ void main() {
         if (calls++ == 0) draw.assume(false);
         throw StateError('always');
       });
-      final (_, Outcome flaky) = await _scheduled(
+      final (outcome: Outcome flaky, body: _) = await _scheduled(
         [.rejects, .throws],
         runs: 1,
         invalid: 10,
         clock: FakeClock([const .new(minutes: 1)]),
       );
-      final (_, Outcome gaveUp) = await _scheduled(
+      final (outcome: Outcome gaveUp, body: _) = await _scheduled(
         [.rejects],
         runs: 1,
         invalid: 1,
@@ -1303,18 +1451,26 @@ void main() {
 
     test('holds nothing after a passed, flaky or gave-up outcome, whatever '
         'it held before', () async {
-      final Map<Type, Body> bodies = {
-        Passed: (Draw draw) {
+      final Map<Type, Body Function()> bodies = {
+        Passed: () => (Draw draw) {
           draw(_choice);
         },
-        Flaky: failsOnce(),
-        GaveUp: (Draw draw) => draw.assume(false),
+        Flaky: failsOnce,
+        GaveUp: () =>
+            (Draw draw) => draw.assume(false),
       };
-      for (final MapEntry(key: Type type, value: Body body) in bodies.entries) {
-        final MemoryStore store = _holding(Stored(sequenceOf([1])));
-        final Outcome outcome = await _search(store: store).run(body);
-        expect(outcome.runtimeType, type);
-        expect(_heldIn(store), isA<Unstored>(), reason: '$type');
+      for (final MapEntry(key: Type type, value: Body Function() make)
+          in bodies.entries) {
+        for (final Loaded held in _smallHeld) {
+          final MemoryStore store = _holding(held);
+          final Outcome outcome = await _search(store: store).run(make());
+          expect(outcome.runtimeType, type, reason: '$type, holding $held');
+          expect(
+            _heldIn(store),
+            isA<Unstored>(),
+            reason: '$type, holding $held',
+          );
+        }
       }
     });
 
@@ -1433,89 +1589,31 @@ void main() {
   group('over every small schedule of run endings', () {
     test('A property is warned slow exactly where its runs\' mean time times '
         'the run count passes 5 s.', () async {
-      int slow = 0;
-      int fast = 0;
+      final Set<bool> warned = {};
       await _eachSchedule((List<_Ending> endings, int runs, int invalid) async {
-        final (_Scheduled body, Outcome outcome) = await _scheduled(
-          endings,
-          runs: runs,
-          invalid: invalid,
-        );
-        final int made = body.generated(outcome).length;
-        // Generation reads the clock at its start and its end, so it takes
-        // one tick, and the threshold falls between two ticks a microsecond
-        // apart.
-        final int edge = 5000000 * made ~/ runs;
-        for (final int micros in [edge - 1, edge, edge + 1]) {
-          final (_, Outcome timed) = await _scheduled(
-            endings,
-            runs: runs,
-            invalid: invalid,
-            clock: FakeClock([.new(microseconds: micros)]),
+        for (final int offset in [-1, 0, 1]) {
+          warned.add(
+            await _expectSlowExactly(
+              endings,
+              runs: runs,
+              invalid: invalid,
+              offset: offset,
+            ),
           );
-          final String reason =
-              '$body, $runs runs, giving up at $invalid, $micros µs';
-          if (micros * runs > 5000000 * made) {
-            slow++;
-            expect(
-              _slowOf(timed),
-              isA<SlowProperty>()
-                  .having(
-                    (w) => w.perRun,
-                    'perRun',
-                    Duration(microseconds: micros ~/ made),
-                  )
-                  .having((w) => w.runs, 'runs', runs),
-              reason: reason,
-            );
-          } else {
-            fast++;
-            expect(_slowOf(timed), isNull, reason: reason);
-          }
         }
       });
-      expect(slow, greaterThan(0));
-      expect(fast, greaterThan(0));
+      expect(warned, {true, false});
     });
 
     test('A search is warned of its invalid runs exactly where they outnumber '
         'those that returned and it did not give up.', () async {
-      int warned = 0;
-      int outnumberedButGaveUp = 0;
-      int unwarned = 0;
+      final Set<_Invalid> reached = {};
       await _eachSchedule((List<_Ending> endings, int runs, int invalid) async {
-        final (_Scheduled body, Outcome outcome) = await _scheduled(
-          endings,
-          runs: runs,
-          invalid: invalid,
+        reached.add(
+          await _expectInvalidExactly(endings, runs: runs, invalid: invalid),
         );
-        final List<_Ending> generated = body.generated(outcome);
-        int count(_Ending ending) =>
-            generated.where((_Ending ran) => ran == ending).length;
-        final int returned = count(.returns);
-        final int rejected = count(.rejects);
-        final int overran = count(.overruns);
-        final bool outnumbered = rejected + overran > returned;
-        final String reason = '$body, $runs runs, giving up at $invalid';
-        if (outnumbered && outcome is! GaveUp) {
-          warned++;
-          expect(
-            _invalidOf(outcome),
-            isA<MostlyInvalid>()
-                .having((w) => w.returned, 'returned', returned)
-                .having((w) => w.rejected, 'rejected', rejected)
-                .having((w) => w.overran, 'overran', overran),
-            reason: reason,
-          );
-        } else {
-          if (outnumbered) outnumberedButGaveUp++;
-          unwarned++;
-          expect(_invalidOf(outcome), isNull, reason: reason);
-        }
       });
-      expect(warned, greaterThan(0));
-      expect(outnumberedButGaveUp, greaterThan(0));
-      expect(unwarned, greaterThan(outnumberedButGaveUp));
+      expect(reached, _Invalid.values.toSet());
     });
   });
 
@@ -1770,11 +1868,11 @@ void main() {
       // An integer across 0 names the choice of the end its bound does not
       // stand for, and each is drawn twice, so the second falls under the
       // bound of an earlier choice.
-      final List<(int, int, int)> ranges = [
-        (-1000000, 2000000, -1000000),
-        (-5, 10, -5),
-        (-10, 3, 3),
-        (-0x80000000, 0x7FFFFFFF, 0x7FFFFFFF),
+      final List<_NamedEdge> ranges = [
+        (min: -1000000, max: 2000000, named: -1000000),
+        (min: -5, max: 10, named: -5),
+        (min: -10, max: 3, named: 3),
+        (min: -0x80000000, max: 0x7FFFFFFF, named: 0x7FFFFFFF),
       ];
       for (int seed = 0; seed < 10; seed++) {
         final List<Set<int>> reached = [
@@ -1783,14 +1881,15 @@ void main() {
         int run = 0;
         await _search(seed: seed, runs: 100).run((Draw draw) {
           final bool early = run++ < 20;
-          for (final (int i, (int min, int max, _)) in ranges.indexed) {
+          for (final (int i, (:int min, :int max, named: _))
+              in ranges.indexed) {
             for (int twice = 0; twice < 2; twice++) {
               final int x = draw(.integer(min: min, max: max));
               if (early) reached[2 * i + twice].add(x);
             }
           }
         });
-        for (final (int i, (_, _, int named)) in ranges.indexed) {
+        for (final (int i, (:int named, min: _, max: _)) in ranges.indexed) {
           for (int twice = 0; twice < 2; twice++) {
             expect(
               reached[2 * i + twice],
@@ -1900,8 +1999,8 @@ void main() {
             store: _holding(Stored(stored)),
           ).run(body.call);
           if (_reportedOf(outcome) case (
-            final ChoiceSequence reported,
-            FirstFound.stored,
+            sequence: final ChoiceSequence reported,
+            firstFound: FirstFound.stored,
           )) {
             found.add(outcome.runtimeType);
             expect(
@@ -1990,31 +2089,24 @@ void main() {
 
     test('A failed outcome\'s sequence is never larger than the first failure '
         'found.', () async {
+      int failed = 0;
       await _eachSearch((_Body body, _, Outcome outcome) async {
         if (outcome is! Failed) return;
+        failed++;
         expect(
           body.first!.record.isSmallerThan(outcome.sequence),
           isFalse,
           reason: '$body',
         );
       });
+      expect(failed, greaterThan(0));
     });
 
     test('Every candidate\'s run reads a record smaller than each record read '
         'before it by a run that failed as the first failure did.', () async {
       int checked = 0;
       await _eachSearch((_Body body, _, Outcome outcome) async {
-        if (outcome is! Failed) return;
-        final _First first = body.first!;
-        ChoiceSequence smallest = first.record;
-        for (final (:int run, :ChoiceSequence record, :_Way way) in body.read) {
-          // The first failure and its replay come before shrinking, and the
-          // final replay after.
-          if (run <= first.run + 1 || run == body.runs - 1) continue;
-          checked++;
-          expect(record.isSmallerThan(smallest), isTrue, reason: '$body');
-          if (way == first.way) smallest = record;
-        }
+        if (outcome is Failed) checked += _expectCandidatesSmaller(body);
       });
       expect(checked, greaterThan(0));
     });
@@ -2069,14 +2161,14 @@ void main() {
           for (final ChoiceSequence ticks in everySequence(length: 2, bound: 2))
             [for (final c in ticks.choices) .new(milliseconds: c.value)],
         ];
-        final Map<(String, int), Outcome> frozen = {};
+        final Map<_Searched, Outcome> frozen = {};
         final Budget budget = .new(steps: 1 << 30, time: .new(milliseconds: 2));
         await _eachSearch(budget: budget, (
           _Body body,
           int seed,
           outcome,
         ) async {
-          frozen[('$body', seed)] = outcome;
+          frozen[(body: '$body', seed: seed)] = outcome;
         });
         for (final List<Duration> ticks in clocks) {
           await _eachSearch(budget: budget, clock: () => FakeClock(ticks), (
@@ -2086,7 +2178,7 @@ void main() {
           ) async {
             _expectSameVerdict(
               outcome,
-              frozen[('$body', seed)]!,
+              frozen[(body: '$body', seed: seed)]!,
               reason: '$body from $seed, ticking $ticks',
             );
           });
@@ -2099,9 +2191,9 @@ void main() {
 
     test('A warning never changes a verdict: one seed passes or fails alike '
         'whatever the clock reads.', () async {
-      final Map<(String, int), Outcome> frozen = {};
+      final Map<_Searched, Outcome> frozen = {};
       await _eachSearch((_Body body, int seed, Outcome outcome) async {
-        frozen[('$body', seed)] = outcome;
+        frozen[(body: '$body', seed: seed)] = outcome;
       });
       // The verdicts a slow warning rode on, so the check reaches each.
       final Set<Type> warned = {};
@@ -2114,7 +2206,7 @@ void main() {
           if (_slowOf(outcome) != null) warned.add(outcome.runtimeType);
           _expectSameVerdict(
             outcome,
-            frozen[('$body', seed)]!,
+            frozen[(body: '$body', seed: seed)]!,
             reason: '$body from $seed, ticking $ticks',
           );
         });
@@ -2277,8 +2369,8 @@ void main() {
           store: _holding(Stored(stored)),
         ).run(body.call);
         if (_reportedOf(outcome) case (
-          final ChoiceSequence reported,
-          FirstFound.stored,
+          sequence: final ChoiceSequence reported,
+          firstFound: FirstFound.stored,
         )) {
           found++;
           expect(stored.isSmallerThan(reported), isFalse);
@@ -2353,18 +2445,13 @@ void main() {
     test('Every candidate\'s run reads a record smaller than each record read '
         'before it by a run that failed as the first failure did.', () async {
       int checked = 0;
-      await _eachSearch((_Body body, _, Outcome outcome) async {
-        if (outcome is! Failed) return;
-        final _First first = body.first!;
-        ChoiceSequence smallest = first.record;
-        for (final (:int run, :ChoiceSequence record, :_Way way) in body.read) {
-          // The first failure and its replay come before shrinking, and the
-          // final replay after.
-          if (run <= first.run + 1 || run == body.runs - 1) continue;
-          checked++;
-          expect(record.isSmallerThan(smallest), isTrue, reason: '$body');
-          if (way == first.way) smallest = record;
-        }
+      await forAll((Draw draw) async {
+        final _Body body = draw(_anyBody, label: 'body');
+        final Outcome outcome = await _search(
+          seed: draw(_anySeed, label: 'seed'),
+          limit: _drawnLimit,
+        ).run(body.call);
+        if (outcome is Failed) checked += _expectCandidatesSmaller(body);
       });
       expect(checked, greaterThan(0));
     });
@@ -2528,6 +2615,37 @@ void main() {
       });
       expect(flaky, greaterThan(0));
       expect(flakyLast, greaterThan(0));
+    });
+
+    test('A property is warned slow exactly where its runs\' mean time times '
+        'the run count passes 5 s.', () async {
+      final Set<bool> warned = {};
+      await forAll((Draw draw) async {
+        warned.add(
+          await _expectSlowExactly(
+            draw(_anyEndings, label: 'endings'),
+            runs: draw(.integer(min: 1, max: 16), label: 'runs'),
+            invalid: draw(.integer(min: 1, max: 16), label: 'invalid'),
+            offset: draw(.integer(min: -1, max: 1), label: 'offset'),
+          ),
+        );
+      });
+      expect(warned, {true, false});
+    });
+
+    test('A search is warned of its invalid runs exactly where they outnumber '
+        'those that returned and it did not give up.', () async {
+      final Set<_Invalid> reached = {};
+      await forAll((Draw draw) async {
+        reached.add(
+          await _expectInvalidExactly(
+            draw(_anyEndings, label: 'endings'),
+            runs: draw(.integer(min: 1, max: 16), label: 'runs'),
+            invalid: draw(.integer(min: 1, max: 16), label: 'invalid'),
+          ),
+        );
+      });
+      expect(reached, _Invalid.values.toSet());
     });
   });
 }

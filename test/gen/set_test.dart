@@ -4,6 +4,7 @@ import 'package:test/test.dart';
 
 import '../support/bits.dart';
 import '../support/bounds.dart';
+import '../support/draw_from.dart';
 import '../support/drawing.dart';
 import '../support/generator.dart';
 import '../support/small.dart';

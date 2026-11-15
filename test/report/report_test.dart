@@ -39,6 +39,12 @@ Failed _failed(
 /// The Dart of the default settings filled from seed 7.
 const String _settings = 'Settings(seed: 7)';
 
+/// A section of a report:
+///
+/// - `written`: what the run wrote to it.
+/// - `part`: the section as printed, or null where none was.
+typedef _Section = ({String written, String? part});
+
 void main() {
   group('an outcome', () {
     test('passed reports its run count', () {
@@ -573,9 +579,9 @@ void main() {
         r'It drew:\n(.*)\n\nIt noted:\n(.*)\n\nIt threw:',
         dotAll: true,
       ).firstMatch(printed)!;
-      for (final (String written, String? part) in [
-        (drawn, parts[1]),
-        (noted, parts[2]),
+      for (final (:String written, :String? part) in <_Section>[
+        (written: drawn, part: parts[1]),
+        (written: noted, part: parts[2]),
       ]) {
         final List<String> lines = part!.split('\n');
         expect(lines, everyElement(isNot('  ')));

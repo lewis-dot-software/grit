@@ -118,8 +118,12 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
-    property('A zigzag finds a choice from the distance it stands for, and '
-        'the distance lies from below its centre to above it.', (Draw draw) {
+    property('A zigzag stands for each distance from below its centre to '
+        'above it at exactly one choice, which it finds from the '
+        'distance.', (Draw draw) {
+      // Each choice standing for a distance in range that leads back to it,
+      // and each distance in range leading to a choice that stands for it,
+      // is one choice per distance.
       final Zigzag zigzag = draw(anyZigzag, label: 'zigzag');
       final Choice choice = .new(
         draw(.integer(min: 0, max: zigzag.bound.value), label: 'choice'),
@@ -127,6 +131,13 @@ void main() {
       final int distance = zigzag.distance(choice);
       expect(distance, inInclusiveRange(-zigzag.below, zigzag.above));
       expect(zigzag.at(distance), choice);
+      final int other = draw(
+        .integer(min: -zigzag.below, max: zigzag.above),
+        label: 'distance',
+      );
+      final Choice at = zigzag.at(other);
+      expect(zigzag.bound.admits(at), isTrue);
+      expect(zigzag.distance(at), other);
     });
 
     property('A larger choice never stands for a distance nearer the '

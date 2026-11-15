@@ -2,9 +2,15 @@ import 'package:grit/grit.dart';
 import 'package:grit/src/api/settings_source.dart';
 import 'package:test/test.dart';
 
+/// What a `Settings` source builds:
+///
+/// - `seed`: the seed it names.
+/// - `settings`: the settings it builds, past its seed.
+typedef _Read = ({int seed, Settings settings});
+
 /// The seed and the settings that the Dart [source] builds, read back as
 /// a consumer's analyser would read it.
-(int, Settings) _read(String source) {
+_Read _read(String source) {
   final Map<String, String> named = {
     for (final String part
         in source.substring('Settings('.length, source.length - 1).split(', '))
@@ -14,8 +20,8 @@ import 'package:test/test.dart';
   };
   final Settings defaults = .new();
   return (
-    .parse(named['seed']!),
-    .new(
+    seed: .parse(named['seed']!),
+    settings: .new(
       runs: .parse(named['runs'] ?? '${defaults.runs}'),
       shrinkSteps: .parse(named['shrinkSteps'] ?? '${defaults.shrinkSteps}'),
       shrinkTime: switch (named['shrinkTime']) {
@@ -92,7 +98,7 @@ void main() {
           shrinkSteps: draw(.integer(min: 0, max: 10000), label: 'shrinkSteps'),
           shrinkTime: draw(_anyShrinkTime, label: 'shrinkTime'),
         );
-        final (int readSeed, Settings read) = _read(
+        final (seed: int readSeed, settings: Settings read) = _read(
           settings.source(seed: seed),
         );
         expect(readSeed, seed);

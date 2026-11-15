@@ -24,6 +24,12 @@ typedef ShrinkStep = ({
 /// - `spans`: the span of each draw it made.
 typedef Failing = ({int read, List<Span> spans});
 
+/// A shrinking along an oracle's answers:
+///
+/// - `path`: each step it took, in order.
+/// - `end`: the state it ended in.
+typedef Answered = ({List<ShrinkStep> path, Shrunk end});
+
 /// The most steps a shrinking along an oracle's answers may take before it
 /// is held never to end, far past the longest any drawn oracle's takes.
 const int _endless = 1000000;
@@ -69,13 +75,13 @@ Shrunk shrunk(Shrink shrink, Failing? Function(ChoiceSequence) failing) {
 /// run making the spans [spansOf] gives the choices it read.
 ///
 /// Fails the test where the path passes [_endless] steps.
-(List<ShrinkStep>, Shrunk) answered(ChoiceSequence first, Oracle oracle) {
+Answered answered(ChoiceSequence first, Oracle oracle) {
   final List<ShrinkStep> path = [];
   Shrink shrink = .start(first, spansOf(first));
   while (true) {
     switch (shrink) {
       case Shrunk():
-        return (path, shrink);
+        return (path: path, end: shrink);
       case Shrinking(
         :final ChoiceSequence current,
         :final ChoiceSequence candidate,

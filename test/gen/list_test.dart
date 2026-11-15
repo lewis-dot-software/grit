@@ -4,6 +4,7 @@ import 'package:test/test.dart';
 
 import '../support/bits.dart';
 import '../support/bounds.dart';
+import '../support/draw_from.dart';
 import '../support/drawing.dart';
 import '../support/generator.dart';
 import '../support/small.dart';
@@ -21,22 +22,45 @@ final List<Generator> _bitElements = [
   .new('a list of lists of booleans', .list(.list(.boolean()))),
 ];
 
+/// Where one element of a list lies in its record:
+///
+/// - `start`: the index of its "one more" choice.
+/// - `end`: the index past its last choice.
+typedef _ElementSpan = ({int start, int end});
+
+/// A list the deletion check runs over:
+///
+/// - `name`: the list, as the check names it.
+/// - `element`: its element's generator.
+/// - `gen`: the list's generator.
+/// - `minLength`: its minimum length.
+/// - `size`: the longest sequence the check draws it from.
+/// - `bound`: the largest choice the check draws it from.
+typedef _ListCase = ({
+  String name,
+  Gen<Object?> element,
+  Gen<List<Object?>> gen,
+  int minLength,
+  int size,
+  int bound,
+});
+
 /// The span of [record] that holds each element of a list of [element]'s
 /// values at least [minLength] long, each from its "one more" choice to the
 /// element's last choice, found by drawing each element alone from where it
 /// starts.
-List<(int, int)> _spans<E>(
+List<_ElementSpan> _spans<E>(
   Gen<E> element,
   ChoiceSequence record, {
   required int minLength,
 }) {
   final List<Choice> choices = record.choices;
-  final List<(int, int)> spans = [];
+  final List<_ElementSpan> spans = [];
   int at = 0;
   while (spans.length < minLength || choices[at].value == 1) {
     final ChoiceSequence rest = .new(choices.skip(at + 1));
     final int end = at + 1 + drawFrom(element, rest).record.choices.length;
-    spans.add((at, end));
+    spans.add((start: at, end: end));
     at = end;
   }
   return spans;
@@ -53,10 +77,14 @@ void _expectEachDeletion<E>(
   String? reason,
 }) {
   final ChoiceSequence record = drew.record;
-  final List<(int, int)> spans = _spans(element, record, minLength: minLength);
+  final List<_ElementSpan> spans = _spans(
+    element,
+    record,
+    minLength: minLength,
+  );
   expect(spans, hasLength(drew.value.length), reason: '$reason: $record');
   for (int i = 0; i < spans.length; i++) {
-    final (int start, int end) = spans[i];
+    final (:int start, :int end) = spans[i];
     final ChoiceSequence shorter = .new([
       ...record.choices.take(start),
       ...record.choices.skip(end),
@@ -73,6 +101,12 @@ void _expectEachDeletion<E>(
   }
 }
 
+/// The choices that open a list's first two elements:
+///
+/// - `first`: the first's.
+/// - `second`: the second's.
+typedef _Pair = ({int first, int second});
+
 void main() {
   test('Deleting one element\'s span from a list\'s record draws the same '
       'list with that element removed.', () {
@@ -83,42 +117,55 @@ void main() {
     // a longer one has an element to delete.
     final Gen<int> digit = .integer(min: 0, max: 2);
     final Gen<List<bool>> bits = .list(.boolean());
-    final List<(String, Gen<Object?>, Gen<List<Object?>>, int, int, int)>
-    lists = [
-      ('a list of integers', digit, .list(digit), 0, 8, 2),
-      ('a list of lists', bits, .list(bits), 0, 9, 1),
+    final List<_ListCase> lists = [
       (
-        'a list with a minimum length',
-        digit,
-        .list(digit, minLength: 1),
-        1,
-        8,
-        2,
+        name: 'a list of integers',
+        element: digit,
+        gen: .list(digit),
+        minLength: 0,
+        size: 8,
+        bound: 2,
       ),
       (
-        'a list with a longer minimum length',
-        digit,
-        .list(digit, minLength: 2),
-        2,
-        8,
-        2,
+        name: 'a list of lists',
+        element: bits,
+        gen: .list(bits),
+        minLength: 0,
+        size: 9,
+        bound: 1,
       ),
       (
-        'a list with a maximum length',
-        digit,
-        .list(digit, maxLength: 2),
-        0,
-        8,
-        2,
+        name: 'a list with a minimum length',
+        element: digit,
+        gen: .list(digit, minLength: 1),
+        minLength: 1,
+        size: 8,
+        bound: 2,
+      ),
+      (
+        name: 'a list with a longer minimum length',
+        element: digit,
+        gen: .list(digit, minLength: 2),
+        minLength: 2,
+        size: 8,
+        bound: 2,
+      ),
+      (
+        name: 'a list with a maximum length',
+        element: digit,
+        gen: .list(digit, maxLength: 2),
+        minLength: 0,
+        size: 8,
+        bound: 2,
       ),
     ];
     for (final (
-          String name,
-          Gen<Object?> element,
-          Gen<List<Object?>> gen,
-          int minLength,
-          int size,
-          int bound,
+          :String name,
+          :Gen<Object?> element,
+          :Gen<List<Object?>> gen,
+          :int minLength,
+          :int size,
+          :int bound,
         )
         in lists) {
       int deleted = 0;
@@ -166,7 +213,12 @@ void main() {
   test('draws one more element inside its minimum length at a choice of 0 '
       'or 1 alike', () {
     final Gen<List<int>> gen = .list(.integer(min: 0, max: 9), minLength: 2);
-    for (final (int first, int second) in [(0, 0), (0, 1), (1, 0), (1, 1)]) {
+    for (final (:int first, :int second) in <_Pair>[
+      (first: 0, second: 0),
+      (first: 0, second: 1),
+      (first: 1, second: 0),
+      (first: 1, second: 1),
+    ]) {
       final Drawing<List<int>> drawing = drawFrom(
         gen,
         sequenceOf([first, 4, second, 7, 1, 2, 0]),

@@ -2,11 +2,15 @@ import 'package:grit/grit.dart';
 import 'package:grit/src/choice/status.dart';
 import 'package:test/test.dart';
 
+import '../support/any_generator.dart';
 import '../support/bits.dart';
+import '../support/exactly.dart';
+import '../support/draw_from.dart';
 import '../support/drawing.dart';
+import '../support/expect_alike.dart';
 import '../support/generator.dart';
-import '../support/generators.dart';
 import '../support/inputs.dart';
+import '../support/simple_generator.dart';
 import '../support/small.dart';
 
 /// What drawing one of [generators] from [sequence] comes to, read off
@@ -116,7 +120,7 @@ void main() {
         .oneOf([for (final Simple s in simple) s.generator.gen]),
         sequenceOf(zeros),
       );
-      expect((simplest as Drew<Object?>).value, simple.first.simplest);
+      expect((simplest as Drew<Object?>).value, exactly(simple.first.simplest));
     });
   });
 }
