@@ -2589,7 +2589,8 @@ void main() {
       'The clock never changes a verdict: the same seed passes or fails '
       'alike under any clock, and only the failure\'s size can differ.',
       () async {
-        final Set<Type> verdicts = {};
+        // No case's check rests on a seed drawing every verdict. The reach
+        // of each verdict rests on the twin over every small body.
         await forAll((Draw draw) async {
           final _Body body = draw(_anyBody, label: 'body');
           final int seed = draw(_anySeed, label: 'seed');
@@ -2616,10 +2617,8 @@ void main() {
             limit: _drawnLimit,
             budget: budget,
           ).run(body.afresh.call);
-          verdicts.add(frozen.runtimeType);
           _expectSameVerdict(ticking, frozen);
         });
-        expect(verdicts, containsAll([Passed, Failed, GaveUp]));
       },
     );
 
@@ -2711,17 +2710,16 @@ void main() {
 
     test('A search is warned of its invalid runs exactly where they outnumber '
         'those that returned and it did not give up.', () async {
-      final Set<_Invalid> reached = {};
+      // Every case's check is exact on its own, so none rests on a seed
+      // drawing each way the runs can stand. The reach of each way rests on
+      // the twin over every small schedule.
       await forAll((Draw draw) async {
-        reached.add(
-          await _expectInvalidExactly(
-            draw(_anyEndings, label: 'endings'),
-            runs: draw(.integer(min: 1, max: 16), label: 'runs'),
-            invalid: draw(.integer(min: 1, max: 16), label: 'invalid'),
-          ),
+        await _expectInvalidExactly(
+          draw(_anyEndings, label: 'endings'),
+          runs: draw(.integer(min: 1, max: 16), label: 'runs'),
+          invalid: draw(.integer(min: 1, max: 16), label: 'invalid'),
         );
       });
-      expect(reached, _Invalid.values.toSet());
     });
   });
 }
