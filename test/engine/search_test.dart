@@ -2551,16 +2551,19 @@ void main() {
 
     test('A warning never changes a verdict: one seed passes or fails alike '
         'whatever the clock reads.', () async {
-      final Set<Type> warned = {};
       await forAll((Draw draw) async {
         final _Body body = draw(_anyBody, label: 'body');
         final int seed = draw(_anySeed, label: 'seed');
+        // Every read a minute or more on, so every ticking search warns slow
+        // and no case's check rests on a slow clock being drawn. The reach of
+        // each verdict rests on the twin over every small body.
         final List<Duration> ticks = draw(
           .list(
             .integer(
-              min: 0,
+              min: 1,
               max: 3,
             ).map((int minutes) => .new(minutes: minutes)),
+            minLength: 1,
           ),
           label: 'ticks',
         );
@@ -2573,11 +2576,10 @@ void main() {
           clock: FakeClock(ticks),
           limit: _drawnLimit,
         ).run(body.afresh.call);
-        if (_slowOf(ticking) != null) warned.add(ticking.runtimeType);
         expect(_slowOf(frozen), isNull);
+        expect(_slowOf(ticking), isNotNull);
         _expectSameVerdict(ticking, frozen);
       });
-      expect(warned, containsAll([Passed, Failed, GaveUp]));
     });
 
     test('A body that fails once and not on replay ends flaky, never '
