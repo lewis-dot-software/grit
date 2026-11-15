@@ -612,6 +612,8 @@ void main() {
   group('on grit, over larger inputs', () {
     test('The token a failure\'s report prints replays a run that fails as '
         'the reported one did.', () async {
+      // 2932 of 3000 drawn cases failed, so a seed misses this tally over
+      // the default 100 runs about 1 in 10^164.
       int failed = 0;
       await forAll((Draw draw) async {
         final Body body = _failingFrom(

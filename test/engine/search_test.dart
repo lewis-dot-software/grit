@@ -2549,6 +2549,8 @@ void main() {
     test('Shrinking never runs more steps than its bound, an outcome whose '
         'bound ran out names that bound, and its sequence is the choices its '
         'final replay read.', () async {
+      // 1249 of 3000 drawn cases ran out, so a seed misses this tally over
+      // the default 100 runs about 1 in 10^23.
       int ranOut = 0;
       await forAll((Draw draw) async {
         final _Body body = draw(_anyBody, label: 'body');
@@ -2573,6 +2575,8 @@ void main() {
 
     test('A candidate that fails with another error type or from another frame '
         'is never accepted.', () async {
+      // 916 of 3000 drawn cases crossed, so a seed misses this tally over
+      // the default 100 runs about 1 in 10^16.
       int crossed = 0;
       await forAll((Draw draw) async {
         final _Body body = draw(_anyBody, label: 'body');
