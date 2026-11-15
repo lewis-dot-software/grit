@@ -1025,32 +1025,44 @@ final class _Breaking {
       '${grits.name} ${breaks.name} at $at, failing from $failsFrom';
 }
 
-/// How a property's search may start on a body: generation from a seed, the
-/// stored replay of a sequence, or a token's replay of one.
+/// Where a property's search starts from: generation from a seed, the stored
+/// replay of a sequence, or a token's replay of one.
+enum _From { generated, stored, token }
+
+/// A way a property's search may start on a body:
+///
+/// - `from`: where the search starts from.
+/// - `start`: a search of the body from it, storing in the store.
 typedef _Start = ({
-  String name,
+  _From from,
   Future<Outcome> Function(Body body, MemoryStore store) start,
 });
+
+/// A start a check reached a break of grit's from:
+///
+/// - `from`: where the search started from.
+/// - `afterFailure`: whether the body failed before it broke.
+typedef _Reached = ({_From from, bool afterFailure});
 
 /// Every small start of a search: generation from a few seeds, and the
 /// stored replay and the token's replay of each one-choice sequence.
 List<_Start> get _smallStarts => [
   for (int seed = 0; seed < _seeds; seed++)
     (
-      name: 'generated',
+      from: .generated,
       start: (Body body, MemoryStore store) =>
           _search(seed: seed, store: store).run(body),
     ),
   for (int value = 0; value <= 3; value++) ...[
     (
-      name: 'stored',
+      from: .stored,
       start: (Body body, MemoryStore store) {
         store.save(_callSite.key, sequenceOf([value]));
         return _search(store: store).run(body);
       },
     ),
     (
-      name: 'token',
+      from: .token,
       start: (Body body, MemoryStore store) =>
           _search(store: store).replay(body, sequenceOf([value])),
     ),
@@ -2090,7 +2102,7 @@ void main() {
 
     test('An error grit\'s own code throws inside a draw ends the test as '
         'grit\'s error, never as the property\'s failure.', () async {
-      final Set<String> reached = {};
+      final Set<_Reached> reached = {};
       for (final _Grits grits in _Grits.values) {
         for (final _Breaks breaks in _Breaks.values) {
           for (int at = 0; at <= 3; at++) {
@@ -2106,18 +2118,16 @@ void main() {
                 final Object? thrown = await _thrownBy(
                   () => start.start(body.call, store),
                 );
-                final String reason = '$body, ${start.name}';
+                final String reason = '$body, ${start.from.name}';
                 final int? brokeOn = body.brokeOn;
                 if (brokeOn == null) {
                   expect(thrown, isNull, reason: reason);
                   continue;
                 }
-                reached.add(
-                  '${start.name}${body.failedFirst ? ' after a failure' : ''}',
-                );
+                reached.add((from: start.from, afterFailure: body.failedFirst));
                 expect(thrown, grits.matcher, reason: reason);
                 expect(body.runs, brokeOn, reason: reason);
-                if (start.name != 'stored') {
+                if (start.from != .stored) {
                   expect(_heldIn(store), isA<Unstored>(), reason: reason);
                 }
               }
@@ -2125,12 +2135,12 @@ void main() {
           }
         }
       }
-      expect(reached, {
-        'generated',
-        'generated after a failure',
-        'stored',
-        'stored after a failure',
-        'token',
+      expect(reached, <_Reached>{
+        (from: .generated, afterFailure: false),
+        (from: .generated, afterFailure: true),
+        (from: .stored, afterFailure: false),
+        (from: .stored, afterFailure: true),
+        (from: .token, afterFailure: false),
       });
     });
 

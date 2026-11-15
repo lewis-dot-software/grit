@@ -215,6 +215,12 @@ typedef _SweptOdds = ({
   bool Function(Choice earlier, Choice named) asOddsSay,
 });
 
+/// What a run on a fixed sequence drew:
+///
+/// - `handed`: the choices the source handed it, in order.
+/// - `status`: how it ended.
+typedef _Drawn = ({ChoiceSequence handed, Status status});
+
 void main() {
   group('a fixed source', () {
     test('reads a weighted choice of 0 as false and 1 as true', () {
@@ -937,9 +943,7 @@ void main() {
             length: size + 1,
             bound: _bound,
           )) {
-            ({ChoiceSequence handed, Status status}) drawn({
-              required bool named,
-            }) {
+            _Drawn drawn({required bool named}) {
               final ChoiceSource source = .fixed(sequence);
               final List<Choice> handed = [];
               final Status status = run(source, () {
@@ -1134,7 +1138,7 @@ void main() {
         for (final (int i, Bound bound) in bounds.indexed)
           draw(_edgesWithin(bound), label: 'edges $i'),
       ];
-      ({ChoiceSequence handed, Status status}) drawn({required bool named}) {
+      _Drawn drawn({required bool named}) {
         final ChoiceSource source = .fixed(sequence);
         final List<Choice> handed = [];
         final Status status = run(source, () {

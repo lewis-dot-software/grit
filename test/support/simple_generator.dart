@@ -6,6 +6,9 @@ import 'integer_range.dart';
 
 /// A generator of `.integer`, `.boolean`, `.element`, `.list`, `.string`,
 /// `.oneOf`, `.set` or `.float`, with the simplest value its docs give it.
+///
+/// - `generator`: the generator.
+/// - `simplest`: the simplest value its docs give it.
 typedef Simple = ({Generator generator, Object? simplest});
 
 /// A float's range, with the simplest double in it.

@@ -38,10 +38,16 @@ Drawing<Object?> _chosen(
   };
 }
 
+/// A `oneOf` the value check runs over:
+///
+/// - `generators`: the generators it draws one of.
+/// - `simplest`: its simplest value.
+typedef _OneOf = ({List<Gen<Object?>> generators, Object? simplest});
+
 void main() {
   test('Every value `oneOf` draws is one of its generators\' values, and '
       'choices of 0 draw its first generator\'s simplest.', () {
-    final List<({List<Gen<Object?>> generators, Object? simplest})> cases = [
+    final List<_OneOf> cases = [
       (generators: [.integer(min: 3, max: 5)], simplest: 3),
       (generators: [.boolean(), .integer(min: 0, max: 2)], simplest: false),
       (
