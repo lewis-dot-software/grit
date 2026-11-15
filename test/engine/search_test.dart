@@ -1346,7 +1346,7 @@ void main() {
 
     test('are carried on a failed and a flaky outcome, and a given-up one '
         'warns slow alone', () async {
-      final FakeClock slow = FakeClock([const .new(minutes: 1)]);
+      final FakeClock slow = .new([const .new(minutes: 1)]);
       int calls = 0;
       final Outcome failed = await _search(limit: 0, clock: slow).run((
         Draw draw,
@@ -2000,7 +2000,7 @@ void main() {
           ).run(body.call);
           if (_reportedOf(outcome) case (
             sequence: final ChoiceSequence reported,
-            firstFound: FirstFound.stored,
+            firstFound: .stored,
           )) {
             found.add(outcome.runtimeType);
             expect(
@@ -2370,7 +2370,7 @@ void main() {
         ).run(body.call);
         if (_reportedOf(outcome) case (
           sequence: final ChoiceSequence reported,
-          firstFound: FirstFound.stored,
+          firstFound: .stored,
         )) {
           found++;
           expect(stored.isSmallerThan(reported), isFalse);

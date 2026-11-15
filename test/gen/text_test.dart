@@ -7,7 +7,7 @@ import '../support/small.dart';
 /// The text a draw keeps of [value], drawn by a body that makes no choice.
 String _textOf(Object? value) {
   final RunDraw draw = .new(.fixed(sequenceOf([])));
-  draw(Gen.build((Draw _) => value));
+  draw(.build((Draw _) => value));
   return draw.draws.single.text;
 }
 
@@ -15,14 +15,14 @@ String _textOf(Object? value) {
 String _read(String literal) {
   expect(literal, allOf(startsWith("'"), endsWith("'")));
   final StringBuffer read = .new();
-  final RegExp token = RegExp(r'\\u\{([0-9a-f]+)\}|\\(.)|(.)', dotAll: true);
+  final RegExp token = .new(r'\\u\{([0-9a-f]+)\}|\\(.)|(.)', dotAll: true);
   for (final RegExpMatch match in token.allMatches(
     literal.substring(1, literal.length - 1),
   )) {
     final String? codePoint = match[1];
     final String? escaped = match[2];
     if (codePoint != null) {
-      read.writeCharCode(int.parse(codePoint, radix: 16));
+      read.writeCharCode(.parse(codePoint, radix: 16));
     } else if (escaped != null) {
       read.write(switch (escaped) {
         'b' => '\b',

@@ -13,7 +13,7 @@ import '../support/small.dart';
 
 /// A directory of its own for one test, deleted once the test ends.
 Directory _directory() {
-  final Directory directory = Directory.systemTemp.createTempSync('grit-');
+  final Directory directory = .systemTemp.createTempSync('grit-');
   addTearDown(() => directory.deleteSync(recursive: true));
   return directory;
 }
@@ -190,11 +190,11 @@ void main() {
     late final Directory directory;
     late final Store store;
     setUpAll(() {
-      directory = Directory.systemTemp.createTempSync('grit-');
+      directory = .systemTemp.createTempSync('grit-');
       store = FileStore(directory);
     });
     tearDownAll(() => directory.deleteSync(recursive: true));
-    final Gen<StoreKey> anyKey = Gen.string().map(StoreKey.new);
+    final Gen<StoreKey> anyKey = .string().map(StoreKey.new);
 
     property('A sequence saved under a key loads under that key until it is '
         'deleted, and under no other.', (Draw draw) {

@@ -105,7 +105,7 @@ final List<_Range> _ranges = [
     (min: .negativeInfinity, max: -double.maxFinite),
     (min: .infinity, max: .infinity),
     (min: .negativeInfinity, max: .negativeInfinity),
-    (min: -3 * double.minPositive, max: 2 * double.minPositive),
+    (min: -3 * .minPositive, max: 2 * .minPositive),
     (min: 4503599627370494.5, max: 4503599627370497),
     (min: 9007199254740990, max: 9007199254740996),
   ])

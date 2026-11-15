@@ -155,7 +155,7 @@ void main() {
     });
 
     test('of the largest choice decodes to it', () {
-      final ChoiceSequence largest = .new([Choice.largest]);
+      final ChoiceSequence largest = .new([.largest]);
       expect(_decoded(Token.encode(largest)), largest);
     });
 

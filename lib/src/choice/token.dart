@@ -40,7 +40,7 @@ abstract final class Token {
     final List<Choice> choices = [];
     for (final String digits in match[1]?.split('.') ?? const <String>[]) {
       // Digits past the largest choice parse to null.
-      final int? value = int.tryParse(digits, radix: _radix);
+      final int? value = .tryParse(digits, radix: _radix);
       if (value == null) return NotAToken();
       choices.add(.new(value));
     }

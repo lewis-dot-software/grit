@@ -45,7 +45,7 @@ void main() {
       expect(
         forAll(
           (Draw draw) =>
-              draw(Gen.build((Draw draw) => draw(.integer(min: 1, max: 0)))),
+              draw(.build((Draw draw) => draw(.integer(min: 1, max: 0)))),
         ),
         throwsA(
           isA<ArgumentError>().having(

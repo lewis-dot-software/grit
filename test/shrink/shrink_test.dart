@@ -340,7 +340,7 @@ void main() {
   test('a candidate told as failing having read a prefix of its choices '
       'leaves that prefix the current sequence, and proposes next only '
       'candidates smaller than it', () {
-    final ChoiceSequence first = sequenceOf(List.filled(10, 1));
+    final ChoiceSequence first = sequenceOf(.filled(10, 1));
     final Shrinking start = Shrink.start(first, spansOf(first)) as Shrinking;
     final ChoiceSequence candidate = start.candidate;
     expect(candidate.choices.length, greaterThan(1));
@@ -351,7 +351,7 @@ void main() {
 
   test('a candidate told as failing having read none of its choices, or '
       'more than it holds, throws a RangeError for none but the first', () {
-    final ChoiceSequence first = sequenceOf(List.filled(10, 1));
+    final ChoiceSequence first = sequenceOf(.filled(10, 1));
     final Shrinking start = Shrink.start(first, spansOf(first)) as Shrinking;
     final int length = start.candidate.choices.length;
     expect(start.toldFailing(read: 0, spans: const []).current, sequenceOf([]));
