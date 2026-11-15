@@ -21,8 +21,8 @@ enum Pass {
   /// place of the part it sits in.
   liftSpan,
 
-  /// Each span of 8, 4, 3, 2 or 1 choices set to 0, the spans in the order
-  /// [deleteSpan] takes them.
+  /// Each span of 8, 4, 3, 2 or 1 choices set to 0, the widest first and each
+  /// width from the end back.
   zeroSpan,
 
   /// Each choice, from the first, lowered to the values a binary search for
@@ -34,7 +34,7 @@ enum Pass {
 
   /// Each two choices 8, 4, 3, 2 or 1 apart, the farthest apart first,
   /// lowered by the same amount: the smaller of the two to the values
-  /// [lowerChoice] probes, and the other by as much.
+  /// [_probes] gives for it, and the other by as much.
   lowerTogether,
 
   /// Each span of 8, 4, 3 or 2 choices sorted, then each two choices 8, 4, 3
@@ -48,9 +48,9 @@ enum Pass {
   swapSpan,
 
   /// Value moved from each choice to the one 8, 4, 3, 2 or 1 places after
-  /// it, the earlier lowered as [lowerChoice] lowers it and the later raised
-  /// by as much, then by 1 less where more than 1 moved, each where that
-  /// stays within [Choice.largest].
+  /// it, the earlier lowered to the values [_probes] gives for it and the
+  /// later raised by as much, then by 1 less where more than 1 moved, each
+  /// where that stays within [Choice.largest].
   ///
   /// The raise by 1 less moves value to an integer counted on along one side
   /// of its zigzag, where one choice is one value and not two.
@@ -65,7 +65,7 @@ enum Pass {
   /// elements before them, so each falls by 1 as one of those is deleted.
   deleteAndLower,
 
-  /// Each choice, from the first, lowered to the values [lowerChoice] probes,
+  /// Each choice, from the first, lowered to the values [_probes] gives for it,
   /// each with each 0 among the 8 choices after it set to the choice that
   /// follows the 0, where that is above 0.
   ///
@@ -73,8 +73,8 @@ enum Pass {
   /// draw after it took, where a value lowered before it leaves the room.
   lowerAndCopy,
 
-  /// Each span of 8, 4, 3, 2 or 1 choices deleted, the spans in the order
-  /// [deleteSpan] takes them, with the choice after the span raised by the
+  /// Each span of 8, 4, 3, 2 or 1 choices deleted, the widest first and each
+  /// width from the end back, with the choice after the span raised by the
   /// span's sum, where that sum is above 0 and the raise stays within
   /// [Choice.largest].
   ///

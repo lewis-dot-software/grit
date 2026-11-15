@@ -143,7 +143,7 @@ def liftSpans (cs : Seq) (spans : List Span) : List Seq :=
       cs.take outer.start ++ slice cs inner ++ cs.drop (outer.start + outer.width)) ++
       liftSpans cs rest
 
-/-- Each span of 8, 4, 3, 2 or 1 choices set to 0, the spans in the order `deleteSpans` takes them. -/
+/-- Each span of 8, 4, 3, 2 or 1 choices set to 0, the widest first and each width from the end back. -/
 def zeroSpans (cs : Seq) : List Seq :=
   widths.flatMap fun width => (startsBack cs.length width).map fun start =>
     cs.take start ++ List.replicate width 0 ++ cs.drop (start + width)
@@ -228,8 +228,8 @@ def lowerAndCopies (cs : Seq) : List Seq :=
         some ((cs.set i lowered).set j (choiceAt cs (j + 1)))
       else none
 
-/-- Each span of 8, 4, 3, 2 or 1 choices deleted, the spans in the order `deleteSpans` takes them, with the choice after
-the span raised by the span's sum, where that sum is above 0 and the raise stays within `largest`. -/
+/-- Each span of 8, 4, 3, 2 or 1 choices deleted, the widest first and each width from the end back, with the choice
+after the span raised by the span's sum, where that sum is above 0 and the raise stays within `largest`. -/
 def deleteAndRaises (cs : Seq) : List Seq :=
   widths.flatMap fun width => (startsBack (cs.length - 1) width).filterMap fun start =>
     let after := start + width

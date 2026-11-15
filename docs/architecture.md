@@ -111,12 +111,13 @@ The step function's current sequence is always the record a run read that it was
 
 ## The clock
 
-Wall time is read in two places alone:
+Wall time is read in three places alone:
 
 - The budget's bound on shrinking.
+- The time shrinking took, which `Failed` carries.
 - The slow-property warning.
 
-Neither changes a verdict.
+None changes a verdict.
 
 Generation is timed, from its first run to its last. A property whose run count, at generation's mean time per run, costs more than the engine's threshold of 5 s, with no setting, gets a warning on its outcome naming its time per run, so its owner can lower the count.
 
@@ -150,7 +151,7 @@ The rules every generator obeys:
 
 - Choices: drawn only through the choice source, with no `Random` of its own and nothing else read.
 - Simplest value: named in its doc comment, the one choice 0 gives.
-- Collections: each element behind a "one more" choice, read as one more whatever it holds inside the minimum, and the collection ending on a choice of 0, one that can only be 0 at its maximum, so deleting a span deletes an element whole.
+- Collections: each element behind a "one more" choice, read as one more whatever it holds inside the minimum, and the collection ending on a choice of 0, one that can only be 0 at its maximum, so deleting a span deletes an element whole. A set whose draws of a distinct element are spent ends with no such choice.
 - Strings: a list of code points, each one choice of its index in an `Alphabet`, simplest first, so a string's length counts code points and a string shrinks as a list does.
 - Distribution: none of it. A generator sets only its choices' bounds, or the zigzag an integer's counts out along, the edge values a choice names, and a "one more" choice's odds.
 
@@ -217,12 +218,13 @@ The token is a sequence as one line of text: its format, `grit1`, then a colon, 
 
 ## Platform and packages
 
-The web would change four things:
+The web would change five things:
 
 - `dart:io`, which the layer rules keep to `api` and `store`.
 - A stack's form, read in `engine` alone.
 - A bound's width under dart2js, held in `choice`.
 - A double's 64 bits read as an integer, which a float's encoding in `gen` ranks by.
+- The range a seed is drawn from in `api`, `1 << 32`, which is 0 under dart2js.
 
 So the web is a later cut of those parts and not a rewrite.
 

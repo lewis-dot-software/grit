@@ -45,21 +45,21 @@ theorem later_shorter {p q : Pass} (h : q ∈ p.later) : q.later.length < p.late
 
 theorem seek_spec {current spans pass position cs accepted s}
     (h : seek current spans pass position cs accepted = .shrinking s) :
-    s.current = current ∧ Proper s ∧
+    Proper s ∧
       Prod.Lex (· < ·) (Prod.Lex (· < ·) (· < ·)) (remaining s) (accepted.toNat, pass.later.length, cs.length) := by
   unfold seek at h
   split at h
   · next hf =>
     cases h
-    obtain ⟨h1, h2, h3, h4, h5⟩ := firstSmaller_spec hf
-    refine ⟨h1, h4, ?_⟩
+    obtain ⟨_, h2, h3, h4, h5⟩ := firstSmaller_spec hf
+    refine ⟨h4, ?_⟩
     simp only [remaining, h2, h3]
     exact .right _ (.right _ h5)
   · split at h
     · next hi =>
       cases h
-      obtain ⟨h1, h2, h3, h4⟩ := inPasses_spec hi
-      refine ⟨h1, h3, ?_⟩
+      obtain ⟨_, h2, h3, h4⟩ := inPasses_spec hi
+      refine ⟨h3, ?_⟩
       simp only [remaining, h2]
       exact .right _ (.left _ _ (later_shorter (List.mem_filter.mp h4).1))
     · split at h
@@ -67,8 +67,8 @@ theorem seek_spec {current spans pass position cs accepted s}
         split at h
         · next hi =>
           cases h
-          obtain ⟨h1, h2, h3, _⟩ := inPasses_spec hi
-          refine ⟨h1, h3, ?_⟩
+          obtain ⟨_, h2, h3, _⟩ := inPasses_spec hi
+          refine ⟨h3, ?_⟩
           simp only [remaining, h2, ha]
           exact .left _ _ (by decide)
         · cases h
@@ -78,12 +78,14 @@ theorem told_below {s s' : Shrinking} {answer : Answer} (hs : Proper s) (h : tol
     Proper s' ∧ Below s' s := by
   cases answer with
   | failing read spans =>
-    obtain ⟨h1, h2, _⟩ := seek_spec h
+    obtain ⟨h2, _⟩ := seek_spec h
+    have h1 : s'.current = record s.candidate read := (congrArg Shrink.current h).symm.trans seek_current
     refine ⟨h2, ?_⟩
     simp only [Below, InvImage, rank, h1]
     exact .left _ _ (smaller_take read hs)
   | notFailing =>
-    obtain ⟨h1, h2, h3⟩ := seek_spec h
+    obtain ⟨h2, h3⟩ := seek_spec h
+    have h1 : s'.current = s.current := (congrArg Shrink.current h).symm.trans seek_current
     refine ⟨h2, ?_⟩
     simp only [Below, InvImage, rank, h1]
     exact .right _ h3
@@ -105,7 +107,7 @@ theorem told_always_ends : AlwaysEnds start told := by
   show ∃ n current, walk told (start first spans) answers n = .shrunk current
   match h : start first spans with
   | .shrunk current => exact ⟨0, current, rfl⟩
-  | .shrinking s => exact proper_ends s (seek_spec h).2.1 answers
+  | .shrinking s => exact proper_ends s (seek_spec h).1 answers
 
 /-- An obviously wrong step function: told its candidate did not fail, it proposes the same candidate again. -/
 def toldStays (s : Shrinking) (answer : Answer) : Shrink :=

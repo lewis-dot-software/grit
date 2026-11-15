@@ -2,7 +2,8 @@ import Shrink.Step
 import Shrink.Shortlex
 
 /-!
-What the states `seek` reaches hold: the current sequence it was given, and a candidate shortlex smaller than it.
+What the states `firstSmaller` and `inPasses` reach hold, the current sequence they were given and a candidate shortlex
+smaller than it, and that `seek` keeps the current sequence it was given.
 -/
 
 namespace Grit

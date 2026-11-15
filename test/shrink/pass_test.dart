@@ -88,8 +88,8 @@ void main() {
     expect(candidates, contains(equals([1, 2, 3, 4, 5, 6])));
   });
 
-  test('zeroing a span zeroes each span in the order deleting takes its '
-      'spans', () {
+  test('zeroing a span zeroes each span, the widest first and each width '
+      'from the end back', () {
     expect(_candidates(.zeroSpan, [1, 2, 3]), [
       [0, 0, 0],
       [1, 0, 0],
