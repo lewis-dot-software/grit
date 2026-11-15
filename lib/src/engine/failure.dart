@@ -1,6 +1,6 @@
 import 'frame.dart';
 
-/// What makes two failures the same, equal where both fields are.
+/// The type of an error a run threw and the frame it was thrown from.
 ///
 /// - `type`: the type of the error thrown.
 /// - `frame`: the frame it was thrown from, or null where its stack held

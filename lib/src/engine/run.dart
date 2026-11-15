@@ -57,6 +57,11 @@ final class Threw extends Run {
   final Failure failure;
 
   /// Whether [run] failed as this run did: it threw an error of the same type
-  /// from the same frame.
-  bool failedAlike(Run run) => run is Threw && run.failure == failure;
+  /// from the same frame, or a stack overflow from any frame where this run
+  /// threw one, since an overflow strikes wherever the stack runs out.
+  bool failedAlike(Run run) => switch ((error, run)) {
+    (StackOverflowError(), Threw(error: StackOverflowError())) => true,
+    (_, Threw(failure: final Failure theirs)) => theirs == failure,
+    (_, Returned() || Rejected() || Overran()) => false,
+  };
 }

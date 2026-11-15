@@ -14,7 +14,13 @@ final class RunDraw extends Draw {
   List<Drawn> get draws => _read(_draws);
 
   /// The lines noted, in order.
-  List<String> get notes => _read(_notes);
+  List<String> get notes {
+    final List<String> lines = [];
+    for (_Note? note = _lastNote; note != null; note = note.before) {
+      lines.add(note.line);
+    }
+    return _read(lines.reversed);
+  }
 
   /// The span of each draw made, the property's body's and those inside a
   /// [Gen.build] body alike, in the order the draws began.
@@ -25,7 +31,7 @@ final class RunDraw extends Draw {
   /// another listed once.
   List<Thrown> get thrown => _read(_thrown);
 
-  List<E> _read<E>(List<E> kept) {
+  List<E> _read<E>(Iterable<E> kept) {
     _writes.throwIfCut();
     return .unmodifiable(kept);
   }

@@ -59,6 +59,8 @@ An error grit's own code throws inside a draw is a bug in grit, never the proper
 
 A stack overflow can strike part way through one of grit's writes to a run's records, the draw's or the choice source's, and leave it half-written, such as a list with a slot and no value in it. Each write keeps the error that cut it short. From then on the draw's records, read once the run ends, throw that error, as do the choice source's record, its length and every choice asked of it, so the run ends on the overflow, out of whichever phase it is in, never on an error from a record read half-written. The draw's own reads inside the run, of a list's length, its last error and its callbacks' errors, go unguarded, since whatever they find, the run ends on the error that cut the write at its first read of the records once it ends.
 
+A note is kept by one store of a field, the line holding each line noted before it, so no overflow leaves the notes half-written, and a note is never a write that cuts. An overflow as the body notes, outside any draw, is the property's failure like any other its own code meets.
+
 A failure the stored replay found takes the path generation's would, from the first replay on, so a stored failure that no longer fails alike is flaky. Once a search ends, the store holds a failed outcome's smallest sequence for its call site, and nothing after any other outcome.
 
 The outcome is a sealed type, one subtype per row:
@@ -78,7 +80,7 @@ Every outcome carries the search's warnings, which never change its verdict: a s
 
 The shrinker is a step function: it proposes a candidate sequence, is told whether the candidate's run failed as the first failure did, with the spans of its draws where it did, and proposes the next. It is pure, so async, time and I/O stay with the engine, which drives it, awaits each run and holds the budget.
 
-The engine decides what counts as the same failure: the same error type, thrown from the same frame. The frame is the first in the package of the property's call site, or where none is, the first outside the Dart SDK and every test package, grit's among them. A candidate that fails any other way is told to the shrinker as not failing, so a case never slips from one bug to another. The first and final replays hold to the same rule. The stored replay and a token's replay take any throw as a failure, since neither has a failure to compare with.
+The engine decides what counts as the same failure: the same error type, thrown from the same frame. The frame is the first in the package of the property's call site, or where none is, the first outside the Dart SDK and every test package, grit's among them. A stack overflow is the same failure as another whatever their frames, since one recursion's overflow strikes in whichever of its frames the stack runs out, and that turns on how much stack each frame took. A candidate that fails any other way is told to the shrinker as not failing, so a case never slips from one bug to another, but for one cost: a property with two unbounded recursions can shrink from one's overflow to the other's. The first and final replays hold to the same rule. The stored replay and a token's replay take any throw as a failure, since neither has a failure to compare with.
 
 Why shrinking always ends:
 

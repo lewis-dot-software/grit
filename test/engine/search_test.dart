@@ -1729,6 +1729,80 @@ void main() {
     });
   });
 
+  group('a run that threw', () {
+    /// A run that threw [error] from line [line] of the consumer's body.
+    Threw threw(Object error, int line) {
+      final StackTrace stackTrace = .fromString(
+        '#0      body (package:app/src/body.dart:$line:3)',
+      );
+      return .new(
+        sequenceOf([]),
+        const [],
+        const [],
+        error: error,
+        stackTrace: stackTrace,
+        failure: _callSite.failureOf(error, stackTrace),
+      );
+    }
+
+    test('failed alike another that overflowed the stack, whatever the frame '
+        'each overflowed in', () {
+      expect(
+        threw(
+          StackOverflowError(),
+          15,
+        ).failedAlike(threw(StackOverflowError(), 16)),
+        isTrue,
+      );
+    });
+
+    test('is no change: failed unlike another that threw its type from '
+        'another frame, or another type from its frame', () {
+      expect(
+        threw(StateError('x'), 15).failedAlike(threw(StateError('x'), 16)),
+        isFalse,
+      );
+      expect(
+        threw(StackOverflowError(), 15).failedAlike(threw(StateError('x'), 15)),
+        isFalse,
+      );
+      expect(
+        threw(StateError('x'), 15).failedAlike(threw(StackOverflowError(), 15)),
+        isFalse,
+      );
+    });
+  });
+
+  group(
+    'a stack overflow outside any draw, the body noting as it recurses',
+    () {
+      test('is the property\'s failure, shrunk and stored, every note whole, '
+          'never thrown out of the search', () async {
+        for (int search = 0; search < 3; search++) {
+          final MemoryStore store = .new();
+          final Outcome outcome = await _search(
+            random: _fillsThreeThree,
+            store: store,
+          ).run(notesOverflowing);
+          expect(
+            outcome,
+            isA<Failed>()
+                .having((o) => o.sequence, 'sequence', sequenceOf([1]))
+                .having((o) => o.end, 'end', ShrinkEnd.shrunk)
+                .having((o) => o.run.error, 'error', isA<StackOverflowError>())
+                .having(
+                  (o) => o.run.notes,
+                  'notes',
+                  allOf(isNotEmpty, everyElement('deeper')),
+                ),
+            reason: 'search $search',
+          );
+          expect(_heldIn(store), _storedAs(sequenceOf([1])));
+        }
+      });
+    },
+  );
+
   group('an error the body\'s own code throws inside a draw', () {
     test(
       'is no change: still the property\'s failure, shrunk, whether its '

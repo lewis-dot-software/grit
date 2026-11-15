@@ -46,9 +46,9 @@ import 'warning.dart';
 /// body caught it.
 ///
 /// A failure is the same as another where its error has the same type and
-/// was thrown from the same frame, which [CallSite.failureOf] reads. A
-/// candidate that fails any other way is told to the shrinker as not
-/// failing.
+/// was thrown from the same frame, which [CallSite.failureOf] reads, or
+/// where each is a stack overflow, whatever its frame. A candidate that
+/// fails any other way is told to the shrinker as not failing.
 final class Search {
   /// A search filling from [random], timing generation and shrinking by
   /// [clock], called from [callSite] and keeping its failure in [store].

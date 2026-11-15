@@ -18,6 +18,7 @@ part 'float.dart';
 part 'float_part.dart';
 part 'integer.dart';
 part 'list.dart';
+part 'note.dart';
 part 'one_of.dart';
 part 'run_draw.dart';
 part 'set.dart';

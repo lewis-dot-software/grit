@@ -6,9 +6,13 @@ abstract final class Draw {
 
   final ChoiceSource _source;
   final List<Drawn> _draws = [];
-  final List<String> _notes = [];
   final List<Span> _spans = [];
   final List<Thrown> _thrown = [];
+
+  /// The last line noted, where one was, so a note is kept by one store of
+  /// this field, which no error, a stack overflow among them, can leave
+  /// half-written.
+  _Note? _lastNote;
 
   /// Each error a callback of the property's own threw, by identity.
   final Set<Object> _theirsThrown = .identity();
@@ -87,5 +91,5 @@ abstract final class Draw {
   }
 
   /// Adds [line] to the report of the run, where it fails.
-  void note(String line) => _writes(() => _notes.add(line));
+  void note(String line) => _lastNote = .new(line, _lastNote);
 }
