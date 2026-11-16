@@ -49,7 +49,7 @@ glados's `any` holds its generators, and grit's are `Gen`'s static members, name
 | `any.list(gen)`, `any.nonEmptyList(gen)` | `.list(gen)`, `.list(gen, minLength: 1)` |
 | `any.listWithLengthInRange(min, max, gen)` | `.list(gen, minLength: min, maxLength: max - 1)` |
 | `any.set(gen)` | `.set(gen)` |
-| `any.letters`, `any.lowercaseLetters`, `any.digits` | `.string(alphabet: .letters)`, `.lowerCase`, `.digits` |
+| `any.letters`, `any.lowercaseLetters`, `any.digits` | `.string(alphabet: .letters)`, `.string(alphabet: .lowerCase)`, `.string(alphabet: .digits)` |
 | `any.letterOrDigits` | `.string(alphabet: .lettersAndDigits)` |
 | `any.stringOf(chars)` | `.string(alphabet: .of(chars))` |
 | `any.choose(values)` | `.element(values)` |

@@ -7,6 +7,8 @@ import 'package:analyzer/dart/element/type.dart';
 import 'package:path/path.dart' as path;
 import 'package:test/test.dart';
 
+import '../support/code_span.dart';
+
 /// The doc that links every topic doc.
 const String _quickstart = 'docs/quickstart.md';
 
@@ -92,9 +94,6 @@ final RegExp _fence = .new(
   dotAll: true,
 );
 
-/// A code span of markdown outside a fenced block, its code captured.
-final RegExp _span = .new(r'`([^`\n]+)`');
-
 /// An identifier of Dart's.
 final RegExp _identifier = .new(r'[A-Za-z_$][\w$]*');
 
@@ -102,7 +101,7 @@ final RegExp _identifier = .new(r'[A-Za-z_$][\w$]*');
 Set<String> _codeIdentifiers(String markdown) {
   final Iterable<String> code = [
     for (final RegExpMatch fence in _fence.allMatches(markdown)) fence[1]!,
-    for (final RegExpMatch span in _span.allMatches(
+    for (final RegExpMatch span in codeSpan.allMatches(
       markdown.replaceAll(_fence, ''),
     ))
       span[1]!,
