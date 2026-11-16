@@ -100,6 +100,6 @@ A run is rejected by an `assume` that is false, a `filter` that finds no value o
 
 A warning never changes a verdict. A passing property that warns prints its report under its test, and a failing one's report carries it.
 
-- Slow property: its runs cost more than five seconds at their mean time per run, so a lower `runs` setting makes it faster.
+- Slow property: its runs cost more than five seconds at their mean time per run, and that mean passes its `expectedRunTime`, so a lower `runs` setting makes it faster, or an `expectedRunTime` declares runs that slow expected ([settings.md](settings.md)).
 - Mostly invalid runs: more runs were rejected or overran than returned, in a search that did not give up.
 - Unreadable stored failure: the file the store held for the call site was no token grit reads, so the search deleted it and generated afresh.

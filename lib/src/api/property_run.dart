@@ -73,6 +73,7 @@ final class PropertyRun {
       limit: _limit,
       invalid: _settings.runs * _invalidPerRun,
       budget: _settings.budget,
+      expectedRunTime: _settings.expectedRunTime,
     );
     return switch (_settings.replayed) {
       null => search.run(body),

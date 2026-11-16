@@ -71,6 +71,6 @@ A `ChoiceSequence` is a run's record: its `choices`, in the order the run made t
 
 A `Warning` is one of three cases:
 
-- `SlowProperty`: the search's runs took `perRun` each on average, slow enough at its `runs` to warn of ([failures.md](failures.md)).
+- `SlowProperty`: the search's runs took `perRun` each on average, slow enough at its `runs`, and past its `expectedRunTime`, to warn of ([failures.md](failures.md)).
 - `MostlyInvalid`: more runs were rejected or overran than returned, counted as `returned`, `rejected` and `overran`.
 - `UnreadableStored`: the store held text for the call site that decodes to no sequence, for the `reason`, an `Undecodable` ([replay.md](replay.md)).

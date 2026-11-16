@@ -35,7 +35,8 @@ import 'warning.dart';
 /// and nothing after any other outcome.
 ///
 /// Generation is timed, and every outcome warns where the run count costs
-/// more than 5 s at its mean time per run, and where its runs were mostly
+/// more than 5 s at its mean time per run and that mean passes
+/// [expectedRunTime], and where its runs were mostly
 /// rejected or overrun in a search that did not give up. No warning changes
 /// the verdict.
 ///
@@ -56,7 +57,8 @@ final class Search {
   /// [runs] is how many runs must return for the property to pass, [limit]
   /// the most choices one run may make, and [invalid] how many runs rejected
   /// or overrun give the search up. [invalid] is at least 1, and every other
-  /// count never negative.
+  /// count never negative. [expectedRunTime] is the mean time a run is
+  /// expected to take, at or under which the search never warns slow.
   Search({
     required this._clock,
     required this._random,
@@ -66,6 +68,7 @@ final class Search {
     required int limit,
     required int invalid,
     required this._budget,
+    required this._expectedRunTime,
   }) : _runs = RangeError.checkNotNegative(runs, 'runs'),
        _limit = RangeError.checkNotNegative(limit, 'limit'),
        _invalid = invalid >= 1
@@ -96,6 +99,7 @@ final class Search {
   final int _limit;
   final int _invalid;
   final Budget _budget;
+  final Duration _expectedRunTime;
 
   /// The outcome of searching [body], the store's failure for the call site
   /// replayed first, with the warnings the search earned.
@@ -182,9 +186,11 @@ final class Search {
     final bool gaveUp = failed == null && returned < _runs;
     final List<Warning> warnings = [
       ...stored,
-      // The mean time per run times the run count, compared in whole
-      // microseconds, so no rounding of the mean moves the threshold.
-      if (time.inMicroseconds * _runs > _slowAfter.inMicroseconds * made)
+      // The mean time per run, times the run count against 5 s and alone
+      // against the expected run time, compared in whole microseconds, so no
+      // rounding of the mean moves either threshold.
+      if (time.inMicroseconds * _runs > _slowAfter.inMicroseconds * made &&
+          time.inMicroseconds > _expectedRunTime.inMicroseconds * made)
         SlowProperty(perRun: time ~/ made, runs: _runs),
       if (!gaveUp && rejected + overran > returned)
         MostlyInvalid(returned: returned, rejected: rejected, overran: overran),

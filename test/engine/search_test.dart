@@ -45,6 +45,7 @@ Search _search({
   int limit = 24,
   int invalid = 100,
   Budget? budget,
+  Duration expectedRunTime = .zero,
 }) => .new(
   clock: clock ?? FakeClock(),
   random: random ?? .new(seed),
@@ -54,6 +55,7 @@ Search _search({
   limit: limit,
   invalid: invalid,
   budget: budget ?? _unbounded,
+  expectedRunTime: expectedRunTime,
 );
 
 /// A choice from 0 to 3, whose value is the choice.
@@ -693,11 +695,13 @@ final class _Scheduled {
 typedef _ScheduledSearch = ({_Scheduled body, Outcome outcome});
 
 /// The search of a fresh [_Scheduled] body of [endings], over [runs] runs
-/// that gives up at [invalid], timed by [clock], with the body it searched.
+/// that gives up at [invalid], expecting each run to take
+/// [expectedRunTime], timed by [clock], with the body it searched.
 Future<_ScheduledSearch> _scheduled(
   List<_Ending> endings, {
   required int runs,
   required int invalid,
+  Duration expectedRunTime = .zero,
   Clock? clock,
 }) async {
   final _Scheduled body = .new(endings);
@@ -705,6 +709,7 @@ Future<_ScheduledSearch> _scheduled(
     runs: runs,
     limit: 0,
     invalid: invalid,
+    expectedRunTime: expectedRunTime,
     clock: clock,
   ).run(body.call);
   return (body: body, outcome: outcome);
@@ -735,6 +740,14 @@ final List<List<Duration>> _slowClocks = [
     [for (final Choice c in ticks.choices) .new(minutes: c.value)],
 ];
 
+/// The expected run times the slow checks over every small schedule declare:
+/// none, one past 5 s over 3 runs alone, and 5 s.
+const List<Duration> _expectedRunTimes = [
+  .zero,
+  .new(seconds: 2),
+  .new(seconds: 5),
+];
+
 /// The slow-property warning of [outcome], or null where it has none.
 SlowProperty? _slowOf(Outcome outcome) =>
     outcome.warnings.whereType<SlowProperty>().firstOrNull;
@@ -743,15 +756,23 @@ SlowProperty? _slowOf(Outcome outcome) =>
 MostlyInvalid? _invalidOf(Outcome outcome) =>
     outcome.warnings.whereType<MostlyInvalid>().firstOrNull;
 
+/// How one timed search stood against the slow warning's two thresholds:
+///
+/// - `warned`: whether it was warned slow.
+/// - `costly`: whether its runs' mean time times the run count passed 5 s.
+typedef _Slowness = ({bool warned, bool costly});
+
 /// Checks that the search of a [_Scheduled] body of [endings], over [runs]
-/// runs that gives up at [invalid], by a clock whose one tick lies [offset]
-/// microseconds past the slow warning's threshold, is warned slow exactly
-/// where its runs' mean time times [runs] passes 5 s, and returns whether it
-/// was.
-Future<bool> _expectSlowExactly(
+/// runs that gives up at [invalid], expecting each run to take
+/// [expectedRunTime], by a clock whose one tick lies [offset] microseconds
+/// past the higher of the slow warning's two thresholds, is warned slow
+/// exactly where its runs' mean time times [runs] passes 5 s and the mean
+/// passes [expectedRunTime], and returns how it stood.
+Future<_Slowness> _expectSlowExactly(
   List<_Ending> endings, {
   required int runs,
   required int invalid,
+  required Duration expectedRunTime,
   required int offset,
 }) async {
   final (:_Scheduled body, :Outcome outcome) = await _scheduled(
@@ -760,17 +781,22 @@ Future<bool> _expectSlowExactly(
     invalid: invalid,
   );
   final int made = body.generated(outcome).length;
+  final int expected = expectedRunTime.inMicroseconds;
   // Generation reads the clock at its start and its end, so it takes one
   // tick, and the threshold falls between two ticks a microsecond apart.
-  final int micros = 5000000 * made ~/ runs + offset;
+  final int micros = max(5000000 * made ~/ runs, expected * made) + offset;
   final (outcome: Outcome timed, body: _) = await _scheduled(
     endings,
     runs: runs,
     invalid: invalid,
+    expectedRunTime: expectedRunTime,
     clock: FakeClock([.new(microseconds: micros)]),
   );
-  final String reason = '$body, $runs runs, giving up at $invalid, $micros µs';
-  final bool slow = micros * runs > 5000000 * made;
+  final String reason =
+      '$body, $runs runs, giving up at $invalid, expecting '
+      '$expectedRunTime, $micros µs';
+  final bool costly = micros * runs > 5000000 * made;
+  final bool slow = costly && micros > expected * made;
   expect(
     _slowOf(timed),
     slow
@@ -784,7 +810,7 @@ Future<bool> _expectSlowExactly(
         : isNull,
     reason: reason,
   );
-  return slow;
+  return (warned: slow, costly: costly);
 }
 
 /// How a search's invalid runs stood beside those that returned.
@@ -1340,6 +1366,26 @@ void main() {
       ]);
     });
 
+    test('warn nothing slow where the runs\' mean time is within the run time '
+        'expected, and warn slow once it passes it', () async {
+      // Generation takes one 6 s tick over its 10 runs, 600 ms a run.
+      Future<Outcome> expecting(Duration expectedRunTime) => _search(
+        runs: 10,
+        clock: FakeClock([const .new(seconds: 6)]),
+        expectedRunTime: expectedRunTime,
+      ).run((Draw draw) {});
+      final Outcome within = await expecting(const .new(milliseconds: 600));
+      expect(within, isA<Passed>());
+      expect(within.warnings, isEmpty);
+      expect((await expecting(const .new(microseconds: 599999))).warnings, [
+        isA<SlowProperty>().having(
+          (w) => w.perRun,
+          'perRun',
+          const Duration(milliseconds: 600),
+        ),
+      ]);
+    });
+
     test('warn of mostly invalid runs, counting each kind, in a search that '
         'passed', () async {
       final (:Outcome outcome, body: _) = await _scheduled(
@@ -1600,21 +1646,31 @@ void main() {
 
   group('over every small schedule of run endings', () {
     test('A property is warned slow exactly where its runs\' mean time times '
-        'the run count passes 5 s.', () async {
-      final Set<bool> warned = {};
+        'the run count passes 5 s and the mean passes its expected run '
+        'time.', () async {
+      final Set<_Slowness> reached = {};
       await _eachSchedule((List<_Ending> endings, int runs, int invalid) async {
-        for (final int offset in [-1, 0, 1]) {
-          warned.add(
-            await _expectSlowExactly(
-              endings,
-              runs: runs,
-              invalid: invalid,
-              offset: offset,
-            ),
-          );
+        // No expected time, one that binds at 3 runs alone, and one that
+        // binds at every count but 1, where it meets the 5 s threshold.
+        for (final Duration expectedRunTime in _expectedRunTimes) {
+          for (final int offset in [-1, 0, 1]) {
+            reached.add(
+              await _expectSlowExactly(
+                endings,
+                runs: runs,
+                invalid: invalid,
+                expectedRunTime: expectedRunTime,
+                offset: offset,
+              ),
+            );
+          }
         }
       });
-      expect(warned, {true, false});
+      expect(reached, {
+        (warned: true, costly: true),
+        (warned: false, costly: true),
+        (warned: false, costly: false),
+      });
     });
 
     test('A search is warned of its invalid runs exactly where they outnumber '
@@ -2707,19 +2763,28 @@ void main() {
     });
 
     test('A property is warned slow exactly where its runs\' mean time times '
-        'the run count passes 5 s.', () async {
-      final Set<bool> warned = {};
+        'the run count passes 5 s and the mean passes its expected run '
+        'time.', () async {
+      final Set<_Slowness> reached = {};
       await forAll((Draw draw) async {
-        warned.add(
+        reached.add(
           await _expectSlowExactly(
             draw(_anyEndings, label: 'endings'),
             runs: draw(.integer(min: 1, max: 16), label: 'runs'),
             invalid: draw(.integer(min: 1, max: 16), label: 'invalid'),
+            expectedRunTime: draw(
+              .integer(
+                min: 0,
+                max: 6000,
+              ).map((int millis) => .new(milliseconds: millis)),
+              label: 'expectedRunTime',
+            ),
             offset: draw(.integer(min: -1, max: 1), label: 'offset'),
           ),
         );
       });
-      expect(warned, {true, false});
+      expect(reached, contains((warned: true, costly: true)));
+      expect(reached, contains((warned: false, costly: true)));
     });
 
     test('A search is warned of its invalid runs exactly where they outnumber '

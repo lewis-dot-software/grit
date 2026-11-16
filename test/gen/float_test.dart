@@ -457,6 +457,7 @@ void main() {
         limit: 24,
         invalid: 100,
         budget: .new(steps: 0, time: .zero),
+        expectedRunTime: .zero,
       ).run((Draw draw) {
         final double x = draw(.float());
         if (run++ < 20) early.add(x);

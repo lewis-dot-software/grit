@@ -292,7 +292,8 @@ void main() {
         '\n'
         'Warning: the property is slow. Its runs took 120 ms each on average, '
         'so a search of 100 runs takes about 12.0 s. A lower `runs` setting '
-        'makes it faster.\n'
+        'makes it faster, and an `expectedRunTime` setting declares runs this '
+        'slow expected.\n'
         '\n'
         'Seed 7. Repeat this search with `settings: Settings(seed: 7)`.',
       );
@@ -346,7 +347,8 @@ void main() {
           '\n'
           'Warning: the property is slow. Its runs took 1.0 s each on '
           'average, so a search of 100 runs takes about 100.0 s. A lower '
-          '`runs` setting makes it faster.\n'
+          '`runs` setting makes it faster, and an `expectedRunTime` setting '
+          'declares runs this slow expected.\n'
           '\n'
           'Warning: most of the property\'s runs were invalid, 1 rejected and '
           '0 overrun against 0 returned. A run is rejected by an assume that '

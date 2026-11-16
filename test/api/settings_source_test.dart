@@ -28,6 +28,10 @@ _Read _read(String source) {
         null => defaults.shrinkTime,
         final String time => _readDuration(time),
       },
+      expectedRunTime: switch (named['expectedRunTime']) {
+        null => defaults.expectedRunTime,
+        final String time => _readDuration(time),
+      },
     ),
   );
 }
@@ -49,8 +53,8 @@ Duration _readDuration(String source) {
   };
 }
 
-/// A shrink time a whole number of one unit, so every unit is reached.
-final Gen<Duration> _anyShrinkTime = .build(
+/// A time a whole number of one unit, so every unit is reached.
+final Gen<Duration> _anyTime = .build(
   (Draw draw) => .new(
     microseconds:
         draw(.integer(min: 0, max: 1000)) *
@@ -83,9 +87,11 @@ void main() {
           runs: 1000,
           shrinkSteps: 3,
           shrinkTime: const .new(minutes: 2),
+          expectedRunTime: const .new(seconds: 3),
         ).source(seed: 7),
         'Settings(seed: 7, runs: 1000, shrinkSteps: 3, '
-        'shrinkTime: Duration(minutes: 2))',
+        'shrinkTime: Duration(minutes: 2), '
+        'expectedRunTime: Duration(seconds: 3))',
       );
     });
 
@@ -96,7 +102,8 @@ void main() {
         final Settings settings = .new(
           runs: draw(.integer(min: 1, max: 10000), label: 'runs'),
           shrinkSteps: draw(.integer(min: 0, max: 10000), label: 'shrinkSteps'),
-          shrinkTime: draw(_anyShrinkTime, label: 'shrinkTime'),
+          shrinkTime: draw(_anyTime, label: 'shrinkTime'),
+          expectedRunTime: draw(_anyTime, label: 'expectedRunTime'),
         );
         final (seed: int readSeed, settings: Settings read) = _read(
           settings.source(seed: seed),
@@ -105,6 +112,7 @@ void main() {
         expect(read.runs, settings.runs);
         expect(read.shrinkSteps, settings.shrinkSteps);
         expect(read.shrinkTime, settings.shrinkTime);
+        expect(read.expectedRunTime, settings.expectedRunTime);
       });
     });
 

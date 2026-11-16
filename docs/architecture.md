@@ -121,7 +121,7 @@ Wall time is read in three places alone:
 
 None changes a verdict.
 
-Generation is timed, from its first run to its last. A property whose run count, at generation's mean time per run, costs more than the engine's threshold of 5 s, with no setting, gets a warning on its outcome naming its time per run, so its owner can lower the count.
+Generation is timed, from its first run to its last. A property whose run count, at generation's mean time per run, costs more than the engine's threshold of 5 s, and whose mean passes the run time its settings expect, zero where they declare none, gets a warning on its outcome naming its time per run, so its owner can lower the count or declare runs that slow expected. The threshold itself is no setting.
 
 ## The API
 

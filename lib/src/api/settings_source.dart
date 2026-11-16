@@ -16,6 +16,8 @@ extension SettingsSource on Settings {
       if (shrinkSteps != defaults.shrinkSteps) 'shrinkSteps: $shrinkSteps',
       if (shrinkTime != defaults.shrinkTime)
         'shrinkTime: ${_duration(shrinkTime)}',
+      if (expectedRunTime != defaults.expectedRunTime)
+        'expectedRunTime: ${_duration(expectedRunTime)}',
     ];
     return 'Settings(${named.join(', ')})';
   }

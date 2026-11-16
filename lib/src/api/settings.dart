@@ -11,8 +11,8 @@ import '../report/undecodable_text.dart';
 final class Settings {
   /// The settings of a search, each defaulted where it is not given.
   ///
-  /// [runs] is at least 1, and [shrinkSteps] and [shrinkTime] never
-  /// negative. A [replay] that is no token this grit reads throws an
+  /// [runs] is at least 1, and [shrinkSteps], [shrinkTime] and
+  /// [expectedRunTime] never negative. A [replay] that is no token this grit reads throws an
   /// [ArgumentError] saying whether it is no token or one of another format.
   Settings({
     int runs = 100,
@@ -20,7 +20,16 @@ final class Settings {
     int shrinkSteps = 5000,
     Duration shrinkTime = const .new(seconds: 10),
     this.replay,
+    Duration expectedRunTime = .zero,
   }) : runs = runs >= 1 ? runs : throw RangeError.range(runs, 1, null, 'runs'),
+       expectedRunTime = expectedRunTime.isNegative
+           ? throw RangeError.range(
+               expectedRunTime.inMicroseconds,
+               0,
+               null,
+               'expectedRunTime',
+             )
+           : expectedRunTime,
        budget = .new(
          steps: shrinkSteps,
          time: shrinkTime,
@@ -51,6 +60,15 @@ final class Settings {
   /// shrinking and no stored failure read or written, and fails where the
   /// case no longer fails, so no token stands in for the search.
   final String? replay;
+
+  /// The mean time a run is expected to take, at or under which the
+  /// property is never warned slow.
+  ///
+  /// A property whose runs are slow by design declares it here. Past it, the
+  /// property is warned slow where its runs cost more than 5 s in all, as a
+  /// property that declares none is. It changes no verdict and bounds no
+  /// run.
+  final Duration expectedRunTime;
 
   /// The sequence [replay] is the token of, or null where it is null.
   @internal

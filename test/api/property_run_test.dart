@@ -163,6 +163,10 @@ void main() {
       expect(settings.shrinkTime, const Duration(seconds: 10));
     });
 
+    test('expect no run time, so the 5 s threshold alone warns slow', () {
+      expect(Settings().expectedRunTime, Duration.zero);
+    });
+
     test('draw a seed afresh for each search', () {
       expect(Settings().seed, isNull);
       final Set<int> seeds = {
@@ -175,8 +179,8 @@ void main() {
   });
 
   group('the settings', () {
-    test('of a run count below 1, or a negative step or time bound, are thrown '
-        'as a bug', () {
+    test('of a run count below 1, or a negative step bound, time bound or '
+        'expected run time, are thrown as a bug', () {
       expect(() => Settings(runs: 0), throwsRangeError);
       expect(
         () => Settings(shrinkSteps: -1),
@@ -199,6 +203,16 @@ void main() {
         ),
       );
       expect(Settings(shrinkTime: .zero).shrinkTime, Duration.zero);
+      expect(
+        () => Settings(expectedRunTime: const .new(microseconds: -1)),
+        throwsA(
+          isA<RangeError>().having(
+            (RangeError error) => error.name,
+            'name',
+            'expectedRunTime',
+          ),
+        ),
+      );
     });
 
     test('name the seed a search fills from', () {
@@ -367,7 +381,8 @@ void main() {
             '\n'
             'Warning: the property is slow. Its runs took 12.0 s each on '
             'average, so a search of 2 runs takes about 24.0 s. A lower `runs` '
-            'setting makes it faster.\n'
+            'setting makes it faster, and an `expectedRunTime` setting '
+            'declares runs this slow expected.\n'
             '\n'
             'Warning: most of the property\'s runs were invalid, 3 rejected '
             'and 0 overrun against 2 returned.',
@@ -379,6 +394,40 @@ void main() {
         ),
       ]);
     });
+
+    test(
+      'of a passed outcome whose runs stay within the run time its '
+      'settings expect prints nothing, and warns once they pass it',
+      () async {
+        // Generation takes one 1 min tick over its 2 runs, 30 s a run.
+        Future<List<String>> expecting(Duration expectedRunTime) async {
+          final PropertyRun run = _run(
+            .new(runs: 2, expectedRunTime: expectedRunTime),
+            FakeClock([const .new(minutes: 1)]),
+          );
+          final (:_Thrown? thrown, :List<String> printed) = await _printed(
+            () => run.check((Draw draw) {}),
+          );
+          expect(thrown, isNull);
+          return printed;
+        }
+
+        expect(await expecting(const .new(seconds: 30)), isEmpty);
+        expect(await expecting(const .new(seconds: 29)), [
+          allOf(
+            startsWith(
+              'The property passed 2 runs.\n'
+              '\n'
+              'Warning: the property is slow. Its runs took 30.0 s each',
+            ),
+            endsWith(
+              '`settings: Settings(seed: 0, runs: 2, '
+              'expectedRunTime: Duration(seconds: 29))`.',
+            ),
+          ),
+        ]);
+      },
+    );
 
     test('of a failure first found from the store names no seed as '
         'repeating its search', () async {
