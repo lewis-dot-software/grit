@@ -21,6 +21,12 @@ enum Pass {
   /// place of the part it sits in.
   liftSpan,
 
+  /// Each draw's span replaced by the simpler form its generator named for
+  /// it, where it named one, the draws taken in the order they began, so a
+  /// value takes the place of one of its kind a choice-by-choice search
+  /// passes over.
+  simplifySpan,
+
   /// Each span of 8, 4, 3, 2 or 1 choices set to 0, the widest first and each
   /// width from the end back.
   zeroSpan,
@@ -85,17 +91,19 @@ enum Pass {
   /// Whether a round takes this pass only where it has accepted nothing yet.
   ///
   /// A costly pass proposes candidates that rarely fail where a cheaper pass
-  /// has not, so it waits for the cheaper passes to stall.
+  /// has not, or, as [moveValue] does, ones that raise a choice a cheaper
+  /// pass lowered earlier in the round, so it waits for the cheaper passes to
+  /// stall.
   bool get costly => switch (this) {
     deleteSpan ||
     liftSpan ||
+    simplifySpan ||
     zeroSpan ||
     lowerChoice ||
     lowerTogether ||
     reorder ||
-    swapSpan ||
-    moveValue => false,
-    deleteAndLower || lowerAndCopy || deleteAndRaise => true,
+    swapSpan => false,
+    moveValue || deleteAndLower || lowerAndCopy || deleteAndRaise => true,
   };
 
   /// The candidates this pass proposes from [sequence], whose run made
@@ -109,6 +117,7 @@ enum Pass {
   }) => switch (this) {
     deleteSpan => _deleteSpans(sequence.choices),
     liftSpan => _liftSpans(sequence.choices, spans),
+    simplifySpan => _simplifySpans(sequence.choices, spans),
     zeroSpan => _zeroSpans(sequence.choices),
     lowerChoice => _lowerChoices(sequence.choices),
     lowerTogether => _lowerTogether(sequence.choices),
@@ -139,6 +148,7 @@ enum Pass {
   int resumeAt(ChoiceSequence sequence, int position, ChoiceSequence next) =>
       switch (this) {
         liftSpan ||
+        simplifySpan ||
         zeroSpan ||
         lowerChoice ||
         lowerTogether ||
@@ -286,6 +296,18 @@ Iterable<_Build> _liftSpans(List<Choice> choices, List<Span> spans) sync* {
         ...choices.take(outer.start),
         ..._of(choices, inner),
         ...choices.skip(outer.start + outer.width),
+      ]);
+    }
+  }
+}
+
+Iterable<_Build> _simplifySpans(List<Choice> choices, List<Span> spans) sync* {
+  for (final Span span in spans) {
+    if (span.form case final ChoiceSequence form) {
+      yield () => .new([
+        ...choices.take(span.start),
+        ...form.choices,
+        ...choices.skip(span.start + span.width),
       ]);
     }
   }

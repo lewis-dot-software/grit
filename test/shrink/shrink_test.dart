@@ -403,9 +403,10 @@ void main() {
 
   test('a round that has accepted a candidate takes no costly pass, so its '
       'candidates wait for a round that accepts nothing', () {
-    // Only lowering and copying proposes [0, 3, 3], and only deleting and
-    // raising [5], from [2, 0, 3], told as failing in the first round. The
-    // empty sequence opens each round of [2, 0, 3].
+    // Only moving value proposes [0, 0, 5], only lowering and copying
+    // [0, 3, 3], and only deleting and raising [5], from [2, 0, 3], told as
+    // failing in the first round. The empty sequence opens each round of
+    // [2, 0, 3].
     final ChoiceSequence first = sequenceOf([2, 0, 3, 3]);
     final ChoiceSequence accepted = sequenceOf([2, 0, 3]);
     final List<ChoiceSequence> proposed = [];
@@ -417,6 +418,7 @@ void main() {
     });
     final int lastRound = proposed.lastIndexOf(sequenceOf([]));
     for (final List<int> costly in [
+      [0, 0, 5],
       [0, 3, 3],
       [5],
     ]) {

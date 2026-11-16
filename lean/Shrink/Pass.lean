@@ -11,6 +11,7 @@ namespace Grit
 inductive Pass where
   | deleteSpan
   | liftSpan
+  | simplifySpan
   | zeroSpan
   | lowerChoice
   | lowerTogether
@@ -26,9 +27,12 @@ inductive Pass where
 def Pass.later (p : Pass) : List Pass :=
   match p with
   | .deleteSpan =>
-    [.liftSpan, .zeroSpan, .lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue, .deleteAndLower,
-      .lowerAndCopy, .deleteAndRaise]
+    [.liftSpan, .simplifySpan, .zeroSpan, .lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue,
+      .deleteAndLower, .lowerAndCopy, .deleteAndRaise]
   | .liftSpan =>
+    [.simplifySpan, .zeroSpan, .lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue, .deleteAndLower,
+      .lowerAndCopy, .deleteAndRaise]
+  | .simplifySpan =>
     [.zeroSpan, .lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue, .deleteAndLower, .lowerAndCopy,
       .deleteAndRaise]
   | .zeroSpan =>
@@ -47,12 +51,13 @@ def Pass.costly (p : Pass) : Bool :=
   match p with
   | .deleteSpan => false
   | .liftSpan => false
+  | .simplifySpan => false
   | .zeroSpan => false
   | .lowerChoice => false
   | .lowerTogether => false
   | .reorder => false
   | .swapSpan => false
-  | .moveValue => false
+  | .moveValue => true
   | .deleteAndLower => true
   | .lowerAndCopy => true
   | .deleteAndRaise => true
@@ -142,6 +147,11 @@ def liftSpans (cs : Seq) (spans : List Span) : List Seq :=
     (beneath outer.depth rest).map (fun inner =>
       cs.take outer.start ++ slice cs inner ++ cs.drop (outer.start + outer.width)) ++
       liftSpans cs rest
+
+/-- Each draw's span of `spans` replaced by the simpler form its generator named for it, where it named one, the draws
+taken in the order they began. -/
+def simplifySpans (cs : Seq) (spans : List Span) : List Seq :=
+  spans.filterMap fun span => span.form.map fun form => cs.take span.start ++ form ++ cs.drop (span.start + span.width)
 
 /-- Each span of 8, 4, 3, 2 or 1 choices set to 0, the widest first and each width from the end back. -/
 def zeroSpans (cs : Seq) : List Seq :=
@@ -243,6 +253,7 @@ def Pass.candidates (p : Pass) (cs : Seq) (spans : List Span) : List Seq :=
   match p with
   | .deleteSpan => deleteSpans cs
   | .liftSpan => liftSpans cs spans
+  | .simplifySpan => simplifySpans cs spans
   | .zeroSpan => zeroSpans cs
   | .lowerChoice => lowerChoices cs
   | .lowerTogether => lowerTogethers cs
@@ -289,6 +300,7 @@ def Pass.resumeAt (p : Pass) (cs : Seq) (position : Nat) (next : Seq) : Nat :=
     if position < (deleteSpans next).length then position
     else resumeInGroups deletions Grit.deleteSpan deletedBefore cs position next
   | .liftSpan => position
+  | .simplifySpan => position
   | .zeroSpan => position
   | .lowerChoice => position
   | .lowerTogether => position

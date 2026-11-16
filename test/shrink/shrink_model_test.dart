@@ -20,10 +20,17 @@ import '../support/spans.dart';
 String _written(ChoiceSequence sequence) => '[${sequence.choices.join(',')}]';
 
 /// The spans of [sequence]'s run, as [spansOf] gives them, each written
-/// `start:width:depth` and joined by commas, as the model reads them.
+/// `start:width:depth`, then where it names a form, `:` and the form's
+/// choices joined by `;`, the spans joined by commas, as the model reads
+/// them.
 String _spans(ChoiceSequence sequence) => [
   for (final Span span in spansOf(sequence))
-    '${span.start}:${span.width}:${span.depth}',
+    [
+      span.start,
+      span.width,
+      span.depth,
+      if (span.form case final ChoiceSequence form) form.choices.join(';'),
+    ].join(':'),
 ].join(',');
 
 /// The model's request to shrink [first], told each answer of [path] in

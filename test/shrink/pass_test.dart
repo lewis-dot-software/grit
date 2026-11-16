@@ -35,10 +35,10 @@ final List<int> _nineDown = [for (int i = 9; i >= 1; i--) i];
 /// - `[1, 2]`, from 1, holding `[2]`.
 /// - `[3, 4]`, from 3.
 final List<Span> _nested = [
-  (start: 0, width: 5, depth: 0),
-  (start: 1, width: 2, depth: 1),
-  (start: 2, width: 1, depth: 2),
-  (start: 3, width: 2, depth: 1),
+  (start: 0, width: 5, depth: 0, form: null),
+  (start: 1, width: 2, depth: 1, form: null),
+  (start: 2, width: 1, depth: 2, form: null),
+  (start: 3, width: 2, depth: 1, form: null),
 ];
 
 /// A list of lists of integers, so its elements' spans differ in width.
@@ -425,6 +425,28 @@ void main() {
     ]);
   });
 
+  test("simplifying a span puts each draw's form in its span's place, each "
+      'draw from the first, and passes over a draw that names none', () {
+    final List<Span> spans = [
+      (start: 0, width: 5, depth: 0, form: sequenceOf([1])),
+      (start: 1, width: 2, depth: 1, form: null),
+      (start: 2, width: 1, depth: 2, form: sequenceOf([0])),
+      (start: 3, width: 2, depth: 1, form: sequenceOf([0, 0, 0])),
+    ];
+    expect(_candidates(.simplifySpan, [7, 1, 2, 3, 4], spans: spans), [
+      [1],
+      [7, 1, 0, 3, 4],
+      [7, 1, 2, 0, 0, 0],
+    ]);
+  });
+
+  test('a round takes simplifying a span just after lifting one', () {
+    expect(
+      Pass.values.indexOf(.simplifySpan),
+      Pass.values.indexOf(.liftSpan) + 1,
+    );
+  });
+
   test('swapping spans swaps two draws with the same draw around both, '
       'whatever their widths', () {
     expect(_candidates(.swapSpan, [7, 1, 2, 3, 4], spans: _nested), [
@@ -434,9 +456,9 @@ void main() {
 
   test("swapping spans swaps two draws of the property's body", () {
     final List<Span> spans = [
-      (start: 0, width: 1, depth: 0),
-      (start: 1, width: 2, depth: 0),
-      (start: 3, width: 1, depth: 0),
+      (start: 0, width: 1, depth: 0, form: null),
+      (start: 1, width: 2, depth: 0, form: null),
+      (start: 3, width: 1, depth: 0, form: null),
     ];
     expect(_candidates(.swapSpan, [5, 1, 2, 3], spans: spans), [
       [1, 2, 5, 3],
@@ -446,7 +468,7 @@ void main() {
   });
 
   test('a pass over spans proposes nothing from a run that made none', () {
-    for (final Pass pass in [.liftSpan, .swapSpan]) {
+    for (final Pass pass in [.liftSpan, .simplifySpan, .swapSpan]) {
       expect(_candidates(pass, _nineDown), isEmpty, reason: pass.name);
     }
   });
@@ -491,11 +513,12 @@ void main() {
       [0, 3],
       [2, 3],
     ]);
-    // Three draws of three choices each, each holding a draw of its first.
+    // Three draws of three choices each, each holding a draw of its first and
+    // naming a single 0 as its form.
     final List<Span> spans = [
       for (int start = 0; start < 9; start += 3) ...[
-        (start: start, width: 3, depth: 0),
-        (start: start, width: 1, depth: 1),
+        (start: start, width: 3, depth: 0, form: .new([.new(0)])),
+        (start: start, width: 1, depth: 1, form: null),
       ],
     ];
     // Nine choices down from 9 with a 0 after each odd one, so every pass

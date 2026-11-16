@@ -417,9 +417,20 @@ void main() {
       draw(.boolean());
       draw(.list(.integer(min: 0, max: 3)));
       expect(draw.spans, [
-        (start: 0, width: 1, depth: 0),
-        (start: 1, width: 3, depth: 0),
-        (start: 2, width: 1, depth: 1),
+        (start: 0, width: 1, depth: 0, form: null),
+        (start: 1, width: 3, depth: 0, form: null),
+        (start: 2, width: 1, depth: 1, form: null),
+      ]);
+    });
+
+    test('keeps a form on the span of the draw that named it alone, never on '
+        'the draw around it', () {
+      final ChoiceSource source = .fixed(sequenceOf([1, 0, 3, 0]));
+      final RunDraw draw = .new(source);
+      expect(draw(.list(.float(min: 0.5, max: 3.25))), [0.5]);
+      expect(draw.spans, [
+        (start: 0, width: 4, depth: 0, form: null),
+        (start: 1, width: 2, depth: 1, form: sequenceOf([0, 0])),
       ]);
     });
 
@@ -431,8 +442,8 @@ void main() {
         Status.overrun,
       );
       expect(draw.spans, [
-        (start: 0, width: 2, depth: 0),
-        (start: 1, width: 1, depth: 1),
+        (start: 0, width: 2, depth: 0, form: null),
+        (start: 1, width: 1, depth: 1, form: null),
       ]);
     });
 

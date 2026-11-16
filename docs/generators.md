@@ -24,7 +24,7 @@ Every bound is inclusive. A range or a length a generator cannot draw from, such
 
 `.integer()` draws from `min` to `max`, each inclusive, by default those of a 32-bit signed integer. It shrinks towards the value in range nearest 0, so a failure for every value above 10 shrinks to 11. `max` lies at most `Choice.largest` above `min`.
 
-`.float()` draws a `double` from `min` to `max`. By default the range is every double, the infinities among them, with NaN drawn as well, and `nan` and `infinite` turn those off or on. A range from `0.0` holds no `-0.0`, since bounds order `-0.0` below `0.0`. Of two doubles, the simpler is the positive before the negative, a whole number before a fraction, and the smaller in magnitude, with the infinities and NaN after every finite double.
+`.float()` draws a `double` from `min` to `max`. By default the range is every double, the infinities among them, with NaN drawn as well, and `nan` and `infinite` turn those off or on. A range from `0.0` holds no `-0.0`, since bounds order `-0.0` below `0.0`. Of two doubles, the simpler is the positive before the negative, a whole number before a fraction, and the smaller in magnitude, with the infinities and NaN after every finite double. A double that fails once its magnitude is large enough shrinks to the smallest whole number in range that fails.
 
 The early runs of a search lean towards each choice's edges, such as 0 and a range's bounds, so the cases a bug most often hides in come up whatever the seed.
 

@@ -260,6 +260,58 @@ void _expectOrdered(_Range range, List<int> a, List<int> b) {
   expect(_simplicity(simpler, other), lessThan(0), reason: reason);
 }
 
+/// The choices of the form [gen]'s draw from [choices] names, or null where
+/// it names none or the choices stop it.
+List<int>? _formOf(Gen<double> gen, List<int> choices) {
+  final ChoiceSource source = .fixed(sequenceOf(choices));
+  final RunDraw draw = .new(source);
+  if (run(source, () => draw(gen)) != .returned) return null;
+  return switch (draw.spans.single.form) {
+    final ChoiceSequence form => [
+      for (final Choice choice in form.choices) choice.value,
+    ],
+    null => null,
+  };
+}
+
+/// The whole number [range]'s float [value] names as its form: for a
+/// fraction, the whole number of its sign at its magnitude rounded up, and
+/// for an infinity, the finite double of its sign of the largest magnitude,
+/// each where [range] allows it, and null otherwise.
+double? _formWhole(_Range range, double value) {
+  if (value.isNaN || value.isFinite && value == value.truncateToDouble()) {
+    return null;
+  }
+  final double whole = value.isInfinite
+      ? (value.isNegative ? -double.maxFinite : double.maxFinite)
+      : (value.isNegative ? -1 : 1) * value.abs().ceilToDouble();
+  return range.min.compareTo(whole) <= 0 && whole.compareTo(range.max) <= 0
+      ? whole
+      : null;
+}
+
+/// Fails the test where the float [choices] draws from [range] names a form
+/// other than its [_formWhole], or one that is no smaller than [choices].
+void _expectForm(_Range range, List<int> choices) {
+  final Gen<double> gen = _genOf(range);
+  final double? value = _drawn(gen, choices);
+  if (value == null) return;
+  final List<int>? form = _formOf(gen, choices);
+  final String reason = '$range: $choices drew $value and named $form';
+  switch (_formWhole(range, value)) {
+    case final double whole:
+      expect(form, isNotNull, reason: reason);
+      expect(sameDouble(_drawn(gen, form!)!, whole), isTrue, reason: reason);
+      expect(
+        sequenceOf(form).isSmallerThan(sequenceOf(choices)),
+        isTrue,
+        reason: reason,
+      );
+    case null:
+      expect(form, isNull, reason: reason);
+  }
+}
+
 void main() {
   test('Every float drawn is NaN only where its `nan` flag allows it, '
       'infinite only where its bounds and `infinite` flag allow it, and '
@@ -326,6 +378,17 @@ void main() {
     }
   });
 
+  test('A fraction names as its form the whole number of its sign at its '
+      'magnitude rounded up, and an infinity the finite double of its sign of '
+      'the largest magnitude, each where the range holds it and by a smaller '
+      'sequence, and no other float names one.', () {
+    for (final _Range range in _ranges) {
+      for (final List<int> choices in _sequences) {
+        _expectForm(range, choices);
+      }
+    }
+  });
+
   test(
     'draws 0.0 first where unbounded, and each part\'s doubles in order',
     () {
@@ -375,6 +438,45 @@ void main() {
     );
     expect(_drawn(.float(min: -3.25, max: -0.5), [0, 0]), -1.0);
     expect(_drawn(.float(min: 0.25, max: 0.75), [0, 0]), 0.25);
+  });
+
+  test('names as a fraction\'s form the whole number of its sign at its '
+      'magnitude rounded up, and as an infinity\'s the finite double of its '
+      'sign of the largest magnitude, each where the range holds it', () {
+    double? named(Gen<double> gen, double value) =>
+        switch (_formOf(gen, _choicesOf(gen, value)!)) {
+          final List<int> form => _drawn(gen, form),
+          null => null,
+        };
+    final Gen<double> gen = .float();
+    expect(
+      [
+        for (final double value in [
+          0.5,
+          -2.5,
+          4503599627370495.5,
+          double.infinity,
+          double.negativeInfinity,
+          3,
+          -0.0,
+          double.nan,
+        ])
+          named(gen, value),
+      ],
+      [
+        1.0,
+        -3.0,
+        4503599627370496.0,
+        double.maxFinite,
+        -double.maxFinite,
+        null,
+        null,
+        null,
+      ],
+    );
+    final Gen<double> bounded = .float(min: 0.5, max: 3.25);
+    expect(named(bounded, 0.75), 1.0);
+    expect(named(bounded, 3.25), isNull);
   });
 
   test('rejects a choice past a part\'s bound, and past the last part', () {
@@ -541,6 +643,16 @@ void main() {
         draw(_anyRange, label: 'range'),
         draw(_anyChoices, label: 'choices'),
         draw(_anyChoices, label: 'other choices'),
+      );
+    });
+
+    property('A fraction names as its form the whole number of its sign at '
+        'its magnitude rounded up, and an infinity the finite double of its '
+        'sign of the largest magnitude, each where the range holds it and by '
+        'a smaller sequence, and no other float names one.', (Draw draw) {
+      _expectForm(
+        draw(_anyRange, label: 'range'),
+        draw(_anyChoices, label: 'choices'),
       );
     });
   });

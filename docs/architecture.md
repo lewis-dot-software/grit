@@ -13,7 +13,7 @@ The shrinker is a pure step function that imports nothing of grit's but `choice`
 
 A choice is a natural number from 0 to its bound, and 0 is the simplest. Every generator is built on choices, by an encoding that gives simpler values at smaller choices: an integer zigzags out from the value it shrinks towards, and a float takes an order that puts simple floats first.
 
-A run is one execution of the body. Its record is its sequence of choices. One sequence is smaller than another when it is shorter, or the same length and smaller at its first difference. That order, shortlex, is the one every part of grit means by smaller. A span is a stretch of consecutive choices in one sequence. A draw's span is the stretch its draw made, the draws inside it among them, and a run records each draw's span beside its sequence, in the order the draws began, with how many draws were in progress around it.
+A run is one execution of the body. Its record is its sequence of choices. One sequence is smaller than another when it is shorter, or the same length and smaller at its first difference. That order, shortlex, is the one every part of grit means by smaller. A span is a stretch of consecutive choices in one sequence. A draw's span is the stretch its draw made, the draws inside it among them, and a run records each draw's span beside its sequence, in the order the draws began, with how many draws were in progress around it and the draw's form, where it names one. A draw's form is a sequence of choices its generator names as a simpler value to take its span's place.
 
 The choice source hands a run its choices. In generation it fills each at random, up to a limit on the choices one run may make. A candidate in shrinking, and a replay, hand over a fixed sequence and never fill, so a run that asks for more than the sequence holds ends there.
 
@@ -95,6 +95,7 @@ A pass is a function from the current sequence, and the spans its run made, to i
 
 - Deleting a span, alone and with the choice before it lowered by one, since that choice may be the span's length, a span whose deletion leaves the pass no candidate at its place tried again, so a length drawn before its elements falls by more than one a round.
 - Lifting a draw's span into the place of a draw it sits in, so a part of a value takes the place of the part around it.
+- Putting a draw's form in its span's place, so a value takes the place of a simpler one that a search choice by choice passes over.
 - Zeroing a span.
 - Lowering a choice by binary search, over the pairs of choices an integer's zigzag puts at one distance, so a value lowers on either side of the one it shrinks towards.
 - Lowering two choices by the same amount, so two values tied to each other fall together.
@@ -105,9 +106,9 @@ A pass is a function from the current sequence, and the spans its run made, to i
 - Lowering a choice, with a later 0 set to the choice after it, so an empty branch takes the branch the next draw took.
 - Deleting a span with the choice after it raised by the span's sum, so a list's element folds into the positive integer after it.
 
-The last three are costly: each proposes candidates that rarely fail where a cheaper pass has not, so a round takes them only where it has accepted nothing yet.
+The last four are costly, so a round takes them only where it has accepted nothing yet. Moving value would undo a choice a cheaper pass lowered earlier in the round, and each of the other three proposes candidates that rarely fail where a cheaper pass has not.
 
-A pass for one kind of value, floats or strings, is added where shrink quality shows the need. It needs the record to carry each draw's kind beside its span, since a span alone cannot say what kind of value its choices make, and that change is settled with the pass.
+A kind of value whose choices the passes shrink poorly names a form, so no pass needs to know what kind of value a span's choices make. A float does: a fraction names the whole number of its sign at its magnitude rounded up, which a binary search from the fraction never probes, since every whole number comes first, and an infinity names the largest finite whole number of its sign.
 
 The step function's current sequence is always the record a run read that it was told failed: the first failure's, or the choices a candidate's run read, which may leave the candidate's tail unread. The current sequence is so the smallest failing record found, and the outcome reports it. The final replay then holds that every sequence the outcome reports as failed still fails.
 
@@ -238,6 +239,8 @@ The shrinking challenge is a public set of shrinking problems, each with the sma
 
 A challenge's search finds a failure from each of the seeds from 0 to 9, and is held to the smallest known from each, and from each further seed its file names.
 
+Beside the challenge, `test/shrink/magnitude_test.dart` holds doubles whose failures turn on a magnitude to the smallest whole number that fails, by the same harness and benchmark.
+
 Each challenge carries a benchmark as well, tagged `bench`, which the suite skips and `dart test -P bench` runs alone. It searches from each seed from 0 to 99 and prints how many failed, how many of those reached the smallest known, and how many steps shrinking ran over them. The clock never moves and the seeds are fixed, so the counts repeat exactly, and a change to the passes shows its cost as the difference from a run at the tree it starts from.
 
 grit departs from the stack's property-test row, which names glados, since it is the library that replaces it. Before `property` runs, a property a layer's issue carries is checked over every sequence up to a small length and bound, by plain loops in the test. Those checks stay once grit stands, beside the same property written on grit over larger inputs.
@@ -255,7 +258,7 @@ Why shrinking works on the record of choices:
 Why every choice is a bounded natural:
 
 - One order serves every kind of value, so the shrinker holds one set of passes, and the proof one order.
-- A kind of value whose choices shrink poorly takes a pass of its own over the same naturals, so the order never grows a type per kind.
+- A kind of value whose choices shrink poorly names its own form, which one pass over the same naturals puts in place, so neither the passes nor the order grows a type per kind.
 
 Why the body draws its inputs:
 

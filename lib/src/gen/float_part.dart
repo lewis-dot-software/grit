@@ -14,13 +14,21 @@ sealed class _FloatPart {
 
   /// The double [choice] stands for.
   double at(Choice choice);
+
+  /// The choices of a simpler double to take the place of the one [choice]
+  /// stands for, where [part] is the choice of this part, or null where the
+  /// part names none.
+  ChoiceSequence? form(Choice part, Choice choice);
 }
 
 /// One double alone: an infinity or NaN.
 final class _Only extends _FloatPart {
-  _Only(this._value);
+  /// The part of [_value] alone, which names [_form] as its simpler form.
+  _Only(this._value, {required this._form});
 
   final double _value;
+
+  final ChoiceSequence? _form;
 
   @override
   Bound get bound => .zero;
@@ -33,6 +41,9 @@ final class _Only extends _FloatPart {
 
   @override
   double at(Choice choice) => _value;
+
+  @override
+  ChoiceSequence? form(Choice part, Choice choice) => _form;
 }
 
 /// The finite doubles of one sign whose magnitudes lie in a range: the whole
@@ -107,6 +118,21 @@ final class _Magnitudes extends _FloatPart {
         ? _wholeAt(_firstWhole + rank)
         : _fractionAt(_firstFraction + rank - _wholes);
     return _negative ? -magnitude : magnitude;
+  }
+
+  /// The choice of the largest whole number the range holds, or null where
+  /// it holds none.
+  Choice? get largestWhole => _wholes > 0 ? .new(_wholes - 1) : null;
+
+  /// The fraction's whole number of its sign whose magnitude is its own
+  /// rounded up, where that lies in the range.
+  @override
+  ChoiceSequence? form(Choice part, Choice choice) {
+    if (choice.value < _wholes) return null;
+    final double whole = at(choice).abs().ceilToDouble();
+    return _wholesBelow(whole) - _firstWhole < _wholes
+        ? .new([part, _choiceOf(whole)])
+        : null;
   }
 
   /// The choice of [magnitude], which lies in the range.

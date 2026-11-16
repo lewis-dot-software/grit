@@ -11,11 +11,13 @@ abbrev Seq := List Nat
 def largest : Nat := 2 ^ 63 - 1
 
 /-- The stretch of a run's record one draw made: `width` choices from `start`, with `depth` draws in progress around
-it. A run's spans are listed in the order their draws began. -/
+it, and the choices its generator names as a simpler value to take its place, where it names one. A run's spans are
+listed in the order their draws began. -/
 structure Span where
   start : Nat
   width : Nat
   depth : Nat
+  form : Option Seq
   deriving DecidableEq, Repr
 
 /-- Whether `a` is smaller than `b` at their first difference, read over the two alike in length. -/

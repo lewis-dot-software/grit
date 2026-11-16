@@ -26,6 +26,10 @@ abstract final class Draw {
   /// depth.
   int _depth = 0;
 
+  /// The form the innermost draw in progress has named, where it has named
+  /// one.
+  ChoiceSequence? _form;
+
   /// A value drawn from [gen], under [label] where the property's body names
   /// one.
   T call<T>(Gen<T> gen, {String? label}) {
@@ -62,8 +66,12 @@ abstract final class Draw {
     // it, and its width is set as it ends, whether it returns or throws.
     final int at = _spans.length;
     final int start = _source.length;
-    _writes(() => _spans.add((start: start, width: 0, depth: _depth)));
+    _writes(
+      () => _spans.add((start: start, width: 0, depth: _depth, form: null)),
+    );
     _depth++;
+    final ChoiceSequence? around = _form;
+    _form = null;
     final T value;
     try {
       value = gen._body(this);
@@ -73,7 +81,9 @@ abstract final class Draw {
         start: start,
         width: _source.length - start,
         depth: _depth,
+        form: _form,
       );
+      _form = around;
       _writes(() => _spans[at] = span);
     }
     // The text is taken as the value is returned, since the body may sort,
@@ -84,6 +94,10 @@ abstract final class Draw {
     }
     return value;
   }
+
+  /// Names [form] as the choices of a simpler value to take the place of the
+  /// innermost draw in progress.
+  void _name(ChoiceSequence form) => _form = form;
 
   /// Rejects the run where [condition] is false.
   void assume(bool condition) {

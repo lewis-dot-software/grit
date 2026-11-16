@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import '../choice/bound.dart';
 import '../choice/choice.dart';
+import '../choice/choice_sequence.dart';
 import '../choice/choice_source.dart';
 import '../choice/odds.dart';
 import '../choice/span.dart';

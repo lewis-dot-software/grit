@@ -4,8 +4,8 @@ import Shrink.Step
 The model's executable: one request per line on standard input, one answer per line on standard output.
 
 A request is tab-separated: a first failure as its choices joined by commas, then the spans its run made, then each
-answer shrinking it is told, in order. A span is its start, width and depth joined by colons, and spans are joined by
-commas. An answer is `0` for a candidate that did not fail, and for one that did, `1/`, then how many of its choices its run read,
+answer shrinking it is told, in order. A span is its start, width and depth joined by colons, then where it names a form,
+a colon and the form's choices joined by semicolons, and spans are joined by commas. An answer is `0` for a candidate that did not fail, and for one that did, `1/`, then how many of its choices its run read,
 `/`, then the spans its run made.
 
 An answer is tab-separated: each candidate told an answer, in order, written `[1,2]` and run together, then `shrunk` or
@@ -28,10 +28,22 @@ def numeral (s : String) : Option Nat :=
 def readSeq (s : String) : Option Seq :=
   if s.isEmpty then some [] else (s.splitOn ",").mapM numeral
 
-/-- The span whose start, width and depth `s` joins by colons, or none where it holds anything else. -/
+/-- The choices `s` joins by semicolons, or none where a choice is no decimal numeral. -/
+def readForm (s : String) : Option Seq :=
+  if s.isEmpty then some [] else (s.splitOn ";").mapM numeral
+
+/-- The span whose start, width and depth `s` joins by colons, then where it names a form, a colon and the form, or
+none where it holds anything else. -/
 def readSpan (s : String) : Option Span :=
-  match (s.splitOn ":").mapM numeral with
-  | some [start, width, depth] => some ⟨start, width, depth⟩
+  match s.splitOn ":" with
+  | [start, width, depth] =>
+    match numeral start, numeral width, numeral depth with
+    | some start, some width, some depth => some ⟨start, width, depth, none⟩
+    | _, _, _ => none
+  | [start, width, depth, form] =>
+    match numeral start, numeral width, numeral depth, readForm form with
+    | some start, some width, some depth, some form => some ⟨start, width, depth, some form⟩
+    | _, _, _, _ => none
   | _ => none
 
 /-- The spans `s` joins by commas, or none where one is no span. -/

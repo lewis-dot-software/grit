@@ -20,9 +20,26 @@ final Gen<void> _tree = .build((Draw draw) {
 /// The spans a run of a tree over [sequence]'s choices alone makes, those of
 /// the draws it stopped in among them, so any sequence has spans that nest
 /// as a run's do.
+///
+/// Each span of more than one choice names as its form its own choices with
+/// the first set to 0, a node holding none and then choices its run leaves
+/// unread, so the forms differ in width and in their choices.
 List<Span> spansOf(ChoiceSequence sequence) {
   final ChoiceSource source = .fixed(sequence);
   final RunDraw draw = .new(source);
   run(source, () => draw(_tree));
-  return draw.spans;
+  return [
+    for (final Span span in draw.spans)
+      span.width > 1
+          ? (
+              start: span.start,
+              width: span.width,
+              depth: span.depth,
+              form: .new([
+                .new(0),
+                ...sequence.choices.skip(span.start + 1).take(span.width - 1),
+              ]),
+            )
+          : span,
+  ];
 }
