@@ -1,19 +1,12 @@
 import 'package:grit/grit.dart';
 
-import 'small.dart';
-
-/// The record every run of [outcomes] ran on.
-final ChoiceSequence _record = sequenceOf([1, 3, 0]);
+import 'threw.dart';
 
 /// A run that threw a [StateError] from line 7 of a test.
-final Threw _threw = .new(
-  _record,
-  const [],
-  const [],
-  error: StateError('too big'),
-  stackTrace: .empty,
-  failure: (type: StateError, frame: .new(.parse('file:///a_test.dart'), 7)),
-);
+final Threw _threw = threw();
+
+/// The record [_threw] ran on.
+final ChoiceSequence _record = _threw.record;
 
 /// A run that did not throw: returned, rejected or overrun.
 final Gen<Run> _notThrown = .element([
@@ -22,21 +15,10 @@ final Gen<Run> _notThrown = .element([
   Overran(_record, const [], const []),
 ]);
 
-/// A run that threw another way than [_threw], an [ArgumentError] from line
-/// 9 of a test.
-final Threw _threwOtherwise = .new(
-  _record,
-  const [],
-  const [],
-  error: ArgumentError('odd'),
-  stackTrace: .empty,
-  failure: (type: ArgumentError, frame: .new(.parse('file:///a_test.dart'), 9)),
-);
-
 /// A replay that did not fail as [_threw] did.
 final Gen<Run> _replay = .oneOf([
   _notThrown,
-  .element([_threwOtherwise]),
+  .element([threwOtherwise]),
 ]);
 
 /// A warning of each kind.

@@ -4,21 +4,7 @@ import 'package:test/test.dart';
 
 import '../support/outcomes.dart';
 import '../support/small.dart';
-
-/// A run that threw a [StateError] of [message] from line 7 of a test, having
-/// drawn [draws] and noted [notes].
-Threw _threw({
-  List<Drawn> draws = const [],
-  List<String> notes = const [],
-  String message = 'too big',
-}) => .new(
-  sequenceOf([1, 3, 0]),
-  draws,
-  notes,
-  error: StateError(message),
-  stackTrace: .empty,
-  failure: (type: StateError, frame: .new(.parse('file:///a_test.dart'), 7)),
-);
+import '../support/threw.dart';
 
 /// A failed outcome of [run], whose shrinking ended on [end] after [steps]
 /// steps over [time].
@@ -58,7 +44,7 @@ void main() {
 
     test('failed reports its smallest case, its shrinking, its token and its '
         'seed', () {
-      final Threw run = _threw(
+      final Threw run = threw(
         draws: [
           (label: 'xs', value: [3], text: '[3]'),
           (label: null, value: true, text: 'true'),
@@ -91,7 +77,7 @@ void main() {
 
     test('failed from the store says it was first found there, and that the '
         'next search replays it first, with no seed', () {
-      final Threw run = _threw();
+      final Threw run = threw();
       expect(
         report(
           Failed(
@@ -125,7 +111,7 @@ void main() {
 
     test('flaky from the store says it was first found there, and that the '
         'next search generates afresh, with no seed', () {
-      final Threw failed = _threw();
+      final Threw failed = threw();
       expect(
         report(
           Flaky(
@@ -152,7 +138,7 @@ void main() {
 
     test('reproduced reports its case, unshrunk, and how to search again, '
         'with no seed', () {
-      final Threw run = _threw(
+      final Threw run = threw(
         draws: [(label: 'x', value: 2, text: '2')],
         notes: ['x is 2'],
       );
@@ -194,7 +180,7 @@ void main() {
     });
 
     test('flaky reports its failure and how its replay ended', () {
-      final Threw failed = _threw(draws: [(label: 'x', value: 2, text: '2')]);
+      final Threw failed = threw(draws: [(label: 'x', value: 2, text: '2')]);
       final Run replay = Returned(failed.record, const [], const []);
       expect(
         report(
@@ -336,7 +322,7 @@ void main() {
 
     test('follow a failed outcome\'s case, one per paragraph, before its '
         'token and its seed', () {
-      final Threw run = _threw();
+      final Threw run = threw();
       expect(
         report(
           Failed(
@@ -403,7 +389,7 @@ void main() {
     test('whose step budget ran out says its case is the smallest found', () {
       expect(
         report(
-          _failed(_threw(), end: .steps, steps: 5000),
+          _failed(threw(), end: .steps, steps: 5000),
           seed: 7,
           settings: _settings,
         ),
@@ -418,7 +404,7 @@ void main() {
     test('whose time budget ran out says its case is the smallest found', () {
       expect(
         report(
-          _failed(_threw(), end: .time, steps: 1, time: .new(seconds: 10)),
+          _failed(threw(), end: .time, steps: 1, time: .new(seconds: 10)),
           seed: 7,
           settings: _settings,
         ),
@@ -433,7 +419,7 @@ void main() {
     test('that shrank in under a millisecond names its time in microseconds', () {
       expect(
         report(
-          _failed(_threw(), time: const .new(microseconds: 345)),
+          _failed(threw(), time: const .new(microseconds: 345)),
           seed: 7,
           settings: _settings,
         ),
@@ -446,7 +432,7 @@ void main() {
 
     test('prints each value\'s text as it was drawn, not the value as the '
         'body left it', () {
-      final Threw run = _threw(
+      final Threw run = threw(
         draws: [
           (label: 'xs', value: [1, 0, 99], text: '[0, 1]'),
           (label: null, value: [5, 99], text: '[5]'),
@@ -460,14 +446,14 @@ void main() {
 
     test('that drew nothing says so', () {
       expect(
-        report(_failed(_threw()), seed: 7, settings: _settings),
+        report(_failed(threw()), seed: 7, settings: _settings),
         contains('It drew nothing.'),
       );
     });
 
     test('indents every line of a value and an error that is not empty '
         'under its heading', () {
-      final Threw run = _threw(
+      final Threw run = threw(
         draws: [(label: 'text', value: 'one\ntwo', text: 'one\ntwo')],
         message: 'first\nsecond\n',
       );
@@ -488,7 +474,7 @@ void main() {
 
     test('prints a value and a note ending in a newline with no line of '
         'spaces', () {
-      final Threw run = _threw(
+      final Threw run = threw(
         draws: [(label: 'body', value: 'x\n', text: 'x\n')],
         notes: ['body x\n'],
       );
@@ -507,7 +493,7 @@ void main() {
     });
 
     test('leaves an empty line inside a value, a note or an error empty', () {
-      final Threw run = _threw(
+      final Threw run = threw(
         draws: [(label: null, value: 'one\n\ntwo', text: 'one\n\ntwo')],
         notes: ['three\n\nfour'],
         message: 'five\n\nsix',
@@ -567,7 +553,7 @@ void main() {
       final String noted = draw(text, label: 'noted');
       final String printed = report(
         _failed(
-          _threw(
+          threw(
             draws: [(label: null, value: drawn, text: drawn)],
             notes: [noted],
           ),
@@ -597,7 +583,7 @@ void main() {
   });
 
   group('a flaky replay', () {
-    final Threw failed = _threw();
+    final Threw failed = threw();
 
     test('rejected says so', () {
       expect(
@@ -626,20 +612,9 @@ void main() {
     });
 
     test('that threw another way names its error and frame', () {
-      final Threw other = .new(
-        failed.record,
-        const [],
-        const [],
-        error: ArgumentError('odd'),
-        stackTrace: .empty,
-        failure: (
-          type: ArgumentError,
-          frame: .new(.parse('file:///a_test.dart'), 9),
-        ),
-      );
       expect(
         report(
-          Flaky(failed, other, firstFound: .generated),
+          Flaky(failed, threwOtherwise, firstFound: .generated),
           seed: 7,
           settings: _settings,
         ),
