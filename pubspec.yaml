@@ -1,4 +1,6 @@
 name: grit
+description: Property-based testing for Dart, with shrinking that keeps an input whole and always ends within a budget.
+repository: https://github.com/lewis-dot-software/grit
 publish_to: none
 version: 0.0.0+0
 
@@ -8,6 +10,7 @@ dependencies:
   meta: ^1.16.0
   test: ^1.31.1
 dev_dependencies:
+  analyzer: ^14.7.0
   lints: ^6.1.0
   path: ^1.9.0
   test_api: ^0.7.15
