@@ -97,13 +97,3 @@ Answered answered(ChoiceSequence first, Oracle oracle) {
     }
   }
 }
-
-/// The oracle that answers a candidate as failing where [fails] holds of it,
-/// its run reading every choice and making the spans [spansOf] gives it, and
-/// as not failing, null, where it does not.
-Failing? Function(ChoiceSequence) treeFailing(
-  bool Function(ChoiceSequence) fails,
-) =>
-    (ChoiceSequence candidate) => fails(candidate)
-    ? (read: candidate.choices.length, spans: spansOf(candidate))
-    : null;
