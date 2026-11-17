@@ -11,9 +11,18 @@ Gen<List<E>> _list<E>(
   required int? maxLength,
 }) {
   _checkSizes(minLength, maxLength, minName: 'minLength', noun: 'length');
+  final double mean = _meanPast(minLength, maxLength);
   return ._((Draw draw) {
+    final int start = draw._source.length;
     final List<E> list = [];
-    while (_more(draw, list.length, min: minLength, max: maxLength)) {
+    while (_more(
+      draw,
+      list.length,
+      min: minLength,
+      max: maxLength,
+      start: start,
+      mean: mean,
+    )) {
       list.add(draw(element));
     }
     return list;

@@ -7,6 +7,8 @@ import '../support/bounds.dart';
 import '../support/draw_from.dart';
 import '../support/drawing.dart';
 import '../support/generator.dart';
+import '../support/integer_range.dart';
+import '../support/long_end.dart';
 import '../support/small.dart';
 
 /// Each minimum and maximum size checked, a null maximum for none.
@@ -243,6 +245,22 @@ void main() {
       (drawFrom(gen, sequenceOf([1, 4, 1, 7, 1])) as Stopped<Set<int>>).status,
       Status.rejected,
     );
+  });
+
+  test('reaches the last quarter of its size range in a fair share of runs, '
+      'from a narrow range and a wide one', () {
+    for (final IntegerRange range in sizeRanges) {
+      final Gen<Set<int>> gen = .set(
+        .integer(min: 0, max: 1 << 40),
+        minSize: range.min,
+        maxSize: range.max,
+      );
+      expect(
+        longEndRuns(gen, range, (Set<int> set) => set.length),
+        greaterThan(10),
+        reason: '$range',
+      );
+    }
   });
 
   group('a consumer\'s mistake', () {

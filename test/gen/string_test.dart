@@ -7,6 +7,8 @@ import '../support/bits.dart';
 import '../support/bounds.dart';
 import '../support/draw_from.dart';
 import '../support/drawing.dart';
+import '../support/integer_range.dart';
+import '../support/long_end.dart';
 import '../support/small.dart';
 
 /// Small alphabets whose every index a choice up to 2 reaches, one holding a
@@ -247,6 +249,22 @@ void main() {
     );
     expect((drawing as Drew<String>).value, 'ca');
     expect(drawing.record, sequenceOf([1, 2, 1, 0, 0]));
+  });
+
+  test('reaches the last quarter of its length range in a fair share of '
+      'runs, from a narrow range and a wide one', () {
+    for (final IntegerRange range in sizeRanges) {
+      final Gen<String> gen = .string(
+        alphabet: .ascii,
+        minLength: range.min,
+        maxLength: range.max,
+      );
+      expect(
+        longEndRuns(gen, range, (String string) => string.runes.length),
+        greaterThan(10),
+        reason: '$range',
+      );
+    }
   });
 
   test('counts a character past the Basic Multilingual Plane as one code '

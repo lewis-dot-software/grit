@@ -1,12 +1,19 @@
+import 'dart:math';
+
 import 'package:grit/grit.dart';
+import 'package:grit/src/choice/choice_source.dart';
 import 'package:grit/src/choice/status.dart';
+import 'package:grit/src/gen/gen.dart';
 import 'package:test/test.dart';
 
 import '../support/bits.dart';
 import '../support/bounds.dart';
 import '../support/draw_from.dart';
 import '../support/drawing.dart';
+import '../support/fixed_random.dart';
 import '../support/generator.dart';
+import '../support/integer_range.dart';
+import '../support/long_end.dart';
 import '../support/small.dart';
 
 /// Elements whose every choice is 0 or 1, so a sequence of bits draws a list
@@ -242,6 +249,40 @@ void main() {
     );
   });
 
+  test('reaches the last quarter of its length range in a fair share of '
+      'runs, from a narrow range and a wide one', () {
+    for (final IntegerRange range in sizeRanges) {
+      final Gen<List<bool>> gen = .list(
+        .boolean(),
+        minLength: range.min,
+        maxLength: range.max,
+      );
+      expect(
+        longEndRuns(gen, range, (List<bool> list) => list.length),
+        greaterThan(10),
+        reason: '$range',
+      );
+    }
+  });
+
+  test('ends inside a run\'s limit of choices, never overrunning it, '
+      'where its elements each cost alike and every "one more" choice is '
+      'filled as one more', () {
+    for (final Gen<Object?> gen in <Gen<Object?>>[
+      .list(.integer(min: 0, max: 9), maxLength: 100000),
+      .list(.boolean()),
+      .list(.list(.integer(min: 0, max: 9), maxLength: 1000)),
+      .string(alphabet: .ascii),
+    ]) {
+      // A draw of 0 fills every weighted choice at odds above never as 1.
+      final ChoiceSource source = .random(
+        FixedRandom(0, ints: List<int>.filled(8192, 0)),
+        limit: 8192,
+      );
+      expect(run(source, () => RunDraw(source)(gen)), Status.returned);
+    }
+  });
+
   test('ends overrun where the choices run out before it ends', () {
     expect(
       (drawFrom(
@@ -266,6 +307,34 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
+    property('A list whose elements each cost alike ends inside its run, '
+        'every "one more" choice filled as one more, wherever the room it '
+        'starts with fits its minimum, or one element where that is 0, and a '
+        'choice more.', (Draw draw) {
+      final int bits = draw(.integer(min: 0, max: 3), label: 'element bits');
+      final (min: int minLength, max: int? maxLength) = draw(
+        bounds,
+        label: 'lengths',
+      );
+      // An element of a list of [bits] booleans exactly costs a "one more"
+      // choice and one for each boolean before each, and a 0 that ends it,
+      // beside its own "one more" choice.
+      final int cost = 2 * bits + 2;
+      final int spare = draw(.integer(min: 0, max: 60), label: 'spare room');
+      final int limit = max(minLength, 1) * cost + 1 + spare;
+      final Gen<List<List<bool>>> gen = .list(
+        .list(.boolean(), minLength: bits, maxLength: bits),
+        minLength: minLength,
+        maxLength: maxLength,
+      );
+      // A draw of 0 fills every weighted choice at odds above never as 1.
+      final ChoiceSource source = .random(
+        FixedRandom(0, ints: List<int>.filled(limit, 0)),
+        limit: limit,
+      );
+      expect(run(source, () => RunDraw(source)(gen)), Status.returned);
+    });
+
     property('Deleting one element\'s span from a list\'s record draws the '
         'same list with that element removed.', (Draw draw) {
       final Generator element = draw(.element(_bitElements), label: 'element');

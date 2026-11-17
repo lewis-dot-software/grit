@@ -1,27 +1,68 @@
 part of 'gen.dart';
 
-/// The odds of one more element past a collection's minimum size, which put
-/// five more on average where no maximum cuts it short.
-final Odds _oneMore = .new(5 / 6);
+/// How many elements past its minimum size a collection is drawn for on
+/// average, where no maximum sets a mean of more.
+const double _leastMean = 5;
 
-/// Whether a collection [size] elements in, from [min] to [max] in size, takes
-/// one more element, read from its "one more" choice.
+/// How many elements past [min] a collection from [min] to [max] in size is
+/// drawn for on average: half its range, or [_leastMean] where that is more
+/// or no [max] is given.
+double _meanPast(int min, int? max) => switch (max) {
+  null => _leastMean,
+  final int max => math.max(_leastMean, (max - min) / 2),
+};
+
+/// The odds of one more element for a collection [size] elements in, whose
+/// record began at [start], drawn for [mean] elements past its minimum.
+///
+/// Odds p put p / (1 - p) more elements on average where nothing cuts them
+/// short. [mean] is cut to as many elements as the run's room still fits at
+/// the choices each so far has cost, and the odds are never where the room
+/// fits fewer than two. An element not yet drawn is priced at one choice, so
+/// a collection whose elements each cost alike ends inside the run, however
+/// many of its "one more" choices are filled as one more, wherever the room
+/// it starts with fits its minimum, or one element where that is 0, and a
+/// choice more.
+Odds _oneMore(
+  ChoiceSource source,
+  int size, {
+  required int start,
+  required double mean,
+}) {
+  final double cost = size == 0 ? 1 : (source.length - start) / size;
+  final double fits = source.room / cost;
+  if (fits < 2) return .never;
+  final double cut = math.min(mean, fits);
+  return .new(cut / (cut + 1));
+}
+
+/// Whether a collection [size] elements in, from [min] to [max] in size and
+/// drawn for [mean] elements past [min], takes one more element, read from
+/// its "one more" choice. Its record began at [start].
 ///
 /// An element inside [min] still sits behind a choice, read as one more
 /// whatever it holds, so deleting an earlier element's span leaves each later
 /// one behind a choice as well. A collection at [max] still ends on a choice,
 /// one that can only be 0, so deleting an element's span leaves a record that
 /// ends where the smaller collection does.
-bool _more(Draw draw, int size, {required int min, required int? max}) {
+bool _more(
+  Draw draw,
+  int size, {
+  required int min,
+  required int? max,
+  required int start,
+  required double mean,
+}) {
+  final ChoiceSource source = draw._source;
   if (size < min) {
-    draw._source.weigh(_oneMore);
+    source.weigh(_oneMore(source, size, start: start, mean: mean));
     return true;
   }
   if (size == max) {
-    draw._source.choose(.zero);
+    source.choose(.zero);
     return false;
   }
-  return draw._source.weigh(_oneMore);
+  return source.weigh(_oneMore(source, size, start: start, mean: mean));
 }
 
 /// Throws where [min], the collection's minimum [noun] named [minName], is

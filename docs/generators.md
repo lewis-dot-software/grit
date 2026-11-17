@@ -52,6 +52,8 @@ final String path = draw(.string(alphabet: .of('ab/.')), label: 'path');
 
 `.list(element)` draws a list of `element`'s values, from `minLength` to `maxLength` long, with no maximum where `maxLength` is null. It shrinks by dropping elements whole, then shrinking each that is left.
 
+A collection draws each element past its minimum at odds that would average half its range more, or five more where its range is narrower than ten or it has no maximum, had its maximum not cut it short. So a collection with a maximum reaches it in more than one run in eight, and its range's last quarter in more than one in five, wherever a run's 8192 choices hold its long end with room to spare. The mean is cut, as well, to as many elements as the run's room still fits at the choices each so far has cost, and a collection takes no more once that room fits fewer than two. So a collection whose elements each cost alike ends inside the run, however wide its range or with none, wherever the room it starts with fits its minimum, or one element where that is 0, and a choice more. A string's length and a set's size are drawn alike.
+
 `.set(element)` draws a set by `==`, from `minSize` to `maxSize`. A draw that repeats an element the set holds is drawn again, up to three draws in all, after which the set ends where it stands, and rejects the run where it holds fewer than `minSize`. A set of a narrow element, such as a `minSize` of 10 over `.boolean()`, so rejects every run.
 
 A map is a set of keys with a value drawn for each, or a list of pairs:

@@ -12,9 +12,18 @@ Gen<Set<E>> _set<E>(
   required int? maxSize,
 }) {
   _checkSizes(minSize, maxSize, minName: 'minSize', noun: 'size');
+  final double mean = _meanPast(minSize, maxSize);
   return ._((Draw draw) {
+    final int start = draw._source.length;
     final Set<E> set = {};
-    while (_more(draw, set.length, min: minSize, max: maxSize)) {
+    while (_more(
+      draw,
+      set.length,
+      min: minSize,
+      max: maxSize,
+      start: start,
+      mean: mean,
+    )) {
       bool added = false;
       for (int i = 0; i < _tries && !added; i++) {
         added = set.add(draw(element));

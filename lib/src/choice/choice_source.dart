@@ -62,6 +62,16 @@ sealed class ChoiceSource {
     return _record.length;
   }
 
+  /// How many more choices the source hands over before it stops the run as
+  /// overrun.
+  int get room {
+    _writes.throwIfCut();
+    return _end - _record.length;
+  }
+
+  /// How many choices the source hands over in all.
+  int get _end;
+
   /// A choice from 0 to [bound], naming [edges], each within [bound], as
   /// choices a random fill's edges reach.
   Choice choose(Bound bound, {List<Choice> edges = const []}) {
@@ -150,6 +160,9 @@ final class _RandomSource extends ChoiceSource {
   static const int _wordBits = 32;
 
   @override
+  int get _end => _limit;
+
+  @override
   Choice _fill(Zigzag zigzag, List<Choice> edges) {
     _overrunAtLimit();
     final Choice choice = _filled(zigzag, edges);
@@ -231,6 +244,9 @@ final class _FixedSource extends ChoiceSource {
   _FixedSource._(this._sequence) : super._();
 
   final ChoiceSequence _sequence;
+
+  @override
+  int get _end => _sequence.choices.length;
 
   @override
   Choice _fill(Zigzag zigzag, List<Choice> edges) {
