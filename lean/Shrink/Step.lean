@@ -86,7 +86,7 @@ def seek (current : Seq) (spans : List Span) (pass : Pass) (position : Nat) (cs 
 
 /-- The first state of shrinking `first`, a sequence whose run failed making `spans`. -/
 def start (first : Seq) (spans : List Span) : Shrink :=
-  seek first spans .deleteSpan 0 (Pass.deleteSpan.candidates first spans) false
+  seek first spans .deleteLast 0 (Pass.deleteLast.candidates first spans) false
 
 /-- The state after `s`'s candidate's run, told as `answer`, the record a failing run made taking the place of the
 current sequence and its pass going on from where `Pass.resumeAt` names. -/

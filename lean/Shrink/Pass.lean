@@ -9,6 +9,8 @@ namespace Grit
 
 /-- One way of proposing smaller sequences. -/
 inductive Pass where
+  | deleteLast
+  | zeroBeneath
   | deleteSpan
   | liftSpan
   | simplifySpan
@@ -26,6 +28,12 @@ inductive Pass where
 /-- The passes after `p`, in the order a round takes them. -/
 def Pass.later (p : Pass) : List Pass :=
   match p with
+  | .deleteLast =>
+    [.zeroBeneath, .deleteSpan, .liftSpan, .simplifySpan, .zeroSpan, .lowerChoice, .lowerTogether, .reorder, .swapSpan,
+      .moveValue, .deleteAndLower, .lowerAndCopy, .deleteAndRaise]
+  | .zeroBeneath =>
+    [.deleteSpan, .liftSpan, .simplifySpan, .zeroSpan, .lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue,
+      .deleteAndLower, .lowerAndCopy, .deleteAndRaise]
   | .deleteSpan =>
     [.liftSpan, .simplifySpan, .zeroSpan, .lowerChoice, .lowerTogether, .reorder, .swapSpan, .moveValue,
       .deleteAndLower, .lowerAndCopy, .deleteAndRaise]
@@ -49,6 +57,8 @@ def Pass.later (p : Pass) : List Pass :=
 /-- Whether a round takes `p` only where it has accepted nothing yet. -/
 def Pass.costly (p : Pass) : Bool :=
   match p with
+  | .deleteLast => false
+  | .zeroBeneath => false
   | .deleteSpan => false
   | .liftSpan => false
   | .simplifySpan => false
@@ -63,7 +73,7 @@ def Pass.costly (p : Pass) : Bool :=
   | .deleteAndRaise => true
 
 /-- Every pass, in the order a round takes them. -/
-def Pass.all : List Pass := .deleteSpan :: Pass.deleteSpan.later
+def Pass.all : List Pass := .deleteLast :: Pass.deleteLast.later
 
 /-- The widths of span the passes take, the widest first. -/
 def widths : List Nat := [8, 4, 3, 2, 1]
@@ -137,6 +147,27 @@ def deleteSpan (cs : Seq) (deletion : Nat × Nat) : List Seq :=
 /-- Each span of 8, 4, 3, 2 or 1 choices deleted, the widest first and each width from the end back, each deletion
 followed by the same with the choice before the span lowered by 1, where that choice is above 0. -/
 def deleteSpans (cs : Seq) : List Seq := (deletions cs.length).flatMap (deleteSpan cs)
+
+/-- Each span of 8, 4, 3, 2 or 1 choices that ends at the last choice deleted, the widest first, each deletion followed by
+the same with the choice before the span lowered by 1, where that choice is above 0. -/
+def deleteLasts (cs : Seq) : List Seq :=
+  (widths.filter (· ≤ cs.length)).flatMap fun width => deleteSpan cs (width, cs.length - width)
+
+/-- `cs` with the choices `span` holds set to 0. -/
+def zeroed (cs : Seq) (span : Span) : Seq :=
+  cs.take span.start ++ List.replicate (slice cs span).length 0 ++ cs.drop (span.start + span.width)
+
+/-- Each span of each draw of the property's body among `spans` with the spans of every draw beneath it set to 0 at once,
+the draws taken in the order they began, where any draw is beneath it. -/
+def zeroBeneaths (cs : Seq) (spans : List Span) : List Seq :=
+  match spans with
+  | [] => []
+  | outer :: rest =>
+    if outer.depth = 0 then
+      match beneath outer.depth rest with
+      | [] => zeroBeneaths cs rest
+      | inner => inner.foldl zeroed cs :: zeroBeneaths cs rest
+    else zeroBeneaths cs rest
 
 /-- Each draw's span of `spans` replaced by the span of each draw beneath it, the draws taken in the order they
 began. -/
@@ -251,6 +282,8 @@ def deleteAndRaises (cs : Seq) : List Seq :=
 /-- The candidates `p` proposes from `cs`, whose run made `spans`, in order. -/
 def Pass.candidates (p : Pass) (cs : Seq) (spans : List Span) : List Seq :=
   match p with
+  | .deleteLast => deleteLasts cs
+  | .zeroBeneath => zeroBeneaths cs spans
   | .deleteSpan => deleteSpans cs
   | .liftSpan => liftSpans cs spans
   | .simplifySpan => simplifySpans cs spans
@@ -299,6 +332,8 @@ def Pass.resumeAt (p : Pass) (cs : Seq) (position : Nat) (next : Seq) : Nat :=
   | .deleteSpan =>
     if position < (deleteSpans next).length then position
     else resumeInGroups deletions Grit.deleteSpan deletedBefore cs position next
+  | .deleteLast => position
+  | .zeroBeneath => position
   | .liftSpan => position
   | .simplifySpan => position
   | .zeroSpan => position

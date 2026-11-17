@@ -93,6 +93,8 @@ The budget then bounds how long shrinking takes, never whether it ends. It count
 
 A pass is a function from the current sequence, and the spans its run made, to its candidates, and the step function chooses among them:
 
+- Deleting a span that ends at the last choice, alone and with the choice before it lowered by one, so a collection that ends the sequence loses its last elements at every width before the many candidates of deleting any span.
+- Zeroing the spans of every draw beneath a draw of the property's body at once, so a collection's elements all take their simplest choices in one candidate, its "one more" choices kept, at one candidate per draw of the body however large its value.
 - Deleting a span, alone and with the choice before it lowered by one, since that choice may be the span's length, a span whose deletion leaves the pass no candidate at its place tried again, so a length drawn before its elements falls by more than one a round.
 - Lifting a draw's span into the place of a draw it sits in, so a part of a value takes the place of the part around it.
 - Putting a draw's form in its span's place, so a value takes the place of a simpler one that a search choice by choice passes over.

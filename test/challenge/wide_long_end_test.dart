@@ -15,11 +15,12 @@ void _shorterThan3000(Draw draw) {
 }
 
 void main() {
-  // The default budget runs out before every element shrinks to false, so
-  // the length alone is held to its smallest failing one, within a few.
-  for (final int seed in [0, 1]) {
-    test('A list of a wide range fails and its length shrinks to within 5 '
-        'of the smallest that fails, from seed $seed', () async {
+  // Each search spends the whole default budget, since a round over 6000
+  // choices outlasts it, so a few seeds alone hold the suite to its smallest
+  // case, and no benchmark runs it over a hundred.
+  for (final int seed in [0, 1, 2, 3, 4]) {
+    test('A list of a wide range fails and shrinks to 3000 falses within the '
+        'default budget, from seed $seed', () async {
       final Outcome outcome = await PropertyRun(
         .new(),
         callSite: .of(.current),
@@ -30,10 +31,9 @@ void main() {
       expect(
         outcome,
         isA<Failed>().having(
-          (Failed failed) =>
-              (failed.run.draws.single.value as List<bool>).length,
-          'length',
-          inInclusiveRange(3000, 3005),
+          (Failed failed) => failed.run.draws.single.value,
+          'list',
+          List<bool>.filled(3000, false),
         ),
       );
     });

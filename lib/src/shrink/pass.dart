@@ -8,6 +8,26 @@ import '../choice/span.dart';
 /// A candidate may be no smaller than the sequence it came from, as where a
 /// span is zeroed that is zero already.
 enum Pass {
+  /// Each span of 8, 4, 3, 2 or 1 choices that ends at the last choice
+  /// deleted, the widest first, each deletion followed by the same with the
+  /// choice before the span lowered by 1, where that choice is above 0.
+  ///
+  /// The lowered choice is one such as a "one more" choice, so a collection
+  /// that ends the sequence loses its last elements at every width, in as
+  /// few candidates as there are widths, however long the sequence.
+  deleteLast,
+
+  /// Each span of each draw of the property's body with the spans of every
+  /// draw beneath it set to 0 at once, the draws taken in the order they
+  /// began, where any draw is beneath it.
+  ///
+  /// The draws beneath are a value's parts, such as a collection's elements,
+  /// so every part takes its simplest choices in one candidate, the choices
+  /// the value makes between them, such as a collection's "one more"
+  /// choices, kept. A draw within another proposes none, so the pass costs
+  /// one candidate per draw of the body, however large its value.
+  zeroBeneath,
+
   /// Each span of 8, 4, 3, 2 or 1 choices deleted, the widest first and each
   /// width from the end back, each deletion followed by the same with the
   /// choice before the span lowered by 1, where that choice is above 0.
@@ -95,6 +115,8 @@ enum Pass {
   /// pass lowered earlier in the round, so it waits for the cheaper passes to
   /// stall.
   bool get costly => switch (this) {
+    deleteLast ||
+    zeroBeneath ||
     deleteSpan ||
     liftSpan ||
     simplifySpan ||
@@ -115,6 +137,8 @@ enum Pass {
     List<Span> spans, {
     int from = 0,
   }) => switch (this) {
+    deleteLast => _deleteLast(sequence.choices),
+    zeroBeneath => _zeroBeneath(sequence.choices, spans),
     deleteSpan => _deleteSpans(sequence.choices),
     liftSpan => _liftSpans(sequence.choices, spans),
     simplifySpan => _simplifySpans(sequence.choices, spans),
@@ -147,6 +171,8 @@ enum Pass {
   /// on from [position].
   int resumeAt(ChoiceSequence sequence, int position, ChoiceSequence next) =>
       switch (this) {
+        deleteLast ||
+        zeroBeneath ||
         liftSpan ||
         simplifySpan ||
         zeroSpan ||
@@ -273,6 +299,14 @@ Iterable<_Build> _deleteSpans(List<Choice> choices) =>
     _deletions(choices.length)
         .expand((_Deletion deletion) => _deleteSpan(choices, deletion));
 
+/// The candidates of [Pass.deleteLast] from [choices].
+Iterable<_Build> _deleteLast(List<Choice> choices) => _widths
+    .where((int width) => width <= choices.length)
+    .expand(
+      (int width) =>
+          _deleteSpan(choices, (width: width, start: choices.length - width)),
+    );
+
 /// The candidates of [Pass.deleteSpan] that delete [deletion]'s span of
 /// [choices].
 Iterable<_Build> _deleteSpan(List<Choice> choices, _Deletion deletion) sync* {
@@ -284,6 +318,25 @@ Iterable<_Build> _deleteSpan(List<Choice> choices, _Deletion deletion) sync* {
       .new(choices[start - 1].value - 1),
       ...choices.skip(start + width),
     ]);
+  }
+}
+
+Iterable<_Build> _zeroBeneath(List<Choice> choices, List<Span> spans) sync* {
+  for (int i = 0; i < spans.length; i++) {
+    final Span outer = spans[i];
+    if (outer.depth > 0) continue;
+    final List<Span> beneath = [
+      for (int j = i + 1; j < spans.length && spans[j].depth > outer.depth; j++)
+        spans[j],
+    ];
+    if (beneath.isEmpty) continue;
+    yield () {
+      final List<Choice> zeroed = [...choices];
+      for (final Span inner in beneath) {
+        zeroed.fillRange(inner.start, inner.start + inner.width, .new(0));
+      }
+      return .new(zeroed);
+    };
   }
 }
 

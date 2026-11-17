@@ -41,6 +41,9 @@ final List<Span> _nested = [
   (start: 3, width: 2, depth: 1, form: null),
 ];
 
+/// A list of integers, each simplest at 0.
+final Gen<List<int>> _integers = .list(.integer(min: 0, max: 9));
+
 /// A list of lists of integers, so its elements' spans differ in width.
 final Gen<List<List<int>>> _lists = .list(.list(.integer(min: 0, max: 9)));
 
@@ -88,6 +91,67 @@ void main() {
     expect(candidates.skip(3).first, [1, 2, 3, 4, 5]);
     expect(candidates, contains(equals([1, 2, 3, 4, 5, 6])));
   });
+
+  test('deleting the last span deletes each span that ends at the last '
+      'choice, the widest first, each deletion followed by the same with the '
+      'choice before the span lowered by 1', () {
+    expect(_candidates(.deleteLast, [1, 2, 3]), [
+      <int>[],
+      [1],
+      [0],
+      [1, 2],
+      [1, 1],
+    ]);
+    expect(_candidates(.deleteLast, _nineDown).take(4), [
+      [9],
+      [8],
+      [9, 8, 7, 6, 5],
+      [9, 8, 7, 6, 4],
+    ]);
+  });
+
+  test('zeroing beneath sets every span beneath each draw of the body to 0 at '
+      'once, and passes over a draw within another', () {
+    expect(_candidates(.zeroBeneath, [7, 1, 2, 3, 4], spans: _nested), [
+      [7, 0, 0, 0, 0],
+    ]);
+    final List<Span> body = [
+      (start: 0, width: 2, depth: 0, form: null),
+      (start: 1, width: 1, depth: 1, form: null),
+      (start: 2, width: 1, depth: 0, form: null),
+      (start: 3, width: 2, depth: 0, form: null),
+      (start: 4, width: 1, depth: 1, form: null),
+    ];
+    expect(_candidates(.zeroBeneath, [5, 6, 7, 8, 9], spans: body), [
+      [5, 0, 7, 8, 9],
+      [5, 6, 7, 8, 0],
+    ]);
+  });
+
+  property(
+    "Zeroing every draw beneath a list's in its record draws a list as long, "
+    'each element its simplest value.',
+    (Draw draw) {
+      final ChoiceSource source = .random(
+        .new(draw(.integer(min: 0), label: 'seed')),
+        limit: 1000,
+      );
+      final RunDraw run = .new(source);
+      final List<int> list = run(_integers);
+      draw.assume(list.isNotEmpty);
+      expect(
+        drawFrom(
+          _integers,
+          Pass.zeroBeneath.candidates(source.record, run.spans).first,
+        ),
+        isA<Drew<List<int>>>().having(
+          (Drew<List<int>> drew) => drew.value,
+          'value',
+          List<int>.filled(list.length, 0),
+        ),
+      );
+    },
+  );
 
   test('zeroing a span zeroes each span, the widest first and each width '
       'from the end back', () {
@@ -440,6 +504,11 @@ void main() {
     ]);
   });
 
+  test('a round takes deleting the last span first, then zeroing beneath, '
+      'then deleting a span', () {
+    expect(Pass.values.take(3), <Pass>[.deleteLast, .zeroBeneath, .deleteSpan]);
+  });
+
   test('a round takes simplifying a span just after lifting one', () {
     expect(
       Pass.values.indexOf(.simplifySpan),
@@ -468,7 +537,12 @@ void main() {
   });
 
   test('a pass over spans proposes nothing from a run that made none', () {
-    for (final Pass pass in [.liftSpan, .simplifySpan, .swapSpan]) {
+    for (final Pass pass in [
+      .zeroBeneath,
+      .liftSpan,
+      .simplifySpan,
+      .swapSpan,
+    ]) {
       expect(_candidates(pass, _nineDown), isEmpty, reason: pass.name);
     }
   });
