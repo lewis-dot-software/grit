@@ -39,17 +39,17 @@ The [quickstart](docs/quickstart.md) writes, runs and replays a failing property
 
 ## Docs
 
-- [Architecture](docs/architecture.md) `knowledge` - A property's body draws its inputs through a choice source, and every choice it makes is recorded as a natural number.
-- [Coming from glados](docs/from-glados.md) `knowledge` - glados hands a property its inputs as arguments, from generators chosen up front, and grit's body draws them as it needs them.
-- [Drawing inputs](docs/drawing.md) `knowledge` - A property's body draws each input as it needs it, by calling its `Draw` on a generator.
-- [Failures](docs/failures.md) `knowledge` - A failing property's report gives its smallest failing case: what the body drew, what it noted and what it threw, how shrinking ended, and how to run the case again.
-- [Generators](docs/generators.md) `knowledge` - A generator is a `Gen<T>`: it makes a value of `T` from a run's random choices, and the value shrinks as those choices do.
-- [Outcomes](docs/outcomes.md) `knowledge` - A search comes to one `Outcome`, a sealed type with a case per way it can end.
-- [Properties](docs/properties.md) `knowledge` - A property is declared one of three ways: `property` as a test of its own, `forAll` inside a test that already stands, and `runProperty` for its outcome as a value, with no test failed.
-- [Quickstart](docs/quickstart.md) `knowledge` - This page installs grit, writes a property that fails, reads its report and replays the failure, then links a doc for each topic it touches.
-- [Replay](docs/replay.md) `knowledge` - grit runs a failure again three ways: the store's replay, a token and a seed.
-- [Settings](docs/settings.md) `knowledge` - A property's `Settings` say how it is searched, each with a default no property has to change.
-- [Shrinker proofs](docs/proofs.md) `knowledge` - The shrinker's step function is tested against a model of it written in Lean, and the properties Dan ruled on are proved of that model, by the office's proofs method (`standard/proofs.md` in the office).
+- [Architecture](docs/architecture.md) - A property's body draws its inputs through a choice source, and every choice it makes is recorded as a natural number.
+- [Coming from glados](docs/from-glados.md) - glados hands a property its inputs as arguments, from generators chosen up front, and grit's body draws them as it needs them.
+- [Drawing inputs](docs/drawing.md) - A property's body draws each input as it needs it, by calling its `Draw` on a generator.
+- [Failures](docs/failures.md) - A failing property's report gives its smallest failing case: what the body drew, what it noted and what it threw, how shrinking ended, and how to run the case again.
+- [Generators](docs/generators.md) - A generator is a `Gen<T>`: it makes a value of `T` from a run's random choices, and the value shrinks as those choices do.
+- [Outcomes](docs/outcomes.md) - A search comes to one `Outcome`, a sealed type with a case per way it can end.
+- [Properties](docs/properties.md) - A property is declared one of three ways: `property` as a test of its own, `forAll` inside a test that already stands, and `runProperty` for its outcome as a value, with no test failed.
+- [Quickstart](docs/quickstart.md) - This page installs grit, writes a property that fails, reads its report and replays the failure, then links a doc for each topic it touches.
+- [Replay](docs/replay.md) - grit runs a failure again three ways: the store's replay, a token and a seed.
+- [Settings](docs/settings.md) - A property's `Settings` say how it is searched, each with a default no property has to change.
+- [Shrinker proofs](docs/proofs.md) - The shrinker's step function is tested against a model of it written in Lean, and the properties Dan ruled on are proved of that model, by the office's proofs method (`standard/proofs.md` in the office).
 
 <!-- /office doc index -->
 
