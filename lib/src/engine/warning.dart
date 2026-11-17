@@ -5,8 +5,7 @@ sealed class Warning {
   Warning._();
 }
 
-/// The property's runs are slow enough that its run count costs more than
-/// the engine's threshold.
+/// The property's runs were slow.
 final class SlowProperty extends Warning {
   /// The warning of runs that took [perRun] each on average, in a search of
   /// [runs] runs.
