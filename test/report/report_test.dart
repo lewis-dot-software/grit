@@ -636,7 +636,7 @@ void main() {
         const [],
         error: StateError('first\nsecond\n'),
         stackTrace: .empty,
-        failure: (type: StateError, frame: null),
+        failure: .new(StateError, const []),
       );
       expect(
         report(
@@ -661,7 +661,7 @@ void main() {
         const [],
         error: ArgumentError('odd'),
         stackTrace: .empty,
-        failure: (type: ArgumentError, frame: null),
+        failure: .new(ArgumentError, const []),
       );
       expect(
         report(
@@ -670,6 +670,27 @@ void main() {
           settings: _settings,
         ),
         contains('ArgumentError from a stack grit could not read:'),
+      );
+    });
+
+    test('that threw from a frame with no line names its member', () {
+      final Threw other = .new(
+        failed.record,
+        const [],
+        const [],
+        error: ArgumentError('odd'),
+        stackTrace: .empty,
+        failure: .new(ArgumentError, [
+          .new('snap', .parse('file:///a_test.dart'), null),
+        ]),
+      );
+      expect(
+        report(
+          Flaky(failed, other, firstFound: .generated),
+          seed: 7,
+          settings: _settings,
+        ),
+        contains('ArgumentError from file:///a_test.dart, in snap:'),
       );
     });
   });

@@ -45,8 +45,9 @@ final class CallSite {
   final String? _package;
 
   /// What the call site's failure is stored under: every frame of its stack
-  /// in its package, by library and line, so a call behind a helper is
-  /// keyed by where the helper is called.
+  /// in its package, by library and line, or by library and member where the
+  /// VM printed no line, so a call behind a helper is keyed by where the
+  /// helper is called.
   ///
   /// A stack with no frame outside the Dart SDK, grit and every test package
   /// is keyed by no frame.
@@ -54,17 +55,15 @@ final class CallSite {
 
   /// The failure of [error], thrown with [stackTrace].
   ///
-  /// Its frame is the first of [stackTrace] in the call site's package, or
-  /// where none is, the first outside the Dart SDK, grit and every test
-  /// package.
+  /// Its frames are those of [stackTrace] outside the Dart SDK, grit and
+  /// every test package, from the first in the call site's package, or
+  /// where none is, from the first of them.
   Failure failureOf(Object error, StackTrace stackTrace) {
     final List<Frame> own = Frame.of(stackTrace).where(_isOwn).toList();
-    return (
-      type: error.runtimeType,
-      frame:
-          own.where((Frame frame) => frame.package == _package).firstOrNull ??
-          own.firstOrNull,
-    );
+    final List<Frame> fromPackage = own
+        .skipWhile((Frame frame) => frame.package != _package)
+        .toList();
+    return .new(error.runtimeType, fromPackage.isEmpty ? own : fromPackage);
   }
 
   /// Whether [stackTrace]'s first frame outside the Dart SDK is grit's, so

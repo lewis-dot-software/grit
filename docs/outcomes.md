@@ -59,9 +59,9 @@ A `Run` is one run of the body, by how it ended:
 
 Every run holds its `record`, the `ChoiceSequence` of the choices it made, its `draws`, each value drawn as a `Drawn` ([drawing.md](drawing.md)), and its `notes`, each line noted.
 
-A `Threw` holds the `error` the body threw, its `stackTrace`, and its `failure`, a `Failure` record of the error's `type` and the `frame` it was thrown from, null where its stack held none grit reads. `failedAlike(run)` says whether another run failed as it did: an error of the same type from the same frame, or a stack overflow from any frame, since an overflow strikes wherever the stack runs out.
+A `Threw` holds the `error` the body threw, its `stackTrace`, and its `failure`. A `Failure` holds the error's `type` and the `frames` of its stack grit reads, innermost first from the `frame` it was thrown from, null where its stack held none. `isAlike(other)` says whether another failure is the same: an error of the same type from the same frame, where a frame with no line is the same as any whose frames run through its member. `failedAlike(run)` says whether another run failed as it did: a failure alike its own, or a stack overflow from any frame, since an overflow strikes wherever the stack runs out.
 
-A `Frame` is one frame of a stack: the library's `uri`, the `line`, and the `package` that library lies in, the scheme alone where it lies in none. `Frame.of(stackTrace)` reads a stack's frames, innermost first, in the Dart VM's form.
+A `Frame` is one frame of a stack: the `member` it runs, the library's `uri`, the `line`, null where the VM printed none, and the `package` that library lies in, the scheme alone where it lies in none. `runsAs(other)` says whether another frame runs the same member of the same library. `Frame.of(stackTrace)` reads a stack's frames, innermost first, in the Dart VM's form.
 
 ## Choices
 

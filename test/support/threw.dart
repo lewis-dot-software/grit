@@ -17,7 +17,7 @@ Threw threw({
   notes,
   error: StateError(message),
   stackTrace: .empty,
-  failure: (type: StateError, frame: .new(.parse('file:///a_test.dart'), 7)),
+  failure: .new(StateError, [.new('main', .parse('file:///a_test.dart'), 7)]),
 );
 
 /// A run on the record `[1, 3, 0]` that threw an [ArgumentError] of `odd`
@@ -28,5 +28,7 @@ final Threw threwOtherwise = .new(
   const [],
   error: ArgumentError('odd'),
   stackTrace: .empty,
-  failure: (type: ArgumentError, frame: .new(.parse('file:///a_test.dart'), 9)),
+  failure: .new(ArgumentError, [
+    .new('main', .parse('file:///a_test.dart'), 9),
+  ]),
 );

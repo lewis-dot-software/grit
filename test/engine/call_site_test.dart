@@ -1,6 +1,5 @@
+import 'package:grit/grit.dart';
 import 'package:grit/src/engine/call_site.dart';
-import 'package:grit/src/engine/failure.dart';
-import 'package:grit/src/engine/frame.dart';
 import 'package:grit/src/store/store_key.dart';
 import 'package:test/test.dart';
 
@@ -11,8 +10,33 @@ StackTrace _stack(List<String> frames) => .fromString(
       .join('\n'),
 );
 
-/// The failure of an error of [type] thrown from [frame].
-Failure _failure(Type type, Frame? frame) => (type: type, frame: frame);
+/// The frame of `member` at [line] of [uri].
+Frame _at(String uri, int line) => .new('member', .parse(uri), line);
+
+/// Matches the failure of an error of [type] thrown from [frame].
+Matcher _failure(Type type, Frame? frame) => isA<Failure>()
+    .having((Failure failure) => failure.type, 'type', type)
+    .having((Failure failure) => failure.frame, 'frame', frame);
+
+/// A frame of one of two members of one of two libraries, at one of two
+/// lines or at none.
+final Gen<Frame> _anyFrame = .build(
+  (Draw draw) => .new(
+    draw(.element(['snap', 'body'])),
+    draw(
+      .element([.parse('package:app/a.dart'), .parse('package:app/b.dart')]),
+    ),
+    draw(.element([null, 1, 2])),
+  ),
+);
+
+/// A failure of one of two types, thrown through up to three frames.
+final Gen<Failure> _anyFailure = .build(
+  (Draw draw) => .new(
+    draw(.element([StateError, ArgumentError])),
+    draw(.list(_anyFrame, maxLength: 3)),
+  ),
+);
 
 /// The call site of a search called from the consumer's library `app`,
 /// through grit and the test packages.
@@ -26,6 +50,32 @@ final CallSite _fromApp = .of(
 );
 
 void main() {
+  group('a frame', () {
+    test('is read with its member and line, past its column', () {
+      expect(
+        Frame.of(
+          .fromString(
+            '#0      main.<anonymous closure> (file:///p/test/a_test.dart:12:5)',
+          ),
+        ),
+        <Frame>[
+          .new(
+            'main.<anonymous closure>',
+            .parse('file:///p/test/a_test.dart'),
+            12,
+          ),
+        ],
+      );
+    });
+
+    test('is read at no line where the VM printed none', () {
+      expect(
+        Frame.of(.fromString('#0      snap (file:///p/test/snap_test.dart)')),
+        <Frame>[.new('snap', .parse('file:///p/test/snap_test.dart'), null)],
+      );
+    });
+  });
+
   group('a failure\'s frame', () {
     test('is its first in the call site\'s package, past frames of other '
         'packages before it', () {
@@ -39,7 +89,7 @@ void main() {
             'package:app/src/property.dart:9:3',
           ]),
         ),
-        _failure(StateError, .new(.parse('package:app/src/sort.dart'), 30)),
+        _failure(StateError, _at('package:app/src/sort.dart', 30)),
       );
     });
 
@@ -62,10 +112,7 @@ void main() {
             'package:other/a.dart:1:1',
           ]),
         ),
-        _failure(
-          StateError,
-          .new(.parse('package:collection/src/list.dart'), 12),
-        ),
+        _failure(StateError, _at('package:collection/src/list.dart', 12)),
       );
     });
 
@@ -88,6 +135,23 @@ void main() {
       );
     });
 
+    test('is its first in the call site\'s package where the VM printed it '
+        'with no line', () {
+      expect(
+        _fromApp.failureOf(
+          UnsupportedError('x'),
+          .fromString(
+            '#0      snap (package:app/src/snap.dart)\n'
+            '#1      body (package:app/src/property.dart:9:3)\n',
+          ),
+        ),
+        _failure(
+          UnsupportedError,
+          .new('snap', .parse('package:app/src/snap.dart'), null),
+        ),
+      );
+    });
+
     test('is read past asynchronous suspensions, with or without a column', () {
       expect(
         _fromApp.failureOf(
@@ -98,7 +162,10 @@ void main() {
             '#1      sort (package:app/src/sort.dart:31)\n',
           ),
         ),
-        _failure(StateError, .new(.parse('package:app/src/sort.dart'), 31)),
+        _failure(
+          StateError,
+          .new('sort', .parse('package:app/src/sort.dart'), 31),
+        ),
       );
     });
 
@@ -119,10 +186,7 @@ void main() {
             'file:///c/app/test/sort_test.dart:14:3',
           ]),
         ),
-        _failure(
-          RangeError,
-          .new(.parse('file:///c/app/test/support/sorting.dart'), 5),
-        ),
+        _failure(RangeError, _at('file:///c/app/test/support/sorting.dart', 5)),
       );
     });
 
@@ -138,22 +202,22 @@ void main() {
             'package:app/src/sort.dart:30:9',
           ]),
         ),
-        _failure(
-          StateError,
-          .new(.parse('package:collection/src/list.dart'), 12),
-        ),
+        _failure(StateError, _at('package:collection/src/list.dart', 12)),
       );
     });
 
     test('is the line an error was thrown from, read from a real throw', () {
       final CallSite here = .of(.current);
-      final int line = Frame.of(.current).first.line + 2;
+      final Frame frame = Frame.of(.current).first;
       try {
         throw const FormatException('thrown');
       } on FormatException catch (error, stackTrace) {
         expect(
           here.failureOf(error, stackTrace),
-          _failure(FormatException, .new(Frame.of(.current).first.uri, line)),
+          _failure(
+            FormatException,
+            .new(frame.member, frame.uri, frame.line! + 2),
+          ),
         );
       }
     });
@@ -226,25 +290,110 @@ void main() {
     final StackTrace at = _stack(['package:app/src/sort.dart:30:9']);
     final StackTrace elsewhere = _stack(['package:app/src/sort.dart:31:9']);
 
+    /// Whether the failures of [first] and [second], each thrown with its
+    /// stack, are alike, read from the first.
+    bool alike((Object, StackTrace) first, (Object, StackTrace) second) =>
+        _fromApp
+            .failureOf(first.$1, first.$2)
+            .isAlike(_fromApp.failureOf(second.$1, second.$2));
+
     test('are the same where each error has one type and one frame', () {
-      expect(
-        _fromApp.failureOf(StateError('a'), at),
-        _fromApp.failureOf(StateError('b'), at),
-      );
+      expect(alike((StateError('a'), at), (StateError('b'), at)), isTrue);
     });
 
     test('differ where their errors\' types differ', () {
-      expect(
-        _fromApp.failureOf(StateError('a'), at),
-        isNot(_fromApp.failureOf(ArgumentError('a'), at)),
-      );
+      expect(alike((StateError('a'), at), (ArgumentError('a'), at)), isFalse);
     });
 
     test('differ where their frames differ', () {
       expect(
-        _fromApp.failureOf(StateError('a'), at),
-        isNot(_fromApp.failureOf(StateError('a'), elsewhere)),
+        alike((StateError('a'), at), (StateError('a'), elsewhere)),
+        isFalse,
       );
+    });
+
+    test('are the same where their frames are at one line of one library, '
+        'whatever their members', () {
+      expect(
+        alike(
+          (
+            StateError('a'),
+            .fromString('#0      f (package:app/src/a.dart:4:3)'),
+          ),
+          (
+            StateError('a'),
+            .fromString(
+              '#0      f.<anonymous closure> (package:app/src/a.dart:4:9)',
+            ),
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test('are the same where one\'s frame has no line, in a member the '
+        'other\'s frames run through, read from either', () {
+      // One throw from `snap` as the VM runs it unoptimised, then optimised,
+      // then inlined into `body`.
+      final List<StackTrace> stacks = [
+        .fromString(
+          '#0      double.toInt (dart:core-patch/double.dart)\n'
+          '#1      double.round (dart:core-patch/double.dart:196:34)\n'
+          '#2      snap (package:app/src/snap.dart:3:12)\n'
+          '#3      body (package:app/src/property.dart:9:3)\n',
+        ),
+        .fromString(
+          '#0      snap (package:app/src/snap.dart)\n'
+          '#1      body (package:app/src/property.dart:9:3)\n',
+        ),
+        .fromString(
+          '#0      body (package:app/src/property.dart)\n'
+          '#1      Search._ran (package:grit/src/engine/search.dart:320:15)\n',
+        ),
+      ];
+      for (final StackTrace first in stacks) {
+        for (final StackTrace second in stacks) {
+          expect(
+            alike(
+              (UnsupportedError('x'), first),
+              (UnsupportedError('x'), second),
+            ),
+            isTrue,
+          );
+        }
+      }
+    });
+
+    test('differ where one\'s frame has no line, in a member the other\'s '
+        'frames never run through, read from either', () {
+      final StackTrace inlined = .fromString(
+        '#0      body (package:app/src/property.dart)\n',
+      );
+      final StackTrace other = .fromString(
+        '#0      snap (package:app/src/snap.dart:3:12)\n'
+        '#1      other (package:app/src/property.dart:9:3)\n',
+      );
+      expect(
+        alike((StateError('x'), inlined), (StateError('x'), other)),
+        isFalse,
+      );
+      expect(
+        alike((StateError('x'), other), (StateError('x'), inlined)),
+        isFalse,
+      );
+    });
+
+    property('Two failures are alike read from either, or from neither.', (
+      Draw draw,
+    ) {
+      final Failure first = draw(_anyFailure, label: 'first');
+      final Failure second = draw(_anyFailure, label: 'second');
+      expect(first.isAlike(second), second.isAlike(first));
+    });
+
+    property('A failure is alike itself.', (Draw draw) {
+      final Failure failure = draw(_anyFailure, label: 'failure');
+      expect(failure.isAlike(failure), isTrue);
     });
   });
 }

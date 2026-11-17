@@ -27,6 +27,13 @@ import '../support/small.dart';
 /// The call site of every search in this file.
 final CallSite _callSite = .of(.current);
 
+/// [y] over [g], rounded, which throws an [UnsupportedError] from the Dart
+/// SDK where [g] is 0.
+int _snap(double y, double g) => (y / g).round();
+
+/// [_snap] of [i] over 0, which always throws.
+int _snapped(int i) => _snap(i.toDouble(), 0);
+
 /// A budget no search here spends.
 final Budget _unbounded = .new(steps: 1 << 30, time: .new(days: 1));
 
@@ -1798,6 +1805,23 @@ void main() {
   });
 
   group('a run that threw', () {
+    /// The run that threw where [act] threw, or null where it returned.
+    Threw? thrownBy(void Function() act) {
+      try {
+        act();
+      } on Object catch (error, stackTrace) {
+        return .new(
+          sequenceOf([]),
+          const [],
+          const [],
+          error: error,
+          stackTrace: stackTrace,
+          failure: _callSite.failureOf(error, stackTrace),
+        );
+      }
+      return null;
+    }
+
     /// A run that threw [error] from line [line] of the consumer's body.
     Threw threw(Object error, int line) {
       final StackTrace stackTrace = .fromString(
@@ -1822,6 +1846,22 @@ void main() {
         ).failedAlike(threw(StackOverflowError(), 16)),
         isTrue,
       );
+    });
+
+    test('failed alike every other that threw from its place, before and '
+        'after the VM optimised the function it threw in', () {
+      final List<Threw> runs = [
+        for (int i = 0; i < 20000; i++) ?thrownBy(() => _snapped(i)),
+      ];
+      // Each failure's frame having a line would not show the VM optimising
+      // the function, so the check holds only where some did not.
+      expect(
+        runs.map((Threw run) => run.failure.frame),
+        anyElement(
+          isA<Frame>().having((Frame frame) => frame.line, 'line', isNull),
+        ),
+      );
+      expect(runs.where((Threw run) => !runs.first.failedAlike(run)), isEmpty);
     });
 
     test('is no change: failed unlike another that threw its type from '
@@ -2442,7 +2482,7 @@ void main() {
             const [],
             error: StateError('x'),
             stackTrace: .empty,
-            failure: (type: StateError, frame: null),
+            failure: .new(StateError, const []),
           ),
         ),
         throwsArgumentError,

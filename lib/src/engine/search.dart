@@ -16,6 +16,7 @@ import 'body.dart';
 import 'budget.dart';
 import 'call_site.dart';
 import 'clock.dart';
+import 'failure.dart';
 import 'first_found.dart';
 import 'outcome.dart';
 import 'run.dart';
@@ -46,8 +47,7 @@ import 'warning.dart';
 /// thrown, with no outcome and the store as it stood, whether or not the
 /// body caught it.
 ///
-/// A failure is the same as another where its error has the same type and
-/// was thrown from the same frame, which [CallSite.failureOf] reads, or
+/// A failure is the same as another where [Failure.isAlike] says so, or
 /// where each is a stack overflow, whatever its frame. A candidate that
 /// fails any other way is told to the shrinker as not failing.
 final class Search {
