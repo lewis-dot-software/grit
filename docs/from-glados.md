@@ -84,4 +84,4 @@ glados fills from `Random(42)` by default, so every run of the suite searches th
 
 ## Failures
 
-glados's shrinking has no bound on its steps or its time. grit's shrinking runs within a budget of steps and of wall time, and a spent budget reports the smallest failure found so far ([failures.md](failures.md)). grit also keeps each property's failure and replays it first on the next run, and counts a smaller case only where it fails as the first did, so a case never slips from one bug to another while it shrinks.
+glados's shrinking has no bound on its steps or its time. grit's shrinking runs within a budget of steps and of wall time, and a spent budget reports the smallest failure found so far ([failures.md](failures.md)). grit also keeps each property's failure and replays it first on the next run, and counts a smaller case only where it fails as the first did.
