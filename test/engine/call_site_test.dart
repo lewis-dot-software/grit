@@ -224,8 +224,8 @@ void main() {
   });
 
   group('a call site\'s key', () {
-    test('is every frame of its stack in its package, by library and line, '
-        'innermost first', () {
+    test('is every frame of its stack in its package, by library and line '
+        'where each carries one, innermost first', () {
       final CallSite site = .of(
         _stack([
           'package:grit/src/api/property.dart:30:5',
@@ -241,6 +241,22 @@ void main() {
         'file:///p/test/support/helper.dart:7\n'
         'file:///p/test/a_test.dart:20\n'
         'file:///p/test/a_test.dart:4',
+      );
+    });
+
+    test('takes a frame the VM printed with no line by its library and '
+        'member', () {
+      final CallSite site = .of(
+        .fromString(
+          '#0      runProperty (package:grit/src/api/property.dart:30:5)\n'
+          '#1      check (file:///p/test/support/helper.dart)\n'
+          '#2      main.<anonymous closure> (file:///p/test/a_test.dart:20:9)',
+        ),
+      );
+      expect(
+        site.key.text,
+        'file:///p/test/support/helper.dart, in check\n'
+        'file:///p/test/a_test.dart:20',
       );
     });
 

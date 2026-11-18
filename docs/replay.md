@@ -11,7 +11,7 @@ grit runs a failure again three ways: the store's replay, a token and a seed. Th
 
 A search that fails keeps its smallest failing case in a file of its own under `.dart_tool/grit/`, in the package `dart test` runs in. The next search of the same property replays that case before it generates anything. Where the case still fails, the search shrinks from it, and its report says it was first found by replaying an earlier search's failure. Where it no longer fails, the search generates as usual. A search that ends any way but a failure leaves nothing stored for its property, so a fixed bug's case is gone once the property passes.
 
-Each stored failure is keyed by its call site: the line `property`, `forAll` or `runProperty` is called from, with each frame of the consumer's package beneath it. So:
+Each stored failure is keyed by its call site: the line `property`, `forAll` or `runProperty` is called from, with each frame of the consumer's package beneath it, and a frame the VM printed with no line by its function in place of its line. So:
 
 - Edits above the call: an edit that moves the line loses its stored failure, and the next search generates afresh.
 - Helpers: a property declared inside a helper is keyed by where the helper is called, so each call keeps a failure of its own.
