@@ -12,25 +12,29 @@ double _meanPast(int min, int? max) => switch (max) {
   final int max => math.max(_leastMean, (max - min) / 2),
 };
 
-/// The odds of one more element for a collection [size] elements in, whose
-/// record began at [start], drawn for [mean] elements past its minimum.
+/// The odds of one more element for a collection [size] elements in, up to
+/// [max] in size, whose record began at [start], drawn for [mean] elements
+/// past its minimum.
 ///
 /// Odds p put p / (1 - p) more elements on average where nothing cuts them
-/// short. [mean] is cut to as many elements as the run's room still fits at
-/// the choices each so far has cost, and the odds are never where the room
-/// fits fewer than two. An element not yet drawn is priced at one choice, so
-/// a collection whose elements each cost alike ends inside the run, however
-/// many of its "one more" choices are filled as one more, wherever the room
-/// it starts with fits its minimum, or one element where that is 0, and a
-/// choice more.
+/// short. Where the run's room fits every element up to [max] at the choices
+/// each so far has cost, nothing does, since the collection ends at [max]
+/// inside the run. Elsewhere [mean] is cut to as many elements as the room
+/// still fits, and the odds are never where it fits fewer than two. An
+/// element not yet drawn is priced at one choice, so a collection whose
+/// elements each cost alike ends inside the run, however many of its "one
+/// more" choices are filled as one more, wherever the room it starts with
+/// fits its minimum, or one element where that is 0, and a choice more.
 Odds _oneMore(
   ChoiceSource source,
   int size, {
+  required int? max,
   required int start,
   required double mean,
 }) {
   final double cost = size == 0 ? 1 : (source.length - start) / size;
   final double fits = source.room / cost;
+  if (max != null && fits > max - size) return .new(mean / (mean + 1));
   if (fits < 2) return .never;
   final double cut = math.min(mean, fits);
   return .new(cut / (cut + 1));
@@ -55,14 +59,16 @@ bool _more(
 }) {
   final ChoiceSource source = draw._source;
   if (size < min) {
-    source.weigh(_oneMore(source, size, start: start, mean: mean));
+    source.weigh(_oneMore(source, size, max: max, start: start, mean: mean));
     return true;
   }
   if (size == max) {
     source.choose(.zero);
     return false;
   }
-  return source.weigh(_oneMore(source, size, start: start, mean: mean));
+  return source.weigh(
+    _oneMore(source, size, max: max, start: start, mean: mean),
+  );
 }
 
 /// Throws where [min], the collection's minimum [noun] named [minName], is

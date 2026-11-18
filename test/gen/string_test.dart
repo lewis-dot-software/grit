@@ -8,7 +8,7 @@ import '../support/bounds.dart';
 import '../support/draw_from.dart';
 import '../support/drawing.dart';
 import '../support/integer_range.dart';
-import '../support/long_end.dart';
+import '../support/reach.dart';
 import '../support/small.dart';
 
 /// Small alphabets whose every index a choice up to 2 reaches, one holding a
@@ -251,19 +251,22 @@ void main() {
     expect(drawing.record, sequenceOf([1, 2, 1, 0, 0]));
   });
 
-  test('reaches the last quarter of its length range in a fair share of '
-      'runs, from a narrow range and a wide one', () {
+  test('reaches its maximum length in more than one run in eight, and '
+      'the last quarter of its range in more than one in five, wherever '
+      'the run\'s room holds every element up to its maximum', () {
     for (final IntegerRange range in sizeRanges) {
       final Gen<String> gen = .string(
         alphabet: .ascii,
         minLength: range.min,
         maxLength: range.max,
       );
-      expect(
-        longEndRuns(gen, range, (String string) => string.runes.length),
-        greaterThan(10),
-        reason: '$range',
+      final Reach shares = reach(
+        gen,
+        range,
+        (String string) => string.runes.length,
       );
+      expect(shares.atMax, greaterThan(1 / 8), reason: '$range');
+      expect(shares.lastQuarter, greaterThan(1 / 5), reason: '$range');
     }
   });
 

@@ -13,7 +13,7 @@ import '../support/drawing.dart';
 import '../support/fixed_random.dart';
 import '../support/generator.dart';
 import '../support/integer_range.dart';
-import '../support/long_end.dart';
+import '../support/reach.dart';
 import '../support/small.dart';
 
 /// Elements whose every choice is 0 or 1, so a sequence of bits draws a list
@@ -249,19 +249,18 @@ void main() {
     );
   });
 
-  test('reaches the last quarter of its length range in a fair share of '
-      'runs, from a narrow range and a wide one', () {
+  test('reaches its maximum length in more than one run in eight, and '
+      'the last quarter of its range in more than one in five, wherever '
+      'the run\'s room holds every element up to its maximum', () {
     for (final IntegerRange range in sizeRanges) {
       final Gen<List<bool>> gen = .list(
         .boolean(),
         minLength: range.min,
         maxLength: range.max,
       );
-      expect(
-        longEndRuns(gen, range, (List<bool> list) => list.length),
-        greaterThan(10),
-        reason: '$range',
-      );
+      final Reach shares = reach(gen, range, (List<bool> list) => list.length);
+      expect(shares.atMax, greaterThan(1 / 8), reason: '$range');
+      expect(shares.lastQuarter, greaterThan(1 / 5), reason: '$range');
     }
   });
 

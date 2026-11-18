@@ -8,7 +8,7 @@ import '../support/draw_from.dart';
 import '../support/drawing.dart';
 import '../support/generator.dart';
 import '../support/integer_range.dart';
-import '../support/long_end.dart';
+import '../support/reach.dart';
 import '../support/small.dart';
 
 /// Each minimum and maximum size checked, a null maximum for none.
@@ -247,19 +247,19 @@ void main() {
     );
   });
 
-  test('reaches the last quarter of its size range in a fair share of runs, '
-      'from a narrow range and a wide one', () {
+  test('reaches its maximum size in more than one run in eight, and '
+      'the last quarter of its range in more than one in five, wherever '
+      'the run\'s room holds every element up to its maximum and no '
+      'draw repeats', () {
     for (final IntegerRange range in sizeRanges) {
       final Gen<Set<int>> gen = .set(
         .integer(min: 0, max: 1 << 40),
         minSize: range.min,
         maxSize: range.max,
       );
-      expect(
-        longEndRuns(gen, range, (Set<int> set) => set.length),
-        greaterThan(10),
-        reason: '$range',
-      );
+      final Reach shares = reach(gen, range, (Set<int> set) => set.length);
+      expect(shares.atMax, greaterThan(1 / 8), reason: '$range');
+      expect(shares.lastQuarter, greaterThan(1 / 5), reason: '$range');
     }
   });
 
