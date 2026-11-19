@@ -74,7 +74,10 @@ Shrunk shrunk(Shrink shrink, Failing? Function(ChoiceSequence) failing) {
 /// failing as [oracle] answers it in turn, with the state it ends in, each
 /// run making the spans [spansOf] gives the choices it read.
 ///
-/// Fails the test where the path passes [_endless] steps.
+/// Fails the test where the path passes [_endless] steps, or where a
+/// candidate told as failing leaves the current sequence no smaller, since a
+/// path that never ends either refuses without end or accepts without
+/// descending.
 Answered answered(ChoiceSequence first, Oracle oracle) {
   final List<ShrinkStep> path = [];
   Shrink shrink = .start(first, spansOf(first));
@@ -94,6 +97,9 @@ Answered answered(ChoiceSequence first, Oracle oracle) {
           record: read == null ? null : recordOf(candidate, read),
         ));
         shrink = tell(shrink, read: read);
+        if (read != null && !shrink.current.isSmallerThan(current)) {
+          fail('$first accepted $candidate without descending from $current');
+        }
     }
   }
 }

@@ -487,6 +487,35 @@ void main() {
   });
 
   group('on grit, over larger first failures and answers', () {
+    test('Shrinking ends along an oracle that falls into step with its '
+        'rounds, failing only candidates that lower a choice by a sliver', () {
+      final ChoiceSequence first = .new([
+        for (final int value in [
+          6656457179519293718,
+          4284766731,
+          207,
+          3063807957014576122,
+          7646175423937272638,
+          0,
+        ])
+          .new(value),
+      ]);
+      final Oracle oracle = (
+        answers: [for (int i = 0; i < 49; i++) i == 21],
+        unread: [],
+        shortest: 5,
+      );
+      answered(first, oracle);
+    });
+
+    test('An oracle fails no candidate once it has been through its answers '
+        'a thousand times', () {
+      final Oracle oracle = (answers: [false, true], unread: [], shortest: 0);
+      final ChoiceSequence candidate = .new([.new(1)]);
+      expect(answerOf(oracle, 1999, candidate), 1);
+      expect(answerOf(oracle, 2001, candidate), isNull);
+    });
+
     property('Shrinking always ends, whatever the oracle answers.', (
       Draw draw,
     ) {

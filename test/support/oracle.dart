@@ -3,7 +3,7 @@ import 'package:grit/grit.dart';
 /// An oracle drawn for the checks on grit:
 ///
 /// - `answers`: whether each candidate fails, in turn, from the first again
-///   once they run out.
+///   once they run out, [_cycles] times through, after which none fails.
 /// - `unread`: how many choices off its end each failing candidate's run
 ///   leaves unread, in turn, from the first again once they run out, and
 ///   none where it is empty.
@@ -13,6 +13,11 @@ import 'package:grit/grit.dart';
 /// sequence to work on, where one that accepts them shrinks it to a few
 /// choices before they run.
 typedef Oracle = ({List<bool> answers, List<int> unread, int shortest});
+
+/// How many times through its answers an oracle goes before it fails no
+/// candidate, so it fails finitely many of those it is asked in turn,
+/// however it answers.
+const int _cycles = 1000;
 
 /// Answers each true at odds from 1 in 2 to 1 in 8, so some oracles accept
 /// seldom enough for the passes after zeroing to see choices other than 0.
@@ -41,7 +46,7 @@ Oracle drawOracle(Draw draw, ChoiceSequence first) => (
 int? answerOf(Oracle oracle, int k, ChoiceSequence candidate) {
   final int length = candidate.choices.length;
   if (length < oracle.shortest ||
-      oracle.answers.isEmpty ||
+      k >= _cycles * oracle.answers.length ||
       !oracle.answers[k % oracle.answers.length]) {
     return null;
   }
