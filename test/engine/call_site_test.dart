@@ -399,6 +399,20 @@ void main() {
       );
     });
 
+    test('are the same where each error has one type and no frame grit '
+        'reads, whatever threw them', () {
+      expect(
+        alike((StateError('a'), .empty), (StateError('b'), .empty)),
+        isTrue,
+      );
+    });
+
+    test('differ where one error has no frame grit reads and the other has '
+        'one, read from either', () {
+      expect(alike((StateError('a'), .empty), (StateError('a'), at)), isFalse);
+      expect(alike((StateError('a'), at), (StateError('a'), .empty)), isFalse);
+    });
+
     property('Two failures are alike read from either, or from neither.', (
       Draw draw,
     ) {

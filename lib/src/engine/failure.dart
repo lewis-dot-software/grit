@@ -22,6 +22,9 @@ final class Failure {
   /// A frame printed with no line was thrown from somewhere in its member,
   /// the code inlined into it among it, so it is the same frame as one
   /// whose frames run through that member, at whatever line.
+  ///
+  /// Two errors of one type thrown from no frame a search reads are the
+  /// same failure, since nothing tells them apart.
   bool isAlike(Failure other) =>
       type == other.type &&
       switch ((frame, other.frame)) {
