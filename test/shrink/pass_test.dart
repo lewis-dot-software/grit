@@ -110,6 +110,26 @@ void main() {
     ]);
   });
 
+  test('deleting the last span proposes at most two candidates per width, '
+      'however long the sequence', () {
+    expect(_candidates(.deleteLast, List.filled(100, 5)), hasLength(10));
+    expect(_candidates(.deleteLast, List.filled(100, 0)), hasLength(5));
+    for (final ChoiceSequence sequence in everySequence(length: 9, bound: 2)) {
+      final int widths = [
+        8,
+        4,
+        3,
+        2,
+        1,
+      ].where((int width) => width <= sequence.choices.length).length;
+      expect(
+        Pass.deleteLast.candidates(sequence, const []),
+        hasLength(lessThanOrEqualTo(2 * widths)),
+        reason: '$sequence',
+      );
+    }
+  });
+
   test('zeroing beneath sets every span beneath each draw of the body to 0 at '
       'once, and passes over a draw within another', () {
     expect(_candidates(.zeroBeneath, [7, 1, 2, 3, 4], spans: _nested), [

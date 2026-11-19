@@ -13,8 +13,8 @@ enum Pass {
   /// choice before the span lowered by 1, where that choice is above 0.
   ///
   /// The lowered choice is one such as a "one more" choice, so a collection
-  /// that ends the sequence loses its last elements at every width, in as
-  /// few candidates as there are widths, however long the sequence.
+  /// that ends the sequence loses its last elements at every width, in at
+  /// most two candidates per width, however long the sequence.
   deleteLast,
 
   /// Each span of each draw of the property's body with the spans of every
