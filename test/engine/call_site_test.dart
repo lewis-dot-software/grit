@@ -289,6 +289,14 @@ void main() {
       },
     );
 
+    test('differs for a frame with no line once its member moves to another '
+        'file', () {
+      expect(
+        CallSite.of(_stack(['file:///p/test/support/b.dart'])).key,
+        isNot(CallSite.of(_stack(['file:///p/test/support/a.dart'])).key),
+      );
+    });
+
     test('holds no frame where its stack has none of its own', () {
       expect(
         CallSite.of(
