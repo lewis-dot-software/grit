@@ -208,7 +208,7 @@ void main() {
 
     test('is the line an error was thrown from, read from a real throw', () {
       final CallSite here = .of(.current);
-      final Frame frame = Frame.of(.current).first;
+      final Frame frame = .of(.current).first;
       try {
         throw const FormatException('thrown');
       } on FormatException catch (error, stackTrace) {

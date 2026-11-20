@@ -275,7 +275,7 @@ void main() {
     ]) {
       // A draw of 0 fills every weighted choice at odds above never as 1.
       final ChoiceSource source = .random(
-        FixedRandom(0, ints: List<int>.filled(8192, 0)),
+        FixedRandom(0, ints: .filled(8192, 0)),
         limit: 8192,
       );
       expect(run(source, () => RunDraw(source)(gen)), Status.returned);
@@ -328,7 +328,7 @@ void main() {
       );
       // A draw of 0 fills every weighted choice at odds above never as 1.
       final ChoiceSource source = .random(
-        FixedRandom(0, ints: List<int>.filled(limit, 0)),
+        FixedRandom(0, ints: .filled(limit, 0)),
         limit: limit,
       );
       expect(run(source, () => RunDraw(source)(gen)), Status.returned);

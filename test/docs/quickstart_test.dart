@@ -70,13 +70,13 @@ void main() {
       reports = _blocks(markdown, 'text');
       // Inside the package, so the page's file resolves package:grit, and
       // its store's files go with the directory.
-      directory = Directory('.dart_tool').createTempSync('quickstart_');
+      directory = .new('.dart_tool').createTempSync('quickstart_');
     });
 
     tearDownAll(() => directory.deleteSync(recursive: true));
 
     test('quotes the report its property prints on a search', () async {
-      final File file = File(path.join(directory.path, 'row_test.dart'))
+      final File file = .new(path.join(directory.path, 'row_test.dart'))
         ..writeAsStringSync(dart[0]);
       expect(_masked(await _reported(file)), _masked(reports[0].trimRight()));
     });
@@ -87,7 +87,7 @@ void main() {
         dart[0].indexOf('  property('),
         dart[0].indexOf('  });\n') + '  });\n'.length,
       );
-      final File file = File(path.join(directory.path, 'replay_test.dart'))
+      final File file = .new(path.join(directory.path, 'replay_test.dart'))
         ..writeAsStringSync(dart[0].replaceFirst(property, dart[1]));
       expect(await _reported(file), reports[1].trimRight());
     });

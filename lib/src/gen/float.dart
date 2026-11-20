@@ -32,17 +32,9 @@ Gen<double> _float({
   final bool allowsNan = nan ?? (min == .negativeInfinity && max == .infinity);
   final _Magnitudes? positive = max.isNegative
       ? null
-      : _Magnitudes.within(
-          low: min.isNegative ? 0 : min,
-          high: max,
-          negative: false,
-        );
+      : .within(low: min.isNegative ? 0 : min, high: max, negative: false);
   final _Magnitudes? negative = min.isNegative
-      ? _Magnitudes.within(
-          low: max.isNegative ? -max : 0,
-          high: -min,
-          negative: true,
-        )
+      ? .within(low: max.isNegative ? -max : 0, high: -min, negative: true)
       : null;
   final List<_FloatPart> parts = [
     ?positive,

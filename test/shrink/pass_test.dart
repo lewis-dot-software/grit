@@ -112,8 +112,8 @@ void main() {
 
   test('deleting the last span proposes at most two candidates per width, '
       'however long the sequence', () {
-    expect(_candidates(.deleteLast, List.filled(100, 5)), hasLength(10));
-    expect(_candidates(.deleteLast, List.filled(100, 0)), hasLength(5));
+    expect(_candidates(.deleteLast, .filled(100, 5)), hasLength(10));
+    expect(_candidates(.deleteLast, .filled(100, 0)), hasLength(5));
     for (final ChoiceSequence sequence in everySequence(length: 9, bound: 2)) {
       final int widths = [
         8,

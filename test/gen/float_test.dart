@@ -283,7 +283,7 @@ double? _formWhole(_Range range, double value) {
     return null;
   }
   final double whole = value.isInfinite
-      ? (value.isNegative ? -double.maxFinite : double.maxFinite)
+      ? (value.isNegative ? -double.maxFinite : .maxFinite)
       : (value.isNegative ? -1 : 1) * value.abs().ceilToDouble();
   return range.min.compareTo(whole) <= 0 && whole.compareTo(range.max) <= 0
       ? whole
@@ -455,11 +455,11 @@ void main() {
           0.5,
           -2.5,
           4503599627370495.5,
-          double.infinity,
-          double.negativeInfinity,
+          .infinity,
+          .negativeInfinity,
           3,
           -0.0,
-          double.nan,
+          .nan,
         ])
           named(gen, value),
       ],
