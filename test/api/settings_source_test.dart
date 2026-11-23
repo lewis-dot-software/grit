@@ -95,8 +95,8 @@ void main() {
       );
     });
 
-    test('builds, read back, the seed it was given and the settings it was '
-        'read from', () async {
+    test('RUN-3: A settings source built from a seed and settings reads '
+        'back that seed and those settings.', () async {
       await forAll((Draw draw) {
         final int seed = draw(.integer(min: 0, max: 0xFFFFFFFF), label: 'seed');
         final Settings settings = .new(

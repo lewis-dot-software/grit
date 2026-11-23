@@ -46,6 +46,7 @@ The [quickstart](docs/quickstart.md) writes, runs and replays a failing property
 - [Generators](docs/generators.md) - A generator is a `Gen<T>`: it makes a value of `T` from a run's random choices, and the value shrinks as those choices do.
 - [Outcomes](docs/outcomes.md) - A search comes to one `Outcome`, a sealed type with a case per way it can end.
 - [Properties](docs/properties.md) - A property is declared one of three ways: `property` as a test of its own, `forAll` inside a test that already stands, and `runProperty` for its outcome as a value, with no test failed.
+- [Property index](docs/property-index.md) - Every property the code holds, each by its number beside its property test, and its Lean declaration where it is proved.
 - [Quickstart](docs/quickstart.md) - This page installs grit, writes a property that fails, reads its report and replays the failure, then links a doc for each topic it touches.
 - [Replay](docs/replay.md) - grit runs a failure again three ways: the store's replay, a token and a seed.
 - [Settings](docs/settings.md) - A property's `Settings` say how it is searched, each with a default no property has to change.

@@ -523,8 +523,8 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
-    property('A report says its seed repeats the search only where that '
-        'search generated from the seed.', (Draw draw) {
+    property('RUN-1: A report says its seed repeats the search only '
+        'where that search generated from the seed.', (Draw draw) {
       final Outcome outcome = draw(outcomes);
       final int seed = draw(.integer(min: 0, max: 0xFFFFFFFF), label: 'seed');
       final bool generated = switch (outcome) {
@@ -547,10 +547,12 @@ void main() {
     /// A text over letters, spaces and newlines, which a report indents.
     final Gen<String> text = .string(alphabet: .of('a \n'), maxLength: 8);
 
-    property('Whatever a note\'s or a drawn value\'s text holds, the report '
-        'prints it under its heading line for line, two spaces opening each '
-        'line that is not empty, with its trailing whitespace trimmed and no '
-        'line the indent alone.', (Draw draw) {
+    property("RUN-2: Whatever a note's or a drawn value's text holds, "
+        'the report prints it: under its heading line for line, two '
+        'spaces opening each line that is not empty, with its '
+        'trailing whitespace trimmed and no line the indent alone.', (
+      Draw draw,
+    ) {
       final String drawn = draw(text, label: 'drawn');
       final String noted = draw(text, label: 'noted');
       final String printed = report(

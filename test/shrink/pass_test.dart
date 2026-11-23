@@ -110,8 +110,8 @@ void main() {
     ]);
   });
 
-  test('deleting the last span proposes at most two candidates per width, '
-      'however long the sequence', () {
+  test('SHR-14: Deleting the last span proposes at most two candidates '
+      'per width, however long the sequence.', () {
     expect(_candidates(.deleteLast, .filled(100, 5)), hasLength(10));
     expect(_candidates(.deleteLast, .filled(100, 0)), hasLength(5));
     for (final ChoiceSequence sequence in everySequence(length: 9, bound: 2)) {
@@ -148,30 +148,27 @@ void main() {
     ]);
   });
 
-  property(
-    "Zeroing every draw beneath a list's in its record draws a list as long, "
-    'each element its simplest value.',
-    (Draw draw) {
-      final ChoiceSource source = .random(
-        .new(draw(.integer(min: 0), label: 'seed')),
-        limit: 1000,
-      );
-      final RunDraw run = .new(source);
-      final List<int> list = run(_integers);
-      draw.assume(list.isNotEmpty);
-      expect(
-        drawFrom(
-          _integers,
-          Pass.zeroBeneath.candidates(source.record, run.spans).first,
-        ),
-        isA<Drew<List<int>>>().having(
-          (Drew<List<int>> drew) => drew.value,
-          'value',
-          List<int>.filled(list.length, 0),
-        ),
-      );
-    },
-  );
+  property("SHR-12: Zeroing every draw beneath a list's in its record draws a "
+      'list as long, each element its simplest value.', (Draw draw) {
+    final ChoiceSource source = .random(
+      .new(draw(.integer(min: 0), label: 'seed')),
+      limit: 1000,
+    );
+    final RunDraw run = .new(source);
+    final List<int> list = run(_integers);
+    draw.assume(list.isNotEmpty);
+    expect(
+      drawFrom(
+        _integers,
+        Pass.zeroBeneath.candidates(source.record, run.spans).first,
+      ),
+      isA<Drew<List<int>>>().having(
+        (Drew<List<int>> drew) => drew.value,
+        'value',
+        List<int>.filled(list.length, 0),
+      ),
+    );
+  });
 
   test('zeroing a span zeroes each span, the widest first and each width '
       'from the end back', () {
@@ -567,37 +564,32 @@ void main() {
     }
   });
 
-  property(
-    "Swapping two sibling spans in a list's record draws the list with those "
-    'two elements swapped.',
-    (Draw draw) {
-      final ChoiceSource source = .random(
-        .new(draw(.integer(min: 0), label: 'seed')),
-        limit: 1000,
-      );
-      final RunDraw run = .new(source);
-      final List<List<int>> list = run(_lists);
-      draw.assume(list.length >= 2);
-      final int i = draw(.integer(min: 0, max: list.length - 2), label: 'i');
-      final int j = draw(
-        .integer(min: i + 1, max: list.length - 1),
-        label: 'j',
-      );
-      final List<List<int>> swapped = [...list];
-      swapped[i] = list[j];
-      swapped[j] = list[i];
-      expect([
-        for (final ChoiceSequence candidate in Pass.swapSpan.candidates(
-          source.record,
-          run.spans,
-        ))
-          if (drawFrom(_lists, candidate) case Drew(
-            :final List<List<int>> value,
-          ))
-            value,
-      ], contains(equals(swapped)));
-    },
-  );
+  property("SHR-13: Swapping two sibling spans in a list's record draws the "
+      'list with those two elements swapped.', (Draw draw) {
+    final ChoiceSource source = .random(
+      .new(draw(.integer(min: 0), label: 'seed')),
+      limit: 1000,
+    );
+    final RunDraw run = .new(source);
+    final List<List<int>> list = run(_lists);
+    draw.assume(list.length >= 2);
+    final int i = draw(.integer(min: 0, max: list.length - 2), label: 'i');
+    final int j = draw(
+      .integer(min: i + 1, max: list.length - 1),
+      label: 'j',
+    );
+    final List<List<int>> swapped = [...list];
+    swapped[i] = list[j];
+    swapped[j] = list[i];
+    expect([
+      for (final ChoiceSequence candidate in Pass.swapSpan.candidates(
+        source.record,
+        run.spans,
+      ))
+        if (drawFrom(_lists, candidate) case Drew(:final List<List<int>> value))
+          value,
+    ], contains(equals(swapped)));
+  });
 
   test('a pass from a place proposes the candidates from that place on', () {
     expect(_candidates(.deleteSpan, [1, 2, 3], from: 4), [

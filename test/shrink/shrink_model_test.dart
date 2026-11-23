@@ -104,8 +104,8 @@ void main() {
     return answers.current;
   }
 
-  property('Shrink proposes each candidate and ends as the Lean model does, '
-      'whatever the oracle answers', (Draw draw) async {
+  property('SHR-11: Shrink proposes each candidate and ends as the Lean '
+      'model does, whatever the oracle answers.', (Draw draw) async {
     final ChoiceSequence first = draw(anySequence, label: 'first failure');
     final (:List<ShrinkStep> path, :Shrunk end) = answered(
       first,

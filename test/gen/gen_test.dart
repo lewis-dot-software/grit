@@ -86,9 +86,9 @@ final Map<String, Gen<Object?>> _generators = {
 
 void main() {
   group('every generator', () {
-    test('Each of `.integer`, `.boolean`, `.list`, `.element`, `.string`, '
-        '`.oneOf`, `.set` and `.float` draws its documented simplest value '
-        'from all-zero choices.', () {
+    test('GEN-2: Each of `.integer`, `.boolean`, `.list`, `.element`, '
+        '`.string`, `.oneOf`, `.set` and `.float` draws its '
+        'documented simplest value from all-zero choices.', () {
       final List<_Simplest> cases = [
         for (int min = -4; min <= 4; min++)
           for (int max = min; max <= 4; max++)
@@ -202,7 +202,7 @@ void main() {
       }
     });
 
-    test('The same sequence always draws the same value.', () {
+    test('GEN-1: The same sequence always draws the same value.', () {
       for (final MapEntry(key: String name, value: Gen<Object?> gen)
           in _generators.entries) {
         for (final ChoiceSequence sequence in everySequence(
@@ -270,8 +270,9 @@ void main() {
   });
 
   group('filter', () {
-    test('A filtered generator only ever draws a value its predicate accepts, '
-        'and rejects the run once its retries are spent.', () {
+    test('GEN-3: A filtered generator only ever draws a value its '
+        'predicate accepts, and rejects the run once its retries are '
+        'spent.', () {
       // From 0 to 3 each choice draws itself, so the expected end of each
       // draw is read off the choices alone.
       final Gen<int> gen = .integer(min: 0, max: 3).filter((int i) => i.isEven);
@@ -456,9 +457,9 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
-    property('Each of `.integer`, `.boolean`, `.list`, `.element`, '
-        '`.string`, `.oneOf`, `.set` and `.float` draws its documented '
-        'simplest value from all-zero choices.', (Draw draw) {
+    property('GEN-2: Each of `.integer`, `.boolean`, `.list`, '
+        '`.element`, `.string`, `.oneOf`, `.set` and `.float` draws '
+        'its documented simplest value from all-zero choices.', (Draw draw) {
       final Simple simple = draw(simpleGenerator, label: 'generator');
       final Drawing<Object?> drawing = drawFrom(
         simple.generator.gen,
@@ -468,7 +469,9 @@ void main() {
       expect((drawing as Drew<Object?>).value, exactly(simple.simplest));
     });
 
-    property('The same sequence always draws the same value.', (Draw draw) {
+    property('GEN-1: The same sequence always draws the same value.', (
+      Draw draw,
+    ) {
       final Generator generator = draw(anyGenerator, label: 'generator');
       final ChoiceSequence sequence = draw(
         smallOrAnySequence,
@@ -480,8 +483,8 @@ void main() {
       );
     });
 
-    test('A draw keeps each value\'s text as the draw returned it, '
-        'whatever the body does to the value after.', () async {
+    test("GEN-4: A draw keeps each value's text as the draw returned "
+        'it, whatever the body does to the value after.', () async {
       // 681 of 3000 drawn cases returned, so a seed misses this tally over
       // the default 100 runs about 1 in 10^11.
       int returned = 0;
@@ -514,10 +517,9 @@ void main() {
       expect(returned, greaterThan(0));
     });
 
-    property('A filtered generator only ever draws a value its predicate '
-        'accepts, and rejects the run once its retries are spent.', (
-      Draw draw,
-    ) {
+    property('GEN-3: A filtered generator only ever draws a value its '
+        'predicate accepts, and rejects the run once its retries are '
+        'spent.', (Draw draw) {
       final Generator base = draw(anyGenerator, label: 'generator');
       final Predicate predicate = draw(
         .element(Predicate.values),

@@ -1652,9 +1652,9 @@ void main() {
   });
 
   group('over every small schedule of run endings', () {
-    test('A property is warned slow exactly where its runs\' mean time times '
-        'the run count passes 5 s and the mean passes its expected run '
-        'time.', () async {
+    test("REP-11: A property is warned slow exactly where its runs' mean "
+        'time times the run count passes 5 s and the mean passes its '
+        'expected run time.', () async {
       final Set<_Slowness> reached = {};
       await _eachSchedule((List<_Ending> endings, int runs, int invalid) async {
         // No expected time, one that binds at 3 runs alone, and one that
@@ -1680,8 +1680,8 @@ void main() {
       });
     });
 
-    test('A search is warned of its invalid runs exactly where they outnumber '
-        'those that returned and it did not give up.', () async {
+    test('REP-12: A search is warned of its invalid runs exactly where '
+        'they outnumber those that returned and it did not give up.', () async {
       final Set<_Invalid> reached = {};
       await _eachSchedule((List<_Ending> endings, int runs, int invalid) async {
         reached.add(
@@ -2112,8 +2112,8 @@ void main() {
   });
 
   group('shrinking', () {
-    test('runs no candidate twice, running each the step function proposes '
-        'once', () async {
+    test('SHR-10: A search runs no candidate twice, and runs each '
+        'candidate the step function proposes once.', () async {
       int repeated = 0;
       await _eachSearch((_Body body, _, Outcome outcome) async {
         if (outcome is! Failed) return;
@@ -2138,9 +2138,9 @@ void main() {
   });
 
   group('over every small body, each from a few seeds', () {
-    test('After a search with no token, its call site\'s stored sequence is '
-        'the smallest failing sequence of a failed outcome, and nothing '
-        'after any other.', () async {
+    test("REP-3: After a search with no token, its call site's stored "
+        'sequence is the smallest failing sequence of a failed '
+        'outcome, and nothing after any other.', () async {
       final Set<Type> outcomes = {};
       for (final _Body Function() make in [..._deterministic, ..._byRun]) {
         for (final Loaded held in _smallHeld) {
@@ -2167,8 +2167,8 @@ void main() {
       expect(outcomes, {Passed, Failed, Flaky, GaveUp});
     });
 
-    test('A failure found from a stored sequence is never reported larger '
-        'than that sequence.', () async {
+    test('REP-4: A failure found from a stored sequence is never '
+        'reported larger than that sequence.', () async {
       final Set<Type> found = {};
       for (final _Body Function() make in [..._deterministic, ..._byRun]) {
         for (final ChoiceSequence stored in everySequence(
@@ -2196,8 +2196,8 @@ void main() {
       expect(found, {Failed, Flaky});
     });
 
-    test('An error grit\'s own code throws inside a draw ends the test as '
-        'grit\'s error, never as the property\'s failure.', () async {
+    test("ENG-5: An error grit's own code throws inside a draw ends the "
+        "test as grit's error, never as the property's failure.", () async {
       final Set<_Reached> reached = {};
       for (final _Grits grits in _Grits.values) {
         for (final _Breaks breaks in _Breaks.values) {
@@ -2240,8 +2240,8 @@ void main() {
       });
     });
 
-    test('A token\'s replay runs the body once and leaves the store as it '
-        'stood.', () async {
+    test("REP-1: A token's replay runs the body once and leaves the "
+        'store as it stood.', () async {
       for (final _Body Function() make in _deterministic) {
         for (final ChoiceSequence token in everySequence(length: 3, bound: 3)) {
           final _Body body = make();
@@ -2256,8 +2256,8 @@ void main() {
       }
     });
 
-    test('A failed outcome\'s sequence fails again, the same way, when '
-        'replayed.', () async {
+    test("ENG-2: A failed outcome's sequence fails again, the same way, "
+        'when replayed.', () async {
       int failed = 0;
       await _eachSearch((_Body body, _, Outcome outcome) async {
         if (outcome is! Failed) return;
@@ -2267,8 +2267,8 @@ void main() {
       expect(failed, greaterThan(0));
     });
 
-    test('A failed outcome\'s sequence is never larger than the first failure '
-        'found.', () async {
+    test("SHR-5: A failed outcome's sequence is never larger than the "
+        'first failure found.', () async {
       int failed = 0;
       await _eachSearch((_Body body, _, Outcome outcome) async {
         if (outcome is! Failed) return;
@@ -2282,8 +2282,9 @@ void main() {
       expect(failed, greaterThan(0));
     });
 
-    test('Every candidate\'s run reads a record smaller than each record read '
-        'before it by a run that failed as the first failure did.', () async {
+    test("SHR-7: Every candidate's run reads a record smaller than each "
+        'record read before it by a run that failed as the first '
+        'failure did.', () async {
       int checked = 0;
       await _eachSearch((_Body body, _, Outcome outcome) async {
         if (outcome is Failed) checked += _expectCandidatesSmaller(body);
@@ -2291,8 +2292,8 @@ void main() {
       expect(checked, greaterThan(0));
     });
 
-    test('A failed outcome\'s sequence is never larger than any failing record '
-        'shrinking found.', () async {
+    test("SHR-6: A failed outcome's sequence is never larger than any "
+        'failing record shrinking found.', () async {
       int failed = 0;
       await _eachSearch((_Body body, _, Outcome outcome) async {
         if (outcome is! Failed) return;
@@ -2306,8 +2307,9 @@ void main() {
       expect(failed, greaterThan(0));
     });
 
-    test('Shrinking never runs more steps than its bound, an outcome whose '
-        'bound ran out names that bound, and its sequence is the choices its '
+    test("SHR-8: Under shrinking's bound of steps: shrinking never runs "
+        'more steps than the bound, an outcome whose bound ran out '
+        "names that bound, an outcome's sequence is the choices its "
         'final replay read.', () async {
       int failed = 0;
       await _eachSearch((_Body body, int seed, Outcome outcome) async {
@@ -2320,8 +2322,8 @@ void main() {
       expect(failed, greaterThan(0));
     });
 
-    test('A candidate that fails with another error type or from another frame '
-        'is never accepted.', () async {
+    test('SHR-9: A candidate that fails with another error type or from '
+        'another frame is never accepted.', () async {
       int crossed = 0;
       await _eachSearch((_Body body, _, Outcome outcome) async {
         crossed += _expectAcceptedAlike(body, outcome);
@@ -2330,47 +2332,41 @@ void main() {
       expect(crossed, greaterThan(0));
     });
 
-    test(
-      'The clock never changes a verdict: the same seed passes or fails '
-      'alike under any clock, and only the failure\'s size can differ.',
-      () async {
-        // Each clock moves by every small sequence of ticks, under a bound on
-        // time a few ticks long. The bodies are deterministic, as the same
-        // seed must be to repeat at all.
-        final List<List<Duration>> clocks = [
-          for (final ChoiceSequence ticks in everySequence(length: 2, bound: 2))
-            [for (final c in ticks.choices) .new(milliseconds: c.value)],
-        ];
-        final Map<_Searched, Outcome> frozen = {};
-        final Budget budget = .new(steps: 1 << 30, time: .new(milliseconds: 2));
-        await _eachSearch(budget: budget, (
+    test('ENG-1: The clock never changes a verdict: the same seed passes '
+        "or fails alike under any clock, and only the failure's size "
+        'can differ.', () async {
+      // Each clock moves by every small sequence of ticks, under a bound on
+      // time a few ticks long. The bodies are deterministic, as the same
+      // seed must be to repeat at all.
+      final List<List<Duration>> clocks = [
+        for (final ChoiceSequence ticks in everySequence(length: 2, bound: 2))
+          [for (final c in ticks.choices) .new(milliseconds: c.value)],
+      ];
+      final Map<_Searched, Outcome> frozen = {};
+      final Budget budget = .new(steps: 1 << 30, time: .new(milliseconds: 2));
+      await _eachSearch(budget: budget, (_Body body, int seed, outcome) async {
+        frozen[(body: '$body', seed: seed)] = outcome;
+      });
+      for (final List<Duration> ticks in clocks) {
+        await _eachSearch(budget: budget, clock: () => FakeClock(ticks), (
           _Body body,
           int seed,
-          outcome,
+          Outcome outcome,
         ) async {
-          frozen[(body: '$body', seed: seed)] = outcome;
+          _expectSameVerdict(
+            outcome,
+            frozen[(body: '$body', seed: seed)]!,
+            reason: '$body from $seed, ticking $ticks',
+          );
         });
-        for (final List<Duration> ticks in clocks) {
-          await _eachSearch(budget: budget, clock: () => FakeClock(ticks), (
-            _Body body,
-            int seed,
-            Outcome outcome,
-          ) async {
-            _expectSameVerdict(
-              outcome,
-              frozen[(body: '$body', seed: seed)]!,
-              reason: '$body from $seed, ticking $ticks',
-            );
-          });
-        }
-        expect(frozen.values.whereType<Passed>(), isNotEmpty);
-        expect(frozen.values.whereType<Failed>(), isNotEmpty);
-        expect(frozen.values.whereType<GaveUp>(), isNotEmpty);
-      },
-    );
+      }
+      expect(frozen.values.whereType<Passed>(), isNotEmpty);
+      expect(frozen.values.whereType<Failed>(), isNotEmpty);
+      expect(frozen.values.whereType<GaveUp>(), isNotEmpty);
+    });
 
-    test('A warning never changes a verdict: one seed passes or fails alike '
-        'whatever the clock reads.', () async {
+    test('REP-10: A warning never changes a verdict: one seed passes or '
+        'fails alike whatever the clock reads.', () async {
       final Map<_Searched, Outcome> frozen = {};
       await _eachSearch((_Body body, int seed, Outcome outcome) async {
         frozen[(body: '$body', seed: seed)] = outcome;
@@ -2395,8 +2391,8 @@ void main() {
       expect(warned, containsAll([Passed, Failed, GaveUp]));
     });
 
-    test('A body that fails once and not on replay ends flaky, never '
-        'failed.', () async {
+    test('ENG-3: A body that fails once and not on replay ends flaky, '
+        'never failed.', () async {
       // Each body fails as its run's place in every small sequence of ways
       // says, and returns on every run past the sequence's end.
       int flaky = 0;
@@ -2439,8 +2435,8 @@ void main() {
   });
 
   group('over every small logging body, each from a few seeds', () {
-    test('A search from one seed fills the same sequences in the same '
-        'order.', () async {
+    test('ENG-4: A search from one seed fills the same sequences in the '
+        'same order.', () async {
       int runs = 0;
       for (final ChoiceSequence bounds in everySequence(length: 3, bound: 3)) {
         for (final int failsPast in [0, 2, 4]) {
@@ -2512,9 +2508,9 @@ void main() {
   });
 
   group('on grit, over larger bodies', () {
-    test('After a search with no token, its call site\'s stored sequence is '
-        'the smallest failing sequence of a failed outcome, and nothing '
-        'after any other.', () async {
+    test("REP-3: After a search with no token, its call site's stored "
+        'sequence is the smallest failing sequence of a failed '
+        'outcome, and nothing after any other.', () async {
       final Set<Type> outcomes = {};
       await forAll((Draw draw) async {
         final _Body body = draw(_anyBody, label: 'body');
@@ -2537,8 +2533,8 @@ void main() {
       expect(outcomes, containsAll([Passed, Failed]));
     });
 
-    test('A failure found from a stored sequence is never reported larger '
-        'than that sequence.', () async {
+    test('REP-4: A failure found from a stored sequence is never '
+        'reported larger than that sequence.', () async {
       int found = 0;
       await forAll((Draw draw) async {
         final _Body body = draw(_anyBody, label: 'body');
@@ -2559,8 +2555,8 @@ void main() {
       expect(found, greaterThan(0));
     });
 
-    property('A token\'s replay runs the body once and leaves the store as it '
-        'stood.', (Draw draw) async {
+    property("REP-1: A token's replay runs the body once and leaves the "
+        'store as it stood.', (Draw draw) async {
       final _Body body = draw(_anyBody, label: 'body');
       final MemoryStore store = _holding(draw(_anyHeld, label: 'held'));
       final Map<StoreKey, Loaded> before = {...store.held};
@@ -2572,8 +2568,8 @@ void main() {
       expect(store.held, before);
     });
 
-    property('A search from one seed fills the same sequences in the same '
-        'order.', (Draw draw) async {
+    property('ENG-4: A search from one seed fills the same sequences in '
+        'the same order.', (Draw draw) async {
       final List<int> bounds = draw(
         .list(anyChoice.map((Choice c) => c.value), maxLength: 6),
         label: 'bounds',
@@ -2590,8 +2586,8 @@ void main() {
       expect(await filled(), await filled());
     });
 
-    test('A failed outcome\'s sequence fails again, the same way, when '
-        'replayed.', () async {
+    test("ENG-2: A failed outcome's sequence fails again, the same way, "
+        'when replayed.', () async {
       int failed = 0;
       await forAll((Draw draw) async {
         final _Body body = draw(_anyBody, label: 'body');
@@ -2606,8 +2602,8 @@ void main() {
       expect(failed, greaterThan(0));
     });
 
-    test('A failed outcome\'s sequence is never larger than the first failure '
-        'found.', () async {
+    test("SHR-5: A failed outcome's sequence is never larger than the "
+        'first failure found.', () async {
       int failed = 0;
       await forAll((Draw draw) async {
         final _Body body = draw(_anyBody, label: 'body');
@@ -2622,8 +2618,9 @@ void main() {
       expect(failed, greaterThan(0));
     });
 
-    test('Every candidate\'s run reads a record smaller than each record read '
-        'before it by a run that failed as the first failure did.', () async {
+    test("SHR-7: Every candidate's run reads a record smaller than each "
+        'record read before it by a run that failed as the first '
+        'failure did.', () async {
       int checked = 0;
       await forAll((Draw draw) async {
         final _Body body = draw(_anyBody, label: 'body');
@@ -2636,8 +2633,8 @@ void main() {
       expect(checked, greaterThan(0));
     });
 
-    test('A failed outcome\'s sequence is never larger than any failing record '
-        'shrinking found.', () async {
+    test("SHR-6: A failed outcome's sequence is never larger than any "
+        'failing record shrinking found.', () async {
       int failed = 0;
       await forAll((Draw draw) async {
         final _Body body = draw(_anyBody, label: 'body');
@@ -2652,8 +2649,9 @@ void main() {
       expect(failed, greaterThan(0));
     });
 
-    test('Shrinking never runs more steps than its bound, an outcome whose '
-        'bound ran out names that bound, and its sequence is the choices its '
+    test("SHR-8: Under shrinking's bound of steps: shrinking never runs "
+        'more steps than the bound, an outcome whose bound ran out '
+        "names that bound, an outcome's sequence is the choices its "
         'final replay read.', () async {
       // 1249 of 3000 drawn cases ran out, so a seed misses this tally over
       // the default 100 runs about 1 in 10^23.
@@ -2679,8 +2677,8 @@ void main() {
       expect(ranOut, greaterThan(0));
     });
 
-    test('A candidate that fails with another error type or from another frame '
-        'is never accepted.', () async {
+    test('SHR-9: A candidate that fails with another error type or from '
+        'another frame is never accepted.', () async {
       // 916 of 3000 drawn cases crossed, so a seed misses this tally over
       // the default 100 runs about 1 in 10^16.
       int crossed = 0;
@@ -2695,45 +2693,43 @@ void main() {
       expect(crossed, greaterThan(0));
     });
 
-    test(
-      'The clock never changes a verdict: the same seed passes or fails '
-      'alike under any clock, and only the failure\'s size can differ.',
-      () async {
-        // No case's check rests on a seed drawing every verdict. The reach
-        // of each verdict rests on the twin over every small body.
-        await forAll((Draw draw) async {
-          final _Body body = draw(_anyBody, label: 'body');
-          final int seed = draw(_anySeed, label: 'seed');
-          final List<Duration> ticks = draw(
-            .list(
-              .integer(min: 0, max: 3).map((int ms) => .new(milliseconds: ms)),
-            ),
-            label: 'ticks',
-          );
-          final Budget budget = .new(
-            steps: _unbounded.steps,
-            time: .new(
-              milliseconds: draw(.integer(min: 0, max: 8), label: 'time'),
-            ),
-          );
-          final Outcome frozen = await _search(
-            seed: seed,
-            limit: _drawnLimit,
-            budget: budget,
-          ).run(body.call);
-          final Outcome ticking = await _search(
-            seed: seed,
-            clock: FakeClock(ticks),
-            limit: _drawnLimit,
-            budget: budget,
-          ).run(body.afresh.call);
-          _expectSameVerdict(ticking, frozen);
-        });
-      },
-    );
+    test('ENG-1: The clock never changes a verdict: the same seed passes '
+        "or fails alike under any clock, and only the failure's size "
+        'can differ.', () async {
+      // No case's check rests on a seed drawing every verdict. The reach
+      // of each verdict rests on the twin over every small body.
+      await forAll((Draw draw) async {
+        final _Body body = draw(_anyBody, label: 'body');
+        final int seed = draw(_anySeed, label: 'seed');
+        final List<Duration> ticks = draw(
+          .list(
+            .integer(min: 0, max: 3).map((int ms) => .new(milliseconds: ms)),
+          ),
+          label: 'ticks',
+        );
+        final Budget budget = .new(
+          steps: _unbounded.steps,
+          time: .new(
+            milliseconds: draw(.integer(min: 0, max: 8), label: 'time'),
+          ),
+        );
+        final Outcome frozen = await _search(
+          seed: seed,
+          limit: _drawnLimit,
+          budget: budget,
+        ).run(body.call);
+        final Outcome ticking = await _search(
+          seed: seed,
+          clock: FakeClock(ticks),
+          limit: _drawnLimit,
+          budget: budget,
+        ).run(body.afresh.call);
+        _expectSameVerdict(ticking, frozen);
+      });
+    });
 
-    test('A warning never changes a verdict: one seed passes or fails alike '
-        'whatever the clock reads.', () async {
+    test('REP-10: A warning never changes a verdict: one seed passes or '
+        'fails alike whatever the clock reads.', () async {
       await forAll((Draw draw) async {
         final _Body body = draw(_anyBody, label: 'body');
         final int seed = draw(_anySeed, label: 'seed');
@@ -2765,8 +2761,8 @@ void main() {
       });
     });
 
-    test('A body that fails once and not on replay ends flaky, never '
-        'failed.', () async {
+    test('ENG-3: A body that fails once and not on replay ends flaky, '
+        'never failed.', () async {
       int flaky = 0;
       // Of them, those whose first replay failed alike and whose final
       // replay did not.
@@ -2802,9 +2798,9 @@ void main() {
       expect(flakyLast, greaterThan(0));
     });
 
-    test('A property is warned slow exactly where its runs\' mean time times '
-        'the run count passes 5 s and the mean passes its expected run '
-        'time.', () async {
+    test("REP-11: A property is warned slow exactly where its runs' mean "
+        'time times the run count passes 5 s and the mean passes its '
+        'expected run time.', () async {
       final Set<_Slowness> reached = {};
       await forAll((Draw draw) async {
         reached.add(
@@ -2827,8 +2823,8 @@ void main() {
       expect(reached, contains((warned: false, costly: true)));
     });
 
-    test('A search is warned of its invalid runs exactly where they outnumber '
-        'those that returned and it did not give up.', () async {
+    test('REP-12: A search is warned of its invalid runs exactly where '
+        'they outnumber those that returned and it did not give up.', () async {
       // Every case's check is exact on its own, so none rests on a seed
       // drawing each way the runs can stand. The reach of each way rests on
       // the twin over every small schedule.

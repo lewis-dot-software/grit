@@ -56,8 +56,9 @@ void main() {
   });
 
   group('over every small zigzag', () {
-    test('A zigzag stands for each distance from below its centre to above '
-        'it at exactly one choice, which it finds from the distance.', () {
+    test('ENG-17: A zigzag stands for each distance from below its centre '
+        'to above it at exactly one choice, which it finds from the '
+        'distance.', () {
       for (final Zigzag zigzag in _everySmallZigzag()) {
         final List<int> distances = _distances(zigzag);
         expect(distances.toSet(), {
@@ -69,7 +70,8 @@ void main() {
       }
     });
 
-    test('A larger choice never stands for a distance nearer the centre.', () {
+    test('ENG-18: A larger choice never stands for a distance nearer the '
+        'centre.', () {
       for (final Zigzag zigzag in _everySmallZigzag()) {
         final List<int> distances = _distances(zigzag);
         for (int choice = 1; choice < distances.length; choice++) {
@@ -82,8 +84,8 @@ void main() {
       }
     });
 
-    test('A zigzag\'s bound and its other end, beside its centre at 0, stand '
-        'for its two ends.', () {
+    test("ENG-19: A zigzag's bound and its other end, beside its centre "
+        'at 0, stand for its two ends.', () {
       // A zigzag with one side alone has its centre for its other end.
       for (final Zigzag zigzag in _everySmallZigzag()) {
         final Set<int> ends = {
@@ -118,9 +120,9 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
-    property('A zigzag stands for each distance from below its centre to '
-        'above it at exactly one choice, which it finds from the '
-        'distance.', (Draw draw) {
+    property('ENG-17: A zigzag stands for each distance from below its '
+        'centre to above it at exactly one choice, which it finds '
+        'from the distance.', (Draw draw) {
       // Each choice standing for a distance in range that leads back to it,
       // and each distance in range leading to a choice that stands for it,
       // is one choice per distance.
@@ -140,8 +142,8 @@ void main() {
       expect(zigzag.distance(at), other);
     });
 
-    property('A larger choice never stands for a distance nearer the '
-        'centre.', (Draw draw) {
+    property('ENG-18: A larger choice never stands for a distance nearer '
+        'the centre.', (Draw draw) {
       final Zigzag zigzag = draw(anyZigzag, label: 'zigzag');
       final int larger = draw(
         .integer(min: 0, max: zigzag.bound.value),
@@ -154,8 +156,8 @@ void main() {
       );
     });
 
-    property('A zigzag\'s bound and its other end, beside its centre at 0, '
-        'stand for its two ends.', (Draw draw) {
+    property("ENG-19: A zigzag's bound and its other end, beside its "
+        'centre at 0, stand for its two ends.', (Draw draw) {
       final Zigzag zigzag = draw(anyZigzag, label: 'zigzag');
       final Set<int> ends = {
         zigzag.distance(.new(0)),

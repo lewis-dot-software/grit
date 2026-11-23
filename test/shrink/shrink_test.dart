@@ -429,7 +429,7 @@ void main() {
   });
 
   group('over every small first failure and every answer', () {
-    test('Shrinking always ends, whatever the oracle answers.', () {
+    test('SHR-1: Shrinking always ends, whatever the oracle answers.', () {
       int ends = 0;
       for (final ChoiceSequence first in _firstFailures) {
         _everyPath(.start(first, spansOf(first)), (_, _) => ends++);
@@ -437,8 +437,8 @@ void main() {
       expect(ends, greaterThan(0));
     });
 
-    test('Every accepted candidate\'s record is shortlex smaller than the '
-        'sequence it replaces.', () {
+    test("SHR-3: Every accepted candidate's record is shortlex smaller "
+        'than the sequence it replaces.', () {
       for (final ChoiceSequence first in _firstFailures) {
         _everyPath(
           .start(first, spansOf(first)),
@@ -448,8 +448,9 @@ void main() {
       }
     });
 
-    test('The current sequence is always the record the first failure\'s run '
-        'read, or one a candidate\'s run read when told it failed.', () {
+    test('SHR-2: The current sequence is always the record the first '
+        "failure's run read, or one a candidate's run read when told "
+        'it failed.', () {
       for (final ChoiceSequence first in _firstFailures) {
         _everyPath(
           .start(first, spansOf(first)),
@@ -459,8 +460,8 @@ void main() {
       }
     });
 
-    test('Shrinking the result again accepts nothing, so the result is a fixed '
-        'point.', () {
+    test('SHR-4: Shrinking the result again accepts nothing, so the '
+        'result is a fixed point.', () {
       int oracles = 0;
       for (final ChoiceSequence first in _firstFailures) {
         _everyPath(.start(first, spansOf(first)), (
@@ -516,15 +517,15 @@ void main() {
       expect(answerOf(oracle, 2001, candidate), isNull);
     });
 
-    property('Shrinking always ends, whatever the oracle answers.', (
+    property('SHR-1: Shrinking always ends, whatever the oracle answers.', (
       Draw draw,
     ) {
       final ChoiceSequence first = draw(anySequence, label: 'first failure');
       answered(first, drawOracle(draw, first));
     });
 
-    property('Every accepted candidate\'s record is shortlex smaller than the '
-        'sequence it replaces.', (Draw draw) {
+    property("SHR-3: Every accepted candidate's record is shortlex "
+        'smaller than the sequence it replaces.', (Draw draw) {
       final ChoiceSequence first = draw(anySequence, label: 'first failure');
       final (:List<ShrinkStep> path, :Shrunk end) = answered(
         first,
@@ -533,10 +534,9 @@ void main() {
       expect(_acceptsOnlySmaller(path, end), isTrue);
     });
 
-    property('The current sequence is always the record the first failure\'s '
-        'run read, or one a candidate\'s run read when told it failed.', (
-      Draw draw,
-    ) {
+    property('SHR-2: The current sequence is always the record the '
+        "first failure's run read, or one a candidate's run read when "
+        'told it failed.', (Draw draw) {
       final ChoiceSequence first = draw(anySequence, label: 'first failure');
       final (:List<ShrinkStep> path, :Shrunk end) = answered(
         first,
@@ -545,8 +545,8 @@ void main() {
       expect(_holdsOnlyFailures(first, path, end), isTrue);
     });
 
-    property('Shrinking the result again accepts nothing, so the result is a '
-        'fixed point.', (Draw draw) {
+    property('SHR-4: Shrinking the result again accepts nothing, so the '
+        'result is a fixed point.', (Draw draw) {
       final ChoiceSequence first = draw(anySequence, label: 'first failure');
       final Oracle oracle = drawOracle(draw, first);
       // An oracle answers alike each time it is asked of one candidate, each

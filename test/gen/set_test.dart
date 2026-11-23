@@ -141,7 +141,8 @@ final Gen<_BitSet> _bitSet = .build(
 void main() {
   final Gen<int> digit = .integer(min: 0, max: 2);
 
-  test('Every set drawn holds from its minimum to its maximum elements.', () {
+  test('GEN-9: Every set drawn holds from its minimum to its maximum '
+      'elements.', () {
     for (final (min: int minSize, max: int? maxSize) in _sizes) {
       final Gen<Set<int>> gen = .set(digit, minSize: minSize, maxSize: maxSize);
       int drawn = 0;
@@ -162,9 +163,9 @@ void main() {
     }
   });
 
-  test('Deleting one element\'s span from the record of a set larger than '
-      'its minimum, where no later draw repeats that element, draws the set '
-      'without that element.', () {
+  test("GEN-10: Deleting one element's span from the record of a set "
+      'larger than its minimum, where no later draw repeats that '
+      'element, draws the set without that element.', () {
     for (final (min: int minSize, max: int? maxSize) in _sizes) {
       final Gen<Set<Object?>> gen = .set(
         digit,
@@ -277,8 +278,8 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
-    property('Every set drawn holds from its minimum to its maximum '
-        'elements.', (Draw draw) {
+    property('GEN-9: Every set drawn holds from its minimum to its '
+        'maximum elements.', (Draw draw) {
       final (
         :Generator element,
         sizes: (min: int minSize, max: int? maxSize),
@@ -299,9 +300,9 @@ void main() {
       }
     });
 
-    property('Deleting one element\'s span from the record of a set larger '
-        'than its minimum, where no later draw repeats that element, draws '
-        'the set without that element.', (Draw draw) {
+    property("GEN-10: Deleting one element's span from the record of a "
+        'set larger than its minimum, where no later draw repeats '
+        'that element, draws the set without that element.', (Draw draw) {
       final (
         :Generator element,
         sizes: (min: int minSize, max: int? maxSize),

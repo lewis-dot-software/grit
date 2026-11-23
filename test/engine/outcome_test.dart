@@ -5,8 +5,8 @@ import '../support/outcomes.dart';
 
 void main() {
   group('on grit, over larger inputs', () {
-    property('An outcome\'s warnings cannot be changed by whoever reads '
-        'them.', (Draw draw) {
+    property("REP-13: An outcome's warnings cannot be changed by whoever "
+        'reads them.', (Draw draw) {
       final Outcome outcome = draw(outcomes);
       final List<Warning> read = outcome.warnings;
       final List<Warning> before = [...read];

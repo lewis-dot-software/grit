@@ -83,8 +83,8 @@ void _expectEachDeletion(Gen<String> gen, Drew<String> drew, {String? reason}) {
 }
 
 void main() {
-  test('Every string drawn has from its minimum to its maximum code points, '
-      'and holds only its alphabet\'s.', () {
+  test('GEN-11: Every string drawn has from its minimum to its maximum '
+      "code points, and holds only its alphabet's.", () {
     for (final Letters letters in _small.map(lettersOf)) {
       for (final (min: int minLength, max: int? maxLength) in _lengths) {
         final Gen<String> gen = .string(
@@ -114,8 +114,8 @@ void main() {
     }
   });
 
-  test('Every string its length bounds and alphabet allow is drawn by some '
-      'sequence.', () {
+  test('GEN-12: Every string its length bounds and alphabet allow is '
+      'drawn by some sequence.', () {
     // A string of three code points reads seven choices, so every string of
     // up to three is checked for.
     for (final String characters in _small) {
@@ -145,8 +145,9 @@ void main() {
     }
   });
 
-  test('Deleting one code point\'s span from the record of a string longer '
-      'than its minimum draws the string without that code point.', () {
+  test("GEN-13: Deleting one code point's span from the record of a "
+      'string longer than its minimum draws the string without that '
+      'code point.', () {
     for (final String characters in _small) {
       for (final (min: int minLength, max: int? maxLength) in _lengths) {
         final Gen<String> gen = .string(
@@ -174,8 +175,8 @@ void main() {
     }
   });
 
-  test('draws each of a preset\'s characters at one index, and nothing '
-      'else', () {
+  test("GEN-14: A string draws each of a preset's characters at one "
+      'index, and nothing else.', () {
     for (final Letters preset in presets) {
       final List<int> codePoints = [
         for (int index = 0; index < preset.size; index++)
@@ -315,8 +316,8 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
-    property('Every string drawn has from its minimum to its maximum code '
-        'points, and holds only its alphabet\'s.', (Draw draw) {
+    property('GEN-11: Every string drawn has from its minimum to its '
+        "maximum code points, and holds only its alphabet's.", (Draw draw) {
       final Letters letters = draw(_anyAlphabet, label: 'alphabet');
       final (min: int minLength, max: int? maxLength) = draw(
         bounds,
@@ -340,8 +341,8 @@ void main() {
       }
     });
 
-    property('Every string its length bounds and alphabet allow is drawn by '
-        'some sequence.', (Draw draw) {
+    property('GEN-12: Every string its length bounds and alphabet allow '
+        'is drawn by some sequence.', (Draw draw) {
       final String characters = draw(
         .string(minLength: 1, maxLength: 6),
         label: 'characters',
@@ -380,10 +381,9 @@ void main() {
       );
     });
 
-    property('Deleting one code point\'s span from the record of a string '
-        'longer than its minimum draws the string without that code point.', (
-      Draw draw,
-    ) {
+    property("GEN-13: Deleting one code point's span from the record of "
+        'a string longer than its minimum draws the string without '
+        'that code point.', (Draw draw) {
       final Letters letters = draw(_anyAlphabet, label: 'alphabet');
       final (min: int minLength, max: int? maxLength) = draw(
         bounds,

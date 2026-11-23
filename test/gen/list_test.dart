@@ -115,8 +115,8 @@ void _expectEachDeletion<E>(
 typedef _Pair = ({int first, int second});
 
 void main() {
-  test('Deleting one element\'s span from a list\'s record draws the same '
-      'list with that element removed.', () {
+  test("GEN-7: Deleting one element's span from a list's record draws "
+      'the same list with that element removed.', () {
     // Each list is named with its element, its minimum length, and the
     // longest and largest choices it is checked over. A list of lists has
     // choices of 0 and 1 alone, so its sequences reach further at the same
@@ -306,10 +306,10 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
-    property('A list whose elements each cost alike ends inside its run, '
-        'every "one more" choice filled as one more, wherever the room it '
-        'starts with fits its minimum, or one element where that is 0, and a '
-        'choice more.', (Draw draw) {
+    property('GEN-8: A list whose elements each cost alike ends inside '
+        'its run, every "one more" choice filled as one more, '
+        'wherever the room it starts with fits its minimum, or one '
+        'element where that is 0, and a choice more.', (Draw draw) {
       final int bits = draw(.integer(min: 0, max: 3), label: 'element bits');
       final (min: int minLength, max: int? maxLength) = draw(
         bounds,
@@ -334,8 +334,8 @@ void main() {
       expect(run(source, () => RunDraw(source)(gen)), Status.returned);
     });
 
-    property('Deleting one element\'s span from a list\'s record draws the '
-        'same list with that element removed.', (Draw draw) {
+    property("GEN-7: Deleting one element's span from a list's record "
+        'draws the same list with that element removed.', (Draw draw) {
       final Generator element = draw(.element(_bitElements), label: 'element');
       final (min: int minLength, max: int? maxLength) = draw(
         bounds,

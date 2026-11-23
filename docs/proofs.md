@@ -19,10 +19,12 @@ The shrinker's step function is tested against a model of it written in Lean, an
 
 ## What is proved
 
-| Statement | Lean | Wrong implementation it rules out |
+Each property's English stands in [property-index.md](property-index.md), by its number.
+
+| Property | Lean | Wrong implementation it rules out |
 |---|---|---|
-| Shrinking always ends, whatever the oracle answers | `AlwaysEnds` | Proposing the same candidate again once told it did not fail |
-| The current sequence is always the record the first failure's run read, or one a candidate's run read when told it failed | `HoldsOnlyFailures` | Taking every candidate as the current sequence, whatever it is told, and taking a failing candidate whole though its run read fewer of its choices |
+| SHR-1 | `AlwaysEnds` | Proposing the same candidate again once told it did not fail |
+| SHR-2 | `HoldsOnlyFailures` | Taking every candidate as the current sequence, whatever it is told, and taking a failing candidate whole though its run read fewer of its choices |
 
 Both hold over the record with spans: a first failure comes with the spans its run made, and each answer of failing with how many of the candidate's choices its run read and the spans it made. An oracle is any stream of answers, one per step, so an oracle that answers one candidate two ways, by the step it is asked at, or with spans that fit no run, is among them.
 

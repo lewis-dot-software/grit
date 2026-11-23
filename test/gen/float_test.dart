@@ -313,9 +313,9 @@ void _expectForm(_Range range, List<int> choices) {
 }
 
 void main() {
-  test('Every float drawn is NaN only where its `nan` flag allows it, '
-      'infinite only where its bounds and `infinite` flag allow it, and '
-      'otherwise lies within its bounds.', () {
+  test('GEN-17: Every float drawn: is NaN only where its `nan` flag '
+      'allows it, infinite only where its bounds and `infinite` flag '
+      'allow it, and otherwise lies within its bounds.', () {
     for (final _Range range in _ranges) {
       for (final List<int> choices in _sequences) {
         _expectAllowed(range, choices);
@@ -323,7 +323,7 @@ void main() {
     }
   });
 
-  test('Every float its bounds and flags allow is drawn by some '
+  test('GEN-18: Every float its bounds and flags allow is drawn by some '
       'sequence.', () {
     expect(_narrow, isNotEmpty);
     for (final _Range range in _narrow) {
@@ -357,10 +357,11 @@ void main() {
     }
   });
 
-  test('Of two floats in range, the simpler is drawn by the smaller '
-      'sequence: the positive before the negative, then a whole number '
-      'before a fraction, then the smaller magnitude before the larger, with '
-      'the infinities and NaN after every finite float.', () {
+  test('GEN-19: Of two floats in range, the simpler is drawn by the '
+      'smaller sequence: the positive before the negative, then a '
+      'whole number before a fraction, then the smaller magnitude '
+      'before the larger, with the infinities and NaN after every '
+      'finite float.', () {
     // The sequences run in shortlex order, and the order of simplicity is
     // transitive, so each pair beside each other stands for every pair.
     for (final _Range range in _ranges) {
@@ -378,10 +379,11 @@ void main() {
     }
   });
 
-  test('A fraction names as its form the whole number of its sign at its '
-      'magnitude rounded up, and an infinity the finite double of its sign of '
-      'the largest magnitude, each where the range holds it and by a smaller '
-      'sequence, and no other float names one.', () {
+  test('GEN-20: A float names a form, where the range holds it and by a '
+      'smaller sequence, as follows: a fraction names the whole '
+      'number of its sign at its magnitude rounded up, an infinity '
+      'names the finite double of its sign of the largest magnitude, '
+      'no other float names one.', () {
     for (final _Range range in _ranges) {
       for (final List<int> choices in _sequences) {
         _expectForm(range, choices);
@@ -607,17 +609,18 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
-    property('Every float drawn is NaN only where its `nan` flag allows it, '
-        'infinite only where its bounds and `infinite` flag allow it, and '
-        'otherwise lies within its bounds.', (Draw draw) {
+    property('GEN-17: Every float drawn: is NaN only where its `nan` '
+        'flag allows it, infinite only where its bounds and '
+        '`infinite` flag allow it, and otherwise lies within its '
+        'bounds.', (Draw draw) {
       _expectAllowed(
         draw(_anyRange, label: 'range'),
         draw(_anyChoices, label: 'choices'),
       );
     });
 
-    property('Every float its bounds and flags allow is drawn by some '
-        'sequence.', (Draw draw) {
+    property('GEN-18: Every float its bounds and flags allow is drawn by '
+        'some sequence.', (Draw draw) {
       final double target = draw(anyDouble, label: 'target');
       final double a = draw(anyDouble.filter((double x) => !x.isNaN));
       final double b = draw(anyDouble.filter((double x) => !x.isNaN));
@@ -635,10 +638,11 @@ void main() {
       expect(_choicesOf(_genOf(range), target), isNotNull);
     });
 
-    property('Of two floats in range, the simpler is drawn by the smaller '
-        'sequence: the positive before the negative, then a whole number '
-        'before a fraction, then the smaller magnitude before the larger, '
-        'with the infinities and NaN after every finite float.', (Draw draw) {
+    property('GEN-19: Of two floats in range, the simpler is drawn by '
+        'the smaller sequence: the positive before the negative, then '
+        'a whole number before a fraction, then the smaller magnitude '
+        'before the larger, with the infinities and NaN after every '
+        'finite float.', (Draw draw) {
       _expectOrdered(
         draw(_anyRange, label: 'range'),
         draw(_anyChoices, label: 'choices'),
@@ -646,10 +650,11 @@ void main() {
       );
     });
 
-    property('A fraction names as its form the whole number of its sign at '
-        'its magnitude rounded up, and an infinity the finite double of its '
-        'sign of the largest magnitude, each where the range holds it and by '
-        'a smaller sequence, and no other float names one.', (Draw draw) {
+    property('GEN-20: A float names a form, where the range holds it and '
+        'by a smaller sequence, as follows: a fraction names the '
+        'whole number of its sign at its magnitude rounded up, an '
+        'infinity names the finite double of its sign of the largest '
+        'magnitude, no other float names one.', (Draw draw) {
       _expectForm(
         draw(_anyRange, label: 'range'),
         draw(_anyChoices, label: 'choices'),

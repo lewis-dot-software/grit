@@ -421,15 +421,14 @@ void main() {
       expect(alike((StateError('a'), at), (StateError('a'), .empty)), isFalse);
     });
 
-    property('Two failures are alike read from either, or from neither.', (
-      Draw draw,
-    ) {
+    property('ENG-6: Two failures are alike read from either, or from '
+        'neither.', (Draw draw) {
       final Failure first = draw(_anyFailure, label: 'first');
       final Failure second = draw(_anyFailure, label: 'second');
       expect(first.isAlike(second), second.isAlike(first));
     });
 
-    property('A failure is alike itself.', (Draw draw) {
+    property('ENG-7: A failure is alike itself.', (Draw draw) {
       final Failure failure = draw(_anyFailure, label: 'failure');
       expect(failure.isAlike(failure), isTrue);
     });

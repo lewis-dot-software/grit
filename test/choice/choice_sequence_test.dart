@@ -34,7 +34,8 @@ void main() {
       expect(sequenceOf([2, 1]).compareTo(sequenceOf([2, 1])), 0);
     });
 
-    test('the empty sequence is smaller than every other', () {
+    test('ENG-9: The empty sequence is shortlex smaller than every '
+        'other.', () {
       final ChoiceSequence empty = sequenceOf([]);
       expect(empty.choices, isEmpty);
       expect(empty.isSmallerThan(empty), isFalse);
@@ -64,7 +65,8 @@ void main() {
       ]);
     });
 
-    test('every sequence is smaller than each one enumerated after it', () {
+    test('ENG-10: Every sequence is smaller than each one after it in '
+        'shortlex order.', () {
       final List<ChoiceSequence> sequences = everySequence(
         length: 3,
         bound: 2,
@@ -110,35 +112,32 @@ void main() {
   });
 
   group('over every small sequence', () {
-    test(
-      'For any two different sequences, exactly one is shortlex smaller than '
-      'the other.',
-      () {
-        final List<ChoiceSequence> sequences = everySequence(
-          length: 4,
-          bound: 3,
-        ).toList();
-        // The enumeration yields each sequence once, so two places hold two
-        // different sequences, told apart with no appeal to the order.
-        for (int i = 0; i < sequences.length; i++) {
-          for (int j = 0; j < sequences.length; j++) {
-            if (i == j) continue;
-            final ChoiceSequence a = sequences[i];
-            final ChoiceSequence b = sequences[j];
-            expect(
-              a.isSmallerThan(b) != b.isSmallerThan(a),
-              isTrue,
-              reason: '$a and $b',
-            );
-          }
+    test('ENG-8: For any two different sequences, exactly one is shortlex '
+        'smaller than the other.', () {
+      final List<ChoiceSequence> sequences = everySequence(
+        length: 4,
+        bound: 3,
+      ).toList();
+      // The enumeration yields each sequence once, so two places hold two
+      // different sequences, told apart with no appeal to the order.
+      for (int i = 0; i < sequences.length; i++) {
+        for (int j = 0; j < sequences.length; j++) {
+          if (i == j) continue;
+          final ChoiceSequence a = sequences[i];
+          final ChoiceSequence b = sequences[j];
+          expect(
+            a.isSmallerThan(b) != b.isSmallerThan(a),
+            isTrue,
+            reason: '$a and $b',
+          );
         }
-      },
-    );
+      }
+    });
   });
 
   group('on grit, over larger inputs', () {
-    property('For any two different sequences, exactly one is shortlex '
-        'smaller than the other.', (Draw draw) {
+    property('ENG-8: For any two different sequences, exactly one is '
+        'shortlex smaller than the other.', (Draw draw) {
       // The two share a prefix, so they differ at a later choice as often as
       // by their lengths.
       final List<Choice> prefix = draw(.list(anyChoice), label: 'prefix');

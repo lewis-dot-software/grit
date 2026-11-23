@@ -24,8 +24,8 @@ int _drawn(Gen<int> gen, int choice) =>
 typedef _IntegerBounds = ({int min, int max});
 
 void main() {
-  test('An integer always draws within its range, and a smaller choice never '
-      'draws a value further from its target.', () {
+  test('GEN-5: An integer always draws within its range, and a smaller '
+      'choice never draws a value further from its target.', () {
     for (int min = -6; min <= 6; min++) {
       for (int max = min; max <= 6; max++) {
         final Gen<int> gen = .integer(min: min, max: max);
@@ -49,7 +49,8 @@ void main() {
     }
   });
 
-  test('draws each value of its range from exactly one choice', () {
+  test('GEN-6: An integer draws each value of its range from exactly '
+      'one choice.', () {
     for (int min = -6; min <= 6; min++) {
       for (int max = min; max <= 6; max++) {
         final Gen<int> gen = .integer(min: min, max: max);
@@ -169,8 +170,10 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
-    property('An integer always draws within its range, and a smaller choice '
-        'never draws a value further from its target.', (Draw draw) {
+    property('GEN-5: An integer always draws within its range, and a '
+        'smaller choice never draws a value further from its target.', (
+      Draw draw,
+    ) {
       final (:int min, :int max) = draw(integerRange, label: 'range');
       final int target = 0.clamp(min, max);
       final int width = max - min;

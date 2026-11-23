@@ -741,9 +741,9 @@ void main() {
   });
 
   group('over every small sequence', () {
-    test('A fixed source hands a run exactly its sequence\'s choices in '
-        'order, and a run that asks past its end ends overrun, its room the '
-        'choices left of its sequence.', () {
+    test("ENG-11: A fixed source: hands a run exactly its sequence's "
+        'choices in order, ends a run that asks past its end overrun, '
+        'gives as its room the choices left of its sequence.', () {
       for (final ChoiceSequence sequence in everySequence(
         length: _length,
         bound: _bound,
@@ -774,8 +774,8 @@ void main() {
       }
     });
 
-    test('A fixed choice above the bound a generator now asks for ends the '
-        'run rejected.', () {
+    test('ENG-12: A fixed choice above the bound a generator now asks for '
+        'ends the run rejected.', () {
       for (int size = 0; size <= _length; size++) {
         final List<ChoiceSequence> sequences = everySequenceOf(
           size: size,
@@ -812,53 +812,51 @@ void main() {
       }
     });
 
-    test(
-      'A random fill never gives a choice above the bound asked for, nor '
-      'more choices than its limit, its room the choices left of its limit.',
-      () {
-        // Each ask is a choice up to the bound its value names, or a weighted
-        // choice where its value is one past the largest bound.
-        for (int seed = 0; seed < 3; seed++) {
-          for (int limit = 0; limit <= _length; limit++) {
-            for (final ChoiceSequence asks in everySequence(
-              length: _length + 1,
-              bound: _bound + 1,
-            )) {
-              final ChoiceSource source = .random(.new(seed), limit: limit);
-              final List<_Handed> handed = [];
-              final Status status = run(source, () {
-                for (final Choice ask in asks.choices) {
-                  if (ask.value > _bound) {
-                    final bool weighed = source.weigh(.new(0.5));
-                    handed.add((bound: .binary, choice: .new(weighed ? 1 : 0)));
-                  } else {
-                    final Bound bound = .new(ask.value);
-                    handed.add((bound: bound, choice: source.choose(bound)));
-                  }
+    test('ENG-13: A random fill: never gives a choice above the bound '
+        'asked for, never gives more choices than its limit, gives as '
+        'its room the choices left of its limit.', () {
+      // Each ask is a choice up to the bound its value names, or a weighted
+      // choice where its value is one past the largest bound.
+      for (int seed = 0; seed < 3; seed++) {
+        for (int limit = 0; limit <= _length; limit++) {
+          for (final ChoiceSequence asks in everySequence(
+            length: _length + 1,
+            bound: _bound + 1,
+          )) {
+            final ChoiceSource source = .random(.new(seed), limit: limit);
+            final List<_Handed> handed = [];
+            final Status status = run(source, () {
+              for (final Choice ask in asks.choices) {
+                if (ask.value > _bound) {
+                  final bool weighed = source.weigh(.new(0.5));
+                  handed.add((bound: .binary, choice: .new(weighed ? 1 : 0)));
+                } else {
+                  final Bound bound = .new(ask.value);
+                  handed.add((bound: bound, choice: source.choose(bound)));
                 }
-              });
-              final String reason = 'seed $seed, limit $limit, asks $asks';
-              for (final (:Bound bound, :Choice choice) in handed) {
-                expect(bound.admits(choice), isTrue, reason: reason);
               }
-              expect(source.record.choices, hasLength(handed.length));
-              expect(handed.length, lessThanOrEqualTo(limit), reason: reason);
-              expect(source.room, limit - handed.length, reason: reason);
-              expect(
-                status,
-                asks.choices.length > limit ? Status.overrun : Status.returned,
-                reason: reason,
-              );
+            });
+            final String reason = 'seed $seed, limit $limit, asks $asks';
+            for (final (:Bound bound, :Choice choice) in handed) {
+              expect(bound.admits(choice), isTrue, reason: reason);
             }
+            expect(source.record.choices, hasLength(handed.length));
+            expect(handed.length, lessThanOrEqualTo(limit), reason: reason);
+            expect(source.room, limit - handed.length, reason: reason);
+            expect(
+              status,
+              asks.choices.length > limit ? Status.overrun : Status.returned,
+              reason: reason,
+            );
           }
         }
-      },
-    );
+      }
+    });
   });
 
   group('over every small sequence of asks, at every few odds', () {
-    test('An early run never fills a choice outside its bound, whatever fill '
-        'it takes.', () {
+    test('ENG-14: An early run never fills a choice outside its bound, '
+        'whatever fill it takes.', () {
       // A sweep is kept across the asks, so its later runs fill a choice at
       // its second named edge as well as its first.
       for (int seed = 0; seed < 3; seed++) {
@@ -896,8 +894,8 @@ void main() {
       }
     });
 
-    test('An early run never fills a distance outside its zigzag, whatever '
-        'fill it takes.', () {
+    test('ENG-15: An early run never fills a distance outside its zigzag, '
+        'whatever fill it takes.', () {
       // Each run asks along a zigzag beside asks along its mirror, under its
       // bound alone and weighted, so a near fill reaches a distance beside a
       // choice of another zigzag of the same bound.
@@ -937,8 +935,8 @@ void main() {
       }
     });
 
-    test('Naming a choice\'s edges changes no value a given sequence '
-        'draws.', () {
+    test("ENG-16: Naming a choice's edges changes no value a given "
+        'sequence draws.', () {
       for (int size = 0; size <= _length; size++) {
         final List<ChoiceSequence> sequences = everySequenceOf(
           size: size,
@@ -1008,9 +1006,9 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
-    property('A fixed source hands a run exactly its sequence\'s choices in '
-        'order, and a run that asks past its end ends overrun, its room the '
-        'choices left of its sequence.', (Draw draw) {
+    property("ENG-11: A fixed source: hands a run exactly its sequence's "
+        'choices in order, ends a run that asks past its end overrun, '
+        'gives as its room the choices left of its sequence.', (Draw draw) {
       final ChoiceSequence sequence = draw(anySequence, label: 'sequence');
       final int size = sequence.choices.length;
       final int asks = draw(.integer(min: 0, max: size + 4), label: 'asks');
@@ -1027,9 +1025,9 @@ void main() {
       expect(status, asks > size ? Status.overrun : Status.returned);
     });
 
-    property('A random fill never gives a choice above the bound asked for, '
-        'nor more choices than its limit, its room the choices left of its '
-        'limit.', (Draw draw) {
+    property('ENG-13: A random fill: never gives a choice above the bound '
+        'asked for, never gives more choices than its limit, gives as '
+        'its room the choices left of its limit.', (Draw draw) {
       final int seed = draw(.integer(min: 0, max: 0xFFFFFFFF), label: 'seed');
       final int limit = draw(.integer(min: 0, max: 64), label: 'limit');
       final ChoiceSource source = .random(
@@ -1063,8 +1061,8 @@ void main() {
       expect(status, asks.length > limit ? Status.overrun : Status.returned);
     });
 
-    property('An early run never fills a choice outside its bound, whatever '
-        'fill it takes.', (Draw draw) {
+    property('ENG-14: An early run never fills a choice outside its '
+        'bound, whatever fill it takes.', (Draw draw) {
       // Each odds is drawn from its ends as often as between them, so a run
       // takes each fill alone as well as a mix.
       final Gen<Odds> anyOdds = .oneOf([
@@ -1109,8 +1107,8 @@ void main() {
       }
     });
 
-    property('An early run never fills a distance outside its zigzag, '
-        'whatever fill it takes.', (Draw draw) {
+    property('ENG-15: An early run never fills a distance outside its '
+        'zigzag, whatever fill it takes.', (Draw draw) {
       final int seed = draw(.integer(min: 0, max: 0xFFFFFFFF), label: 'seed');
       final ChoiceSource source = .random(
         .new(seed),
@@ -1140,8 +1138,8 @@ void main() {
       _expectWithinZigzags(source, asks, reason: 'seed $seed');
     });
 
-    property('Naming a choice\'s edges changes no value a given sequence '
-        'draws.', (Draw draw) {
+    property("ENG-16: Naming a choice's edges changes no value a given "
+        'sequence draws.', (Draw draw) {
       final ChoiceSequence sequence = draw(anySequence, label: 'sequence');
       final List<Bound> bounds = draw(.list(_anyBound), label: 'bounds');
       final List<List<Choice>> edges = [
@@ -1164,8 +1162,8 @@ void main() {
       expect(drawn(named: true), drawn(named: false));
     });
 
-    property('A fixed choice above the bound a generator now asks for ends '
-        'the run rejected.', (Draw draw) {
+    property('ENG-12: A fixed choice above the bound a generator now asks '
+        'for ends the run rejected.', (Draw draw) {
       // Each choice is asked for under the bound drawn beside it, each at a
       // scale of its own, so a choice lies above its bound as often as not.
       final List<_Asked> asked = draw(

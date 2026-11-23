@@ -123,9 +123,9 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
-    property('Whatever a drawn string holds, its text is a single-quoted '
-        'Dart literal of printable ASCII alone, which reads back as the '
-        'string.', (Draw draw) {
+    property('GEN-15: Whatever a drawn string holds, its text is a '
+        'single-quoted Dart literal of printable ASCII alone, which '
+        'reads back as the string.', (Draw draw) {
       final String drawn = draw(
         .oneOf([_units, .string(alphabet: .unicode), _special]),
         label: 'drawn',

@@ -161,8 +161,8 @@ void main() {
   });
 
   group('over every small sequence', () {
-    test('A sequence saved under a key loads under that key until it is '
-        'deleted, and under no other.', () {
+    test('REP-5: A sequence saved under a key loads under that key '
+        'until it is deleted, and under no other.', () {
       final Store store = FileStore(_directory());
       for (final ChoiceSequence sequence in everySequence(
         length: 3,
@@ -196,8 +196,8 @@ void main() {
     tearDownAll(() => directory.deleteSync(recursive: true));
     final Gen<StoreKey> anyKey = .string().map(StoreKey.new);
 
-    property('A sequence saved under a key loads under that key until it is '
-        'deleted, and under no other.', (Draw draw) {
+    property('REP-5: A sequence saved under a key loads under that key '
+        'until it is deleted, and under no other.', (Draw draw) {
       final StoreKey key = draw(anyKey, label: 'key');
       final StoreKey other = draw(anyKey, label: 'other');
       final ChoiceSequence sequence = draw(anySequence, label: 'sequence');

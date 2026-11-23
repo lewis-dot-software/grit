@@ -181,8 +181,9 @@ void main() {
   });
 
   group('over every small sequence', () {
-    test('The token of any sequence is one line of ASCII, safe inside a Dart '
-        'string literal, and opens with its format\'s version.', () {
+    test('REP-8: The token of any sequence: is one line of ASCII, safe '
+        "inside a Dart string literal, and opens with its format's "
+        'version.', () {
       for (final ChoiceSequence sequence in _smallSequences) {
         final String token = Token.encode(sequence);
         expect(token, matches(_safe), reason: '$sequence');
@@ -190,14 +191,15 @@ void main() {
       }
     });
 
-    test('Decoding the token of any sequence gives that sequence back.', () {
+    test('REP-6: Decoding the token of any sequence gives that sequence '
+        'back.', () {
       for (final ChoiceSequence sequence in _smallSequences) {
         expect(_decoded(Token.encode(sequence)), sequence, reason: '$sequence');
       }
     });
 
-    test('Text that decodes is the one token its sequence encodes to, so no '
-        'two tokens name one sequence.', () {
+    test('REP-7: Text that decodes is the one token its sequence '
+        'encodes to, so no two tokens name one sequence.', () {
       int decoded = 0;
       for (final String text in _everyText(length: 4)) {
         if (_decoded(text) case final ChoiceSequence sequence) {
@@ -209,8 +211,8 @@ void main() {
       expect(decoded, greaterThan(0));
     });
 
-    test('Text that is no token, or a token of another format, never decodes '
-        'to a sequence, and its error says which.', () {
+    test('REP-9: Text that is no token, or a token of another format, '
+        'never decodes to a sequence, and its error says which.', () {
       final Set<_Kind> seen = {};
       for (final String text in _everyText(length: 4)) {
         final _Kind kind = _kindOf(text);
@@ -222,32 +224,31 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
-    property('The token of any sequence is one line of ASCII, safe inside a '
-        'Dart string literal, and opens with its format\'s version.', (
-      Draw draw,
-    ) {
+    property('REP-8: The token of any sequence: is one line of ASCII, '
+        'safe inside a Dart string literal, and opens with its '
+        "format's version.", (Draw draw) {
       final String token = Token.encode(draw(anySequence, label: 'sequence'));
       expect(token, matches(_safe));
       expect(token, startsWith('${Token.format}:'));
     });
 
-    property('Decoding the token of any sequence gives that sequence back.', (
-      Draw draw,
-    ) {
+    property('REP-6: Decoding the token of any sequence gives that '
+        'sequence back.', (Draw draw) {
       final ChoiceSequence sequence = draw(anySequence, label: 'sequence');
       expect(_decoded(Token.encode(sequence)), sequence);
     });
 
-    property('Text that decodes is the one token its sequence encodes to, so '
-        'no two tokens name one sequence.', (Draw draw) {
+    property('REP-7: Text that decodes is the one token its sequence '
+        'encodes to, so no two tokens name one sequence.', (Draw draw) {
       final String text = draw(_anyText, label: 'text');
       if (_decoded(text) case final ChoiceSequence sequence) {
         expect(Token.encode(sequence), text);
       }
     });
 
-    property('Text that is no token, or a token of another format, never '
-        'decodes to a sequence, and its error says which.', (Draw draw) {
+    property('REP-9: Text that is no token, or a token of another '
+        'format, never decodes to a sequence, and its error says '
+        'which.', (Draw draw) {
       final String text = draw(_anyText, label: 'text');
       expect(_kindOfDecoding(Token.decode(text)), _kindOf(text));
     });

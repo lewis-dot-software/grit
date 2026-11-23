@@ -45,8 +45,8 @@ Drawing<Object?> _chosen(
 typedef _OneOf = ({List<Gen<Object?>> generators, Object? simplest});
 
 void main() {
-  test('Every value `oneOf` draws is one of its generators\' values, and '
-      'choices of 0 draw its first generator\'s simplest.', () {
+  test("GEN-16: Every value `oneOf` draws is one of its generators' "
+      "values, and choices of 0 draw its first generator's simplest.", () {
     final List<_OneOf> cases = [
       (generators: [.integer(min: 3, max: 5)], simplest: 3),
       (generators: [.boolean(), .integer(min: 0, max: 2)], simplest: false),
@@ -103,8 +103,9 @@ void main() {
   });
 
   group('on grit, over larger inputs', () {
-    property('Every value `oneOf` draws is one of its generators\' values, '
-        'and choices of 0 draw its first generator\'s simplest.', (Draw draw) {
+    property('GEN-16: Every value `oneOf` draws is one of its '
+        "generators' values, and choices of 0 draw its first "
+        "generator's simplest.", (Draw draw) {
       final List<Generator> generators = draw(
         .list(anyGenerator, minLength: 1, maxLength: 4),
         label: 'generators',
